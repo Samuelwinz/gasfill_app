@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GasFill — Fast, Safe & Premium Cylinder Delivery</title>
+  <meta name="description" content="GasFill — premium cylinder delivery and refill. SPA demo with dashboard, orders and product catalog."/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f6f8fb;
+      --card:#ffffff;
+      --muted:#60708a;
+      --accent1:#0ea5a4;
+      --accent2:#0b5ed7;
+      --accent3:#f97316;
+      --glass: rgba(255,255,255,0.7);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      background:linear-gradient(180deg,#f3f6fb,#fbfdff);
+      color:#0f172a;
+      display:flex;
+      flex-direction:column;
+      min-height:100vh;
+    }
+
+    /* --- App shell --- */
+    .app{width:100%;max-width:1200px;margin:0 auto;padding:20px;flex:1;display:flex;flex-direction:column}
+    header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 0}
+    .brand{display:flex;gap:14px;align-items:center}
+    .logo{
+      width:56px;height:56px;border-radius:12px;
+      background:linear-gradient(135deg,var(--accent2),var(--accent1));
+      display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px;
+      box-shadow:0 8px 30px rgba(11,94,215,0.12)
+    }
+    .brand h1{margin:0;font-size:1.2rem}
+    nav{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    nav a{padding:10px 14px;border-radius:10px;text-decoration:none;color:var(--muted);font-weight:600}
+    nav a.active{background:#fff;border:1px solid #eef6ff;color:var(--accent2);box-shadow:0 6px 20px rgba(11,94,215,0.06)}
+    .cta{background:linear-gradient(90deg,var(--accent2),#0b6ef0);color:#fff;padding:10px 14px;border-radius:10px;font-weight:800;box-shadow:0 10px 40px rgba(11,94,215,0.12)}
+
+    /* content layout */
+    main{flex:1;margin-top:12px}
+    section{display:none}
+    section.active{display:block}
+
+    .hero{
+      display:flex;gap:18px;align-items:center;padding:20px;border-radius:14px;background:linear-gradient(180deg,#fff,#fbfdff);box-shadow:0 18px 40px rgba(12,40,80,0.06)
+    }
+    .hero .text h2{margin:0 0 8px 0;font-size:1.6rem}
+    .hero .text p{margin:0;color:var(--muted)}
+
+    /* grids/cards */
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    .card{background:var(--card);padding:14px;border-radius:12px;border:1px solid #f1f5f9;box-shadow:0 8px 28px rgba(12,40,80,0.04)}
+    .product-card{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px;text-align:center}
+    .product-card img{width:120px;height:120px;object-fit:contain;border-radius:8px}
+    .price{font-weight:800;color:var(--accent2)}
+    .small{font-size:0.92rem;color:var(--muted)}
+
+    /* responsive */
+    @media (max-width:1000px){ .grid{grid-template-columns:repeat(2,1fr)} .product-card img{width:100px;height:100px} }
+    @media (max-width:640px){ .grid{grid-template-columns:1fr} nav{overflow:auto} .hero{flex-direction:column;align-items:flex-start} }
+
+    /* forms */
+    form input,form textarea,form select{width:100%;padding:10px;border-radius:10px;border:1px solid #e6eef8;font-size:0.95rem}
+    .row{display:flex;gap:10px}
+    .row .col{flex:1}
+
+    /* footer sticky */
+    footer{background:linear-gradient(90deg,#0b1220,#0b2a4d);color:#fff;padding:24px;margin-top:20px;border-top-left-radius:12px;border-top-right-radius:12px;flex-shrink:0}
+    footer .inner{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    footer a{color:rgba(255,255,255,0.85);text-decoration:none}
+
+    /* cart floating */
+    .cart-btn{position:fixed;right:18px;bottom:90px;background:linear-gradient(90deg,var(--accent2),var(--accent1));color:#fff;padding:12px 14px;border-radius:14px;box-shadow:0 12px 36px rgba(11,94,215,0.18);z-index:60;border:none;cursor:pointer;font-weight:800}
+    .cart-count{background:#fff;color:var(--accent2;border-radius:999px;padding:4px 8px;margin-left:8px;border-radius:999px;font-weight:800}
+
+    /* orders log / badges */
+    .orders-log{display:flex;flex-direction:column;gap:10px}
+    .order-row{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:10px;border:1px solid #eef4ff;background:#fff}
+    .badge{padding:6px 10px;border-radius:999px;font-weight:700}
+    .badge-pending{background:#eef2ff;color:var(--accent2)}
+    .badge-ontheway{background:#fff7ed;color:#92400e}
+    .badge-delivered{background:#ecfccb;color:#166534}
+    .muted-2{color:#94a3b8}
+
+    /* tiny utility */
+    .center{text-align:center}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="logo">GF</div>
+        <div>
+          <h1>GasFill</h1>
+          <div class="small">Fast • Safe • Premium</div>
+        </div>
+      </div>
+
+      <nav id="mainNav" aria-label="Main navigation">
+        <a href="#" data-target="products" class="nav-link active">Products</a>
+        <a href="#" data-target="order" class="nav-link">Order</a>
+        <a href="#" data-target="bulk" class="nav-link">Bulk</a>
+        <a href="#" data-target="safety" class="nav-link">Safety</a>
+        <a href="#" data-target="contact" class="nav-link">Contact</a>
+        <a href="#" data-target="orderNow" class="nav-link">Order Now</a>
+        <a href="#" data-target="dashboard" class="nav-link">Dashboard</a>
+        <button class="cta" id="orderNowBtn" style="margin-left:10px">Order Now</button>
+      </nav>
+    </header>
+
+    <main>
+      <!-- HERO / PRODUCTS -->
+      <section id="products" class="active">
+        <div class="hero card" role="region" aria-label="hero">
+          <div style="flex:1" class="text">
+            <h2>GasFill — Fast, safe cylinder delivery</h2>
+            <p class="small">Order premium cylinders, exchange empties, or set up bulk deliveries for your business.</p>
+            <div style="margin-top:12px;display:flex;gap:8px">
+              <button onclick="navigateTo('order')" class="cta">Order Cylinder</button>
+              <button onclick="navigateTo('bulk')" style="background:#fff;border:1px solid #eef6ff;padding:10px 12px;border-radius:10px">Bulk & Business</button>
+            </div>
+          </div>
+          <div style="width:360px;display:flex;align-items:center;justify-content:center">
+            <!-- simple illustrative SVG -->
+            <svg width="220" height="140" viewBox="0 0 220 140" xmlns="http://www.w3.org/2000/svg">
+              <rect x="6" y="20" width="140" height="100" rx="12" fill="#0b5ed7" opacity="0.12"/>
+              <rect x="74" y="32" width="110" height="80" rx="10" fill="#0ea5a4" opacity="0.14"/>
+              <g transform="translate(10,16)">
+                <rect width="120" height="90" rx="10" fill="#fff"/>
+                <rect x="14" y="12" width="92" height="20" rx="8" fill="url(#g1)"/>
+                <g transform="translate(10,48)" fill="#0b5ed7">
+                  <rect width="24" height="24" rx="4"/>
+                  <rect x="32" width="24" height="24" rx="4"/>
+                  <rect x="64" width="24" height="24" rx="4"/>
+                </g>
+              </g>
+            </svg>
+          </div>
+        </div>
+
+        <div style="margin-top:18px;display:flex;justify-content:space-between;align-items:center">
+          <h2 style="margin:0">Popular Products</h2>
+          <div class="small muted-2">Tap a product to add to cart</div>
+        </div>
+
+        <div class="grid" style="margin-top:12px">
+          <!-- product objects -->
+          <div class="card product-card" data-id="6kg" data-name="6kg Cylinder" data-price="30">
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><rect x="12" y="8" width="40" height="48" rx="6" fill="#f6f9ff"/><rect x="22" y="4" width="20" height="6" rx="2" fill="#0b5ed7"/></svg>
+            <div style="font-weight:700">6kg Cylinder</div>
+            <div class="small">Portable & safe</div>
+            <div class="price">₵120</div>
+            <button onclick="addToCart('6kg','6kg Cylinder',120)">Add to cart</button>
+          </div>
+
+          <div class="card product-card" data-id="12kg" data-name="12.5kg Cylinder" data-price="55">
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><rect x="10" y="6" width="44" height="52" rx="8" fill="#fdfaf6"/><rect x="22" y="4" width="20" height="6" rx="2" fill="#0ea5a4"/></svg>
+            <div style="font-weight:700">12.5kg Cylinder</div>
+            <div class="small">Household standard</div>
+            <div class="price">₵220</div>
+            <button onclick="addToCart('12kg','12.5kg Cylinder',220)">Add to cart</button>
+          </div>
+
+          <div class="card product-card" data-id="37kg" data-name="37kg Cylinder" data-price="180">
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><rect x="8" y="4" width="48" height="56" rx="10" fill="#fff7f0"/><rect x="22" y="6" width="20" height="8" rx="3" fill="#f97316"/></svg>
+            <div style="font-weight:700">37kg Cylinder</div>
+            <div class="small">Commercial / restaurant</div>
+            <div class="price">₵680</div>
+            <button onclick="addToCart('37kg','37kg Cylinder',680)">Add to cart</button>
+          </div>
+
+          <div class="card product-card" data-id="reg" data-name="Regulator" data-price="25">
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><circle cx="32" cy="32" r="24" fill="#f0f9ff"/><rect x="28" y="26" width="8" height="12" rx="2" fill="#0b5ed7"/></svg>
+            <div style="font-weight:700">Regulator</div>
+            <div class="small">Safety certified</div>
+            <div class="price">₵80</div>
+            <button onclick="addToCart('reg','Regulator',80)">Add to cart</button>
+          </div>
+
+          <div class="card product-card" data-id="hose" data-name="Hose" data-price="15">
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><path d="M10 32c8-10 40-12 44 0" stroke="#0ea5a4" stroke-width="4" fill="none"/></svg>
+            <div style="font-weight:700">Hose</div>
+            <div class="small">High-pressure rubber</div>
+            <div class="price">₵45</div>
+            <button onclick="addToCart('hose','Hose',45)">Add to cart</button>
+          </div>
+
+          <div class="card product-card" data-id="burner" data-name="Gas Burner" data-price="40">
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><rect x="14" y="18" width="36" height="28" rx="6" fill="#fff8f0"/><circle cx="32" cy="32" r="6" fill="#f97316"/></svg>
+            <div style="font-weight:700">Gas Burner</div>
+            <div class="small">Sturdy stainless</div>
+            <div class="price">₵150</div>
+            <button onclick="addToCart('burner','Gas Burner',150)">Add to cart</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ORDER single -->
+      <section id="order">
+        <div class="card">
+          <h2>Place an Order</h2>
+          <form id="singleOrderForm">
+            <div class="row" style="margin-top:8px">
+              <div class="col"><label>Full name</label><input id="o_name" required></div>
+              <div class="col"><label>Phone (WhatsApp)</label><input id="o_phone" required></div>
+            </div>
+            <label style="margin-top:8px">Product</label>
+            <select id="o_product">
+              <option>12.5kg Cylinder — Refill</option>
+              <option>5kg Cylinder — Refill</option>
+              <option>37kg Cylinder — Commercial</option>
+              <option>Empty Exchange</option>
+            </select>
+
+            <label style="margin-top:8px">Quantity</label>
+            <input id="o_qty" type="number" min="1" value="1">
+
+            <label style="margin-top:8px">Delivery address</label>
+            <textarea id="o_address" rows="3" required></textarea>
+
+            <div style="display:flex;gap:10px;margin-top:12px;align-items:center">
+              <button type="button" id="placeOrderBtn" class="cta">Submit Order</button>
+              <div class="small muted-2">Or <button type="button" class="small" onclick="openWhatsAppOrder()">send via WhatsApp</button></div>
+            </div>
+            <div id="orderFeedback" class="small" style="margin-top:8px;color:green"></div>
+          </form>
+        </div>
+      </section>
+
+      <!-- BULK -->
+      <section id="bulk">
+        <div class="card">
+          <h2>Bulk Orders & Business Supply</h2>
+          <p class="small">Volume discounts, scheduled deliveries, and dedicated support for businesses.</p>
+
+          <div style="margin-top:12px" class="grid">
+            <div class="card">
+              <h3>Standard Bulk Pack</h3>
+              <p class="small">10 × 12.5kg cylinders, priority delivery</p>
+              <p class="price">From ₵1,900</p>
+              <button onclick="fillBulk('Standard')">Request Quote</button>
+            </div>
+            <div class="card">
+              <h3>Restaurant Pack</h3>
+              <p class="small">20 × 37kg cylinders, weekly delivery</p>
+              <p class="price">From ₵12,800</p>
+              <button onclick="fillBulk('Restaurant')">Request Quote</button>
+            </div>
+            <div class="card">
+              <h3>Retailer Pack</h3>
+              <p class="small">Mixed cylinders + accessories</p>
+              <p class="price">Custom pricing</p>
+              <button onclick="fillBulk('Retailer')">Request Quote</button>
+            </div>
+          </div>
+
+          <div style="margin-top:14px">
+            <h4>Request a Quote</h4>
+            <form id="bulkForm">
+              <input id="b_company" placeholder="Company / Business name" />
+              <input id="b_contact" placeholder="Contact phone / email" />
+              <textarea id="b_details" placeholder="Tell us your monthly usage & preferred schedule"></textarea>
+              <div style="display:flex;gap:8px;margin-top:8px"><button type="button" onclick="submitBulk()">Send Request</button></div>
+              <div id="bulkFeedback" class="small" style="margin-top:8px;color:green"></div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- SAFETY -->
+      <section id="safety">
+        <h2>Safety & Handling</h2>
+        <div class="grid" style="margin-top:12px">
+          <div class="card">
+            <h3>Storage</h3>
+            <p class="small">Keep cylinders upright in ventilated areas, away from heat and flames.</p>
+          </div>
+          <div class="card">
+            <h3>Leak Detection</h3>
+            <p class="small">Use soapy water — bubbles indicate a leak. Do not use flames to test.</p>
+          </div>
+          <div class="card">
+            <h3>Installation</h3>
+            <p class="small">Our certified technicians fit regulators and hoses on-site and run safety checks.</p>
+          </div>
+          <div class="card">
+            <h3>Emergency</h3>
+            <p class="small">If you smell gas: ventilate, evacuate, and call our emergency hotline immediately.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- CONTACT -->
+      <section id="contact">
+        <div class="card">
+          <h2>Contact & Support</h2>
+          <div class="grid" style="margin-top:12px">
+            <div class="card">
+              <h3>Hotline</h3>
+              <p class="small">+233 201 022 153</p>
+              <button onclick="callHotline()">Call</button>
+            </div>
+            <div class="card">
+              <h3>WhatsApp</h3>
+              <p class="small">+233 201 022 153 (fastest)</p>
+              <button onclick="openWhatsApp()">Open WhatsApp</button>
+            </div>
+            <div class="card">
+              <h3>Email</h3>
+              <p class="small">support@gasfill.example</p>
+              <button onclick="composeEmail()">Email Us</button>
+            </div>
+          </div>
+
+          <div style="margin-top:14px">
+            <h4>Send us a message</h4>
+            <form id="contactForm">
+              <input id="c_name" placeholder="Your name" />
+              <input id="c_email" placeholder="Your email" />
+              <textarea id="c_msg" placeholder="Message"></textarea>
+              <div style="margin-top:8px"><button type="button" onclick="submitContact()">Send Message</button></div>
+              <div id="contactFeedback" class="small" style="margin-top:8px;color:green"></div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- ORDER NOW quick -->
+      <section id="orderNow">
+        <div class="card center">
+          <h2>Quick Order</h2>
+          <p class="small">Select a product and place a one-click order.</p>
+          <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+            <button onclick="oneClickOrder('12.5kg Cylinder',220)">12.5kg — ₵220</button>
+            <button onclick="oneClickOrder('6kg Cylinder',120)">6kg — ₵120</button>
+            <button onclick="oneClickOrder('37kg Cylinder',680)">37kg — ₵680</button>
+          </div>
+          <div id="quickFeedback" class="small" style="margin-top:10px;color:green"></div>
+        </div>
+      </section>
+
+      <!-- DASHBOARD -->
+      <section id="dashboard">
+        <div style="display:flex;gap:16px;flex-wrap:wrap">
+          <div class="card" style="flex:1;min-width:220px">
+            <h3>Orders Today</h3>
+            <div id="statOrders" style="font-weight:800;font-size:1.4rem">0</div>
+            <div class="small muted-2">Total orders recorded in this browser</div>
+          </div>
+
+          <div class="card" style="flex:1;min-width:220px">
+            <h3>Pending Deliveries</h3>
+            <div id="statPending" style="font-weight:800;font-size:1.4rem">0</div>
+            <div class="small muted-2">Orders not yet delivered</div>
+          </div>
+
+          <div class="card" style="flex:1;min-width:220px">
+            <h3>Revenue (simulated)</h3>
+            <div id="statRevenue" style="font-weight:800;font-size:1.4rem">₵0</div>
+            <div class="small muted-2">Sum of order totals stored locally</div>
+          </div>
+        </div>
+
+        <div style="margin-top:14px">
+          <h3>Recent Orders</h3>
+          <div id="recentOrders" class="orders-log" style="margin-top:8px"></div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Floating cart -->
+    <button class="cart-btn" id="openCartBtn" title="Open cart">Cart (<span id="cartCount">0</span>)</button>
+
+    <!-- Cart Modal (simple) -->
+    <div id="cartModal" style="display:none;position:fixed;inset:0;background:rgba(4,8,15,0.45);align-items:center;justify-content:center;z-index:80">
+      <div style="width:100%;max-width:520px;background:#fff;border-radius:12px;padding:18px;box-shadow:0 16px 40px rgba(2,6,23,0.2)">
+        <div style="display:flex;align-items:center;justify-content:space-between"><h3 style="margin:0">Your Cart</h3><button onclick="closeCart()" class="small">Close</button></div>
+        <div id="cartItems" style="margin-top:12px;display:flex;flex-direction:column;gap:10px"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+          <div class="small muted-2">Total</div><div id="cartTotal" style="font-weight:800">₵0</div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button onclick="checkoutCart()" class="cta">Checkout</button>
+          <button onclick="clearCart()" style="background:#fff;border:1px solid #eef6ff;padding:8px;border-radius:8px">Clear</button>
+        </div>
+        <div id="cartFeedback" class="small" style="margin-top:8px;color:green"></div>
+      </div>
+    </div>
+
+    <footer>
+      <div class="inner">
+        <div>
+          <strong>GasFill</strong>
+          <div class="small muted-2">Fast • Safe • Premium</div>
+        </div>
+        <div class="small">
+          © 2025 GasFill • <a href="#privacy">Privacy</a> • <a href="#terms">Terms</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    // -------------------------
+    // Simple SPA routing (no framework)
+    // -------------------------
+    const navLinks = document.querySelectorAll('.nav-link');
+    navLinks.forEach(a=> a.addEventListener('click', e=>{
+      e.preventDefault();
+      const tgt = a.getAttribute('data-target');
+      activateSection(tgt);
+    }));
+    document.getElementById('orderNowBtn').addEventListener('click', ()=> activateSection('orderNow'));
+
+    function activateSection(id){
+      document.querySelectorAll('section').forEach(s=> s.classList.remove('active'));
+      const el = document.getElementById(id);
+      if(!el) return;
+      el.classList.add('active');
+      // nav active class
+      navLinks.forEach(a=> a.classList.toggle('active', a.getAttribute('data-target')===id));
+      // update dashboard when shown
+      if(id==='dashboard') renderDashboard();
+      window.scrollTo({top:0,behavior:'smooth'});
+    }
+    function navigateTo(id){ activateSection(id); }
+
+    // -------------------------
+    // CART (localStorage)
+    // -------------------------
+    const CART_KEY = 'gasfill_cart_v1';
+    const ORDERS_KEY = 'gasfill_orders_v1';
+
+    function loadCart(){ try{ return JSON.parse(localStorage.getItem(CART_KEY) || '[]') }catch(e){ return [] } }
+    function saveCart(items){ localStorage.setItem(CART_KEY, JSON.stringify(items)); updateCartUI() }
+
+    function addToCart(id,name,price){
+      const cart = loadCart();
+      const found = cart.find(i=>i.id===id);
+      if(found) found.qty++;
+      else cart.push({id,name,price,qty:1});
+      saveCart(cart);
+      showFeedback('Added to cart: '+name);
+    }
+
+    function updateCartUI(){
+      const cart = loadCart();
+      const count = cart.reduce((s,i)=>s+i.qty,0);
+      document.getElementById('cartCount').textContent = count;
+    }
+
+    document.getElementById('openCartBtn').addEventListener('click', openCart);
+    function openCart(){
+      renderCartItems();
+      document.getElementById('cartModal').style.display = 'flex';
+    }
+    function closeCart(){ document.getElementById('cartModal').style.display = 'none'; }
+
+    function renderCartItems(){
+      const ct = document.getElementById('cartItems');
+      const cart = loadCart();
+      ct.innerHTML = '';
+      let total = 0;
+      if(!cart.length){ ct.innerHTML = '<div class="small muted-2">Cart is empty</div>'; document.getElementById('cartTotal').textContent = '₵0'; return; }
+      cart.forEach(item=>{
+        const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center';
+        row.innerHTML = `<div style="min-width:0"><div style="font-weight:800">${escapeHtml(item.name)} <span class="small" style="color:#94a3b8">x${item.qty}</span></div><div class="small muted-2">₵${item.price} each</div></div><div style="display:flex;gap:8px;align-items:center"><button onclick="changeQty('${item.id}',-1)" style="padding:6px;border-radius:8px">-</button><button onclick="changeQty('${item.id}',1)" style="padding:6px;border-radius:8px">+</button></div>`;
+        ct.appendChild(row);
+        total += item.price * item.qty;
+      });
+      document.getElementById('cartTotal').textContent = '₵'+total;
+    }
+
+    function changeQty(id,delta){
+      const cart = loadCart();
+      const idx = cart.findIndex(i=>i.id===id);
+      if(idx===-1) return;
+      cart[idx].qty += delta;
+      if(cart[idx].qty <= 0) cart.splice(idx,1);
+      saveCart(cart);
+      renderCartItems();
+    }
+
+    function clearCart(){ localStorage.removeItem(CART_KEY); updateCartUI(); renderCartItems(); }
+
+    function checkoutCart(){
+      const cart = loadCart();
+      if(!cart.length){ showFeedback('Cart is empty'); return; }
+      // create order object & store locally (demo)
+      const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
+      const orders = loadOrders();
+      const id = 'ORD-'+Date.now();
+      const order = { id, items: cart, total, status:'pending', createdAt: new Date().toISOString() };
+      orders.unshift(order);
+      saveOrders(orders);
+      clearCart();
+      closeCart();
+      showFeedback('Checkout successful — order recorded.');
+      renderDashboard();
+    }
+
+    // -------------------------
+    // ORDERS (localStorage)
+    // -------------------------
+    function loadOrders(){ try{ return JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]') }catch(e){ return [] } }
+    function saveOrders(arr){ localStorage.setItem(ORDERS_KEY, JSON.stringify(arr)); }
+
+    // single order form
+    document.getElementById('placeOrderBtn').addEventListener('click', ()=>{
+      const product = document.getElementById('o_product').value;
+      const name = document.getElementById('o_name').value.trim();
+      const phone = document.getElementById('o_phone').value.trim();
+      const qty = Number(document.getElementById('o_qty').value) || 1;
+      const addr = document.getElementById('o_address').value.trim();
+      if(!name || !phone || !addr){ alert('Please fill name, phone and address.'); return; }
+      const orders = loadOrders();
+      const id = 'ORD-'+Date.now();
+      const priceMap = { '12.5kg Cylinder — Refill':220, '5kg Cylinder — Refill':120, '37kg Cylinder — Commercial':680, 'Empty Exchange': 0 };
+      const total = (priceMap[product]||100)*qty;
+      orders.unshift({id, product, name, phone, qty, address:addr, total, status:'pending', createdAt:new Date().toISOString()});
+      saveOrders(orders);
+      document.getElementById('orderFeedback').textContent = 'Order recorded. We will contact you shortly.';
+      setTimeout(()=>{ document.getElementById('orderFeedback').textContent = ''; },5000);
+      renderDashboard();
+    });
+
+    // bulk form
+    function fillBulk(pack){ document.getElementById('b_details').value = 'Interested in '+pack+' pack. Please quote.'; activateSection('bulk'); }
+    function submitBulk(){ const company = document.getElementById('b_company').value.trim(); const contact = document.getElementById('b_contact').value.trim(); const details = document.getElementById('b_details').value.trim(); if(!company||!contact){ alert('Please enter company and contact'); return; } document.getElementById('bulkFeedback').textContent = 'Quote request sent. We will contact you.'; setTimeout(()=>document.getElementById('bulkFeedback').textContent='',5000); }
+
+    // contact form
+    function submitContact(){ const n=document.getElementById('c_name').value.trim(); const em=document.getElementById('c_email').value.trim(); const msg=document.getElementById('c_msg').value.trim(); if(!n||!em||!msg){ alert('Please fill the form'); return; } document.getElementById('contactFeedback').textContent = 'Message sent. We will respond soon.'; setTimeout(()=>document.getElementById('contactFeedback').textContent='',4000); }
+
+    // one-click order
+    function oneClickOrder(product,price){
+      const orders = loadOrders();
+      const id = 'ORD-'+Date.now();
+      orders.unshift({id, product, qty:1, total:price, status:'pending', createdAt:new Date().toISOString()});
+      saveOrders(orders);
+      document.getElementById('quickFeedback').textContent = 'Order placed: '+product;
+      setTimeout(()=>document.getElementById('quickFeedback').textContent='',4000);
+      renderDashboard();
+    }
+
+    // WhatsApp helpers
+    function openWhatsApp(){ window.open('https://wa.me/233201022153','_blank') }
+    function openWhatsAppOrder(){
+      const name = document.getElementById('o_name').value || '';
+      const phone = document.getElementById('o_phone').value || '';
+      const product = document.getElementById('o_product').value;
+      const qty = document.getElementById('o_qty').value || 1;
+      const addr = document.getElementById('o_address').value || '';
+      if(!phone || !addr){ alert('Please fill phone and address first'); return; }
+      const msg = `GasFill Order:%0AName:${encodeURIComponent(name)}%0APhone:${encodeURIComponent(phone)}%0AProduct:${encodeURIComponent(product)} x${qty}%0AAddress:${encodeURIComponent(addr)}`;
+      window.open('https://wa.me/233201022153?text='+msg,'_blank');
+    }
+    function callHotline(){ window.location.href = 'tel:+233201022153'; }
+    function composeEmail(){ window.location.href = 'mailto:support@gasfill.example'; }
+
+    // -------------------------
+    // DASHBOARD render
+    // -------------------------
+    function renderDashboard(){
+      const orders = loadOrders();
+      document.getElementById('statOrders').textContent = orders.length;
+      const pending = orders.filter(o => o.status === 'pending').length;
+      document.getElementById('statPending').textContent = pending;
+      const revenue = orders.reduce((s,o)=> s + (Number(o.total)||0), 0);
+      document.getElementById('statRevenue').textContent = '₵' + revenue;
+      const recent = document.getElementById('recentOrders');
+      recent.innerHTML = '';
+      orders.slice(0,8).forEach(o=>{
+        const div = document.createElement('div'); div.className='order-row';
+        const left = document.createElement('div'); left.innerHTML = `<div style="font-weight:800">${escapeHtml(o.product||'Cart order')} <span class="small" style="color:#94a3b8">(${o.qty||1})</span></div><div class="small muted-2">${new Date(o.createdAt).toLocaleString()}</div>`;
+        const right = document.createElement('div'); const badge = document.createElement('div');
+        badge.className = 'badge ' + (o.status==='pending' ? 'badge-pending' : o.status==='accepted' ? 'badge-ontheway' : 'badge-delivered');
+        badge.textContent = o.status==='pending' ? 'Pending' : o.status==='accepted' ? 'On the way' : 'Delivered';
+        right.appendChild(badge);
+        // track & mark actions
+        const trackBtn = document.createElement('button'); trackBtn.textContent='Track'; trackBtn.style.marginLeft='8px'; trackBtn.onclick = ()=> alert('Tracker demo — not connected');
+        const markBtn = document.createElement('button'); markBtn.textContent='Mark Delivered'; markBtn.style.marginLeft='8px'; markBtn.onclick = ()=>{ updateOrderStatus(o.id,'delivered'); renderDashboard(); };
+        right.appendChild(trackBtn); right.appendChild(markBtn);
+        div.appendChild(left); div.appendChild(right);
+        recent.appendChild(div);
+      });
+    }
+
+    function updateOrderStatus(id,status){
+      const orders = loadOrders();
+      const idx = orders.findIndex(o=>o.id===id);
+      if(idx===-1) return;
+      orders[idx].status = status; saveOrders(orders); renderDashboard();
+    }
+
+    // auto-rotate older orders statuses (demo)
+    setInterval(()=>{
+      const orders = loadOrders();
+      let changed=false;
+      orders.forEach(o=>{
+        if(o.status === 'pending'){ o.status = 'accepted'; changed=true; }
+        else if(o.status === 'accepted'){ o.status = 'delivered'; changed=true; }
+      });
+      if(changed){ saveOrders(orders); if(document.getElementById('dashboard').classList.contains('active')) renderDashboard(); }
+    }, 25000);
+
+    // -------------------------
+    // small utils & init
+    // -------------------------
+    function escapeHtml(s){ return (s+'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c)); }
+    function showFeedback(text){ const el = document.getElementById('cartFeedback'); if(el){ el.textContent = text; setTimeout(()=>el.textContent='',3000) } }
+    function addOrderToLocal(order){ const arr = loadOrders(); arr.unshift(order); saveOrders(arr); renderDashboard(); }
+
+    // initial state & UI
+    if(!localStorage.getItem(ORDERS_KEY)) saveOrders([]);
+    if(!localStorage.getItem(CART_KEY)) saveCart([]);
+    updateCartUI();
+    renderDashboard();
+
+    // helper to show messages
+    function showMsg(msg){ const el = document.getElementById('cartFeedback'); if(!el) return; el.textContent = msg; setTimeout(()=>el.textContent='',3500); }
+
+    // small helpers called by HTML buttons
+    window.addToCart = addToCart;
+    window.openWhatsApp = openWhatsApp;
+    window.openWhatsAppOrder = openWhatsAppOrder;
+    window.callHotline = callHotline;
+    window.composeEmail = composeEmail;
+    window.fillBulk = fillBulk;
+    window.submitBulk = submitBulk;
+    window.checkoutCart = checkoutCart;
+    window.clearCart = clearCart;
+    window.oneClickOrder = oneClickOrder;
+    window.activateSection = activateSection;
+    window.changeQty = changeQty;
+    window.closeCart = closeCart;
+
+    // preserve nav behavior if hash present
+    if(location.hash){
+      const h = location.hash.replace('#','');
+      const mapping = { products:'products', order:'order', bulk:'bulk', safety:'safety', contact:'contact', orderNow:'orderNow', dashboard:'dashboard' };
+      if(mapping[h]) activateSection(mapping[h]);
+    }
+  </script>
+</body>
+</html>
