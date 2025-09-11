@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GasFill — Fast, Safe & Premium Cylinder Delivery</title>
+  <meta name="description" content="GasFill - premium cylinder delivery and refill service. Order LPG cylinders, exchange empties, and get bulk supply for businesses. Safe handling and fast delivery." />
+  <style>
+    /* Elegant, modern, high-class styling */
+    :root{
+      --bg: #fbfcfd;
+      --card: #ffffff;
+      --muted: #6b7280;
+      --accent: #0b5ed7; /* blue */
+      --accent-2: #0ea5a4; /* teal */
+      --gold:#f59e0b;
+      --glass: rgba(255,255,255,0.7);
+      --maxw:1200px;
+      font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#f6f8fb,#fbfcfd);color:#0f172a;line-height:1.48}
+    .wrap{max-width:var(--maxw);margin:0 auto;padding:28px 20px}
+
+    header{display:flex;align-items:center;justify-content:space-between;gap:16px}
+    .brand{display:flex;gap:12px;align-items:center}
+    .logo{width:54px;height:54px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#0a58ca);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px;box-shadow:0 6px 18px rgba(11,94,215,0.12)}
+    .brand h1{margin:0;font-size:1.15rem}
+    nav{display:flex;gap:18px;align-items:center}
+    nav a{color:#0f172a;text-decoration:none;font-weight:600;opacity:0.85}
+    .cta{background:linear-gradient(90deg,var(--accent),#0b6ef0);color:#fff;padding:10px 14px;border-radius:10px;font-weight:800;box-shadow:0 8px 24px rgba(11,94,215,0.12)}
+
+    /* Hero */
+    .hero{display:grid;grid-template-columns:1fr 420px;gap:28px;align-items:center;margin-top:28px}
+    .hero-card{background:linear-gradient(180deg,#fff,#fbfdff);padding:28px;border-radius:16px;box-shadow:0 18px 40px rgba(12,40,80,0.06)}
+    .tag{display:inline-block;background:linear-gradient(90deg,var(--accent-2),#06b6a4);color:#fff;padding:6px 10px;border-radius:999px;font-weight:700;margin-bottom:12px}
+    h2{margin:0 0 12px;font-size:1.6rem}
+    p.lead{margin:0 0 18px;color:var(--muted)}
+    .features{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+    .feature{background:#fff;padding:12px;border-radius:10px;border:1px solid #eef4ff;min-width:150px;box-shadow:0 8px 30px rgba(12,40,80,0.03)}
+
+    /* Order card */
+    .order{background:linear-gradient(180deg,#fff,#f8fbff);padding:18px;border-radius:14px;border:1px solid #eef6ff}
+    label{display:block;font-weight:700;margin:10px 0 6px}
+    input,select,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #e6eef8;font-size:0.95rem}
+    .row{display:flex;gap:10px}
+    .row input{flex:1}
+    .btn{display:inline-block;padding:10px 14px;border-radius:10px;border:none;cursor:pointer;font-weight:800}
+    .btn-primary{background:linear-gradient(90deg,var(--accent),#0b6ef0);color:#fff}
+    .btn-ghost{background:#fff;border:1px solid #e6eef8}
+
+    /* sections */
+    section{margin-top:26px}
+    .cards-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    .card{background:var(--card);padding:18px;border-radius:12px;border:1px solid #f1f5f9;box-shadow:0 8px 28px rgba(12,40,80,0.04)}
+    .muted{color:var(--muted)}
+
+    /* gallery */
+    .gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .imgbox{border-radius:10px;overflow:hidden;border:1px solid #eef4ff}
+    .imgbox svg{width:100%;height:160px;display:block}
+
+    /* testimonials */
+    .testimonials{display:flex;gap:14px}
+    .testimonial{background:#fff;padding:14px;border-radius:10px;border:1px solid #eef4ff}
+
+    footer{margin-top:36px;padding:30px;text-align:center;color:var(--muted)}
+
+    @media(max-width:1000px){
+      .hero{grid-template-columns:1fr}
+      .cards-grid{grid-template-columns:repeat(2,1fr)}
+      .gallery{grid-template-columns:repeat(2,1fr)}
+    }
+    @media(max-width:600px){.cards-grid{grid-template-columns:1fr}.gallery{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo">JOJO</div>
+        <div>
+          <h1>GasFill</h1>
+          <div class="muted">Fast • Safe • Premium</div>
+        </div>
+      </div>
+
+      <nav>
+        <a href="#products">Products</a>
+        <a href="#order">Order</a>
+        <a href="#business">Bulk</a>
+        <a href="#safety">Safety</a>
+        <a href="#contact">Contact</a>
+        <a class="cta" href="#order">Order Now</a>
+      </nav>
+    </header>
+
+    <main>
+      <div class="hero">
+        <div class="hero-card">
+          <span class="tag">Officially Certified</span>
+          <h2>Need gas delivered right to your door?<br><span style="color:var(--accent)">Premium cylinder refills & exchanges</span></h2>
+          <p class="lead">GasFill brings safe home delivery, fast refills, and business bulk supply. Trained delivery technicians, secure handling and transparent pricing.</p>
+
+          <div class="features">
+            <div class="feature">✅ 24–48 min average delivery</div>
+            <div class="feature">🔒 Safety certified technicians</div>
+            <div class="feature">🏷️ Flexible payment (MoMo, Card, Cash)</div>
+          </div>
+
+          <div style="margin-top:18px;display:flex;gap:12px;align-items:center">
+            <a class="btn btn-primary" href="#order">Order Cylinder</a>
+            <a class="btn btn-ghost" href="#contact">Contact Support</a>
+          </div>
+
+          <div style="margin-top:18px;color:var(--muted);font-size:14px">
+            <strong>Hotline:</strong> +233 201022153 • <strong>WhatsApp:</strong> +233201022153
+          </div>
+        </div>
+
+        <aside class="order">
+          <h3 style="margin:0">Place an Order</h3>
+          <p class="muted" style="margin-top:6px">Fastest way: send via WhatsApp after filling details.</p>
+          <form id="orderForm" style="margin-top:12px">
+            <label for="product">Product</label>
+            <select id="product">
+              <option value="12.5kg">12.5 kg Cylinder — Refill</option>
+              <option value="5kg">5 kg Cylinder — Refill</option>
+              <option value="37kg">37 kg Cylinder — Commercial</option>
+              <option value="exchange">Empty Exchange (same size)</option>
+            </select>
+
+            <label for="qty">Quantity</label>
+            <input id="qty" type="number" value="1" min="1">
+
+            <label for="name">Full name</label>
+            <input id="name" placeholder="e.g. Ama Mensah" required>
+
+            <label for="phone">Phone (WhatsApp)</label>
+            <input id="phone" placeholder="233201022153" required>
+
+            <label for="address">Delivery address</label>
+            <textarea id="address" placeholder="Street, Landmark, City" required></textarea>
+
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button type="button" id="submitOrder" class="btn btn-primary">Submit</button>
+              <button type="button" id="waOrder" class="btn btn-ghost">Send via WhatsApp</button>
+            </div>
+            <p id="orderStatus" class="muted" style="margin-top:10px"></p>
+          </form>
+
+          <div style="margin-top:12px; border-top:1px dashed #eef6ff;padding-top:12px;color:var(--muted);font-size:13px">
+            <strong>Payment:</strong> Mobile Money, Card on delivery, Cash
+          </div>
+        </aside>
+      </div>
+
+      <!-- Products & services -->
+      <section id="products">
+        <h2>Products & Services</h2>
+        <div class="cards-grid" style="margin-top:12px">
+          <div class="card">
+            <h3>Cylinder Refill</h3>
+            <p class="muted">Refill of LPG cylinders in multiple sizes with leak test and valve check.</p>
+            <ul class="muted">
+              <li>5 kg — Portable</li>
+              <li>12.5 kg — Standard household</li>
+              <li>37 kg — Commercial</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <h3>Cylinder Exchange</h3>
+            <p class="muted">Swap your empty cylinder for a filled cylinder quickly. Same-day exchange in service areas.</p>
+          </div>
+
+          <div class="card">
+            <h3>New Cylinders & Accessories</h3>
+            <p class="muted">Regulators, hoses, burners and certified cylinders — installed on request.</p>
+          </div>
+
+          <div class="card">
+            <h3>Bulk Orders & Business Supply</h3>
+            <p class="muted">Special pricing and delivery for restaurants, hostels and retailers. Request quotes and scheduled deliveries.</p>
+          </div>
+
+          <div class="card">
+            <h3>Safety Checks & Certification</h3>
+            <p class="muted">Our technicians perform safety checks, pressure tests and provide handling guidance.</p>
+          </div>
+
+          <div class="card">
+            <h3>Emergency Response</h3>
+            <p class="muted">If you smell gas, follow our emergency guidance and call our hotline. We dispatch priority crews if needed.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Delivery Info -->
+      <section id="delivery">
+        <h2>Delivery Information</h2>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:12px">
+          <div class="card" style="flex:1;min-width:260px">
+            <h4>Areas Covered</h4>
+            <p class="muted">Accra Metro, Osu, Cantonments, East Legon, Labone, North Ridge, and surrounding neighborhoods. See our full service map by contacting support.</p>
+          </div>
+          <div class="card" style="flex:1;min-width:260px">
+            <h4>Delivery Times</h4>
+            <p class="muted">Standard delivery: 24–48 minutes in central areas. Scheduled delivery: choose date & time slot.</p>
+          </div>
+          <div class="card" style="flex:1;min-width:260px">
+            <h4>Delivery Fees</h4>
+            <p class="muted">Small fee applies outside central zones. Bulk orders and subscriptions enjoy discounted rates.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Gallery -->
+      <section id="gallery">
+        <h2>Gallery — Our Fleet & Team</h2>
+        <div class="gallery" style="margin-top:12px">
+          <div class="imgbox"> <!-- vehicle -->
+            <svg viewBox="0 0 600 360" xmlns="http://www.w3.org/2000/svg">
+              <defs><linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#0b5ed7"/><stop offset="1" stop-color="#0ea5a4"/></linearGradient></defs>
+              <rect width="100%" height="100%" fill="#eef7ff"></rect>
+              <g transform="translate(40,40)">
+                <rect x="10" y="80" width="420" height="150" rx="20" fill="url(#g1)" opacity="0.95"></rect>
+                <circle cx="90" cy="250" r="28" fill="#fff"/>
+                <circle cx="330" cy="250" r="28" fill="#fff"/>
+                <text x="40" y="40" font-size="28" fill="#043164" font-weight="700">Delivery Fleet</text>
+              </g>
+            </svg>
+          </div>
+          <div class="imgbox"> <!-- technician -->
+            <svg viewBox="0 0 600 360" xmlns="http://www.w3.org/2000/svg">
+              <rect width="100%" height="100%" fill="#f3fffb"></rect>
+              <g transform="translate(40,30)">
+                <circle cx="120" cy="80" r="36" fill="#0b5ed7"/>
+                <rect x="40" y="140" width="200" height="90" rx="10" fill="#fff"/>
+                <text x="20" y="32" font-size="28" fill="#043164" font-weight="700">Certified Technicians</text>
+              </g>
+            </svg>
+          </div>
+          <div class="imgbox"> <!-- safety -->
+            <svg viewBox="0 0 600 360" xmlns="http://www.w3.org/2000/svg">
+              <rect width="100%" height="100%" fill="#fff7ed"></rect>
+              <g transform="translate(30,30)">
+                <rect x="20" y="40" width="320" height="160" rx="14" fill="#fff" stroke="#fde68a" stroke-width="4"/>
+                <text x="30" y="32" font-size="28" fill="#92400e" font-weight="700">Safety First</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- Business / Bulk -->
+      <section id="business">
+        <h2>Business & Bulk Supply</h2>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:12px">
+          <div class="card" style="flex:1;min-width:300px">
+            <h4>Special Pricing</h4>
+            <p class="muted">Volume discounts for restaurants, hostels and retailers. Contracts & scheduled deliveries available.</p>
+            <ul class="muted"><li>Tiered pricing based on monthly volume</li><li>Priority delivery slots</li><li>Dedicated account manager</li></ul>
+            <div style="margin-top:10px"><button class="btn btn-primary" id="requestQuoteBtn">Request Bulk Quote</button></div>
+          </div>
+
+          <div class="card" style="flex:1;min-width:300px">
+            <h4>Partnerships</h4>
+            <p class="muted">Partner with GasFill for supply and distribution. We provide logistics and invoicing support.</p>
+            <div style="margin-top:10px"><button class="btn btn-ghost" id="partnerBtn">Become a Partner</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Safety -->
+      <section id="safety">
+        <h2>Safety & Handling</h2>
+        <div class="cards-grid" style="margin-top:12px">
+          <div class="card">
+            <h4>How to store cylinders</h4>
+            <p class="muted">Keep upright, away from heat and direct sunlight. Store in ventilated areas.</p>
+          </div>
+          <div class="card">
+            <h4>Detecting leaks</h4>
+            <p class="muted">If you smell gas, do not light matches. Open windows and call our emergency hotline immediately.</p>
+          </div>
+          <div class="card">
+            <h4>Installation & checks</h4>
+            <p class="muted">Our technicians check regulators, hoses and connectors before leaving the site.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ & Support -->
+      <section id="support">
+        <h2>Support & FAQs</h2>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:12px">
+          <div class="card" style="flex:1;min-width:320px">
+            <h4>FAQ</h4>
+            <details style="margin-top:8px"><summary>How do I exchange an empty cylinder?</summary><p class="muted">Choose "Empty Exchange" in the order form; our rider will swap on delivery.</p></details>
+            <details style="margin-top:8px"><summary>What payment methods are accepted?</summary><p class="muted">Mobile Money, Card payments and Cash on delivery.</p></details>
+            <details style="margin-top:8px"><summary>Can I schedule deliveries?</summary><p class="muted">Yes — choose a preferred delivery time during ordering.</p></details>
+          </div>
+
+          <div class="card" style="flex:1;min-width:320px">
+            <h4>Contact & emergencies</h4>
+            <p class="muted">Hotline: +233201022153<br>WhatsApp: +233201022153<br>Email: support@gasfill.example</p>
+            <div style="margin-top:10px"><button class="btn btn-primary" id="callBtn">Call Hotline</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Reviews -->
+      <section id="reviews">
+        <h2>Customer Reviews</h2>
+        <div class="testimonials" style="margin-top:12px">
+          <div class="testimonial">
+            <strong>Mary A.</strong>
+            <p class="muted">"Fast delivery and the technician was very professional. Highly recommend."</p>
+          </div>
+          <div class="testimonial">
+            <strong>Kwame B.</strong>
+            <p class="muted">"Excellent bulk pricing for our restaurant — reliable and punctual."</p>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <footer>
+      <div style="max-width:900px;margin:0 auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+          <div>
+            <strong>GasFill</strong><div class="muted">Fast • Safe • Premium</div>
+          </div>
+          <div class="muted">© 2025 GasFill • All rights reserved</div>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    // Interactive behavior: order form handling & WhatsApp integration (client-only demo)
+    const BUSINESS_PHONE = '233537093041'; // replace with your number
+
+    function encodeForWhatsApp(text){ return encodeURIComponent(text); }
+
+    document.getElementById('waOrder').addEventListener('click', ()=>{
+      const data = collectOrder();
+      if(!data) return;
+      const msg = `GasFill Order:%0AName: ${data.name}%0APhone: ${data.phone}%0AProduct: ${data.product} x${data.qty}%0AAddress: ${data.address}%0APreferred: ${data.time}`;
+      window.open(`https://wa.me/${BUSINESS_PHONE}?text=${msg}`, '_blank');
+    });
+
+    document.getElementById('submitOrder').addEventListener('click', ()=>{
+      const data = collectOrder();
+      if(!data) return;
+      // demo: store in localStorage orders
+      const orders = JSON.parse(localStorage.getItem('gasfill_orders_v1')||'[]');
+      orders.unshift(Object.assign({id:'ORD-'+Date.now(),createdAt:new Date().toISOString(),status:'pending'}, data));
+      localStorage.setItem('gasfill_orders_v1', JSON.stringify(orders));
+      document.getElementById('orderStatus').textContent = 'Order recorded. We will contact you shortly.';
+      setTimeout(()=>{ document.getElementById('orderStatus').textContent=''; },6000);
+    });
+
+    function collectOrder(){
+      const product = document.getElementById('product').value;
+      const qty = Number(document.getElementById('qty').value)||1;
+      const name = document.getElementById('name').value.trim();
+      const phone = document.getElementById('phone').value.trim();
+      const address = document.getElementById('address').value.trim();
+      const time = document.getElementById('time') ? document.getElementById('time').value.trim() : '';
+      if(!name||!phone||!address){ alert('Please fill name, phone and address.'); return null; }
+      return { product, qty, name, phone, address, time };
+    }
+
+    // Request Quote / Partner buttons
+    document.getElementById('requestQuoteBtn').addEventListener('click', ()=>{ alert('To request a bulk quote, please contact support@gasfill.example or use the WhatsApp button.'); });
+    document.getElementById('partnerBtn').addEventListener('click', ()=>{ alert('Partner signup: send an email to partnerships@gasfill.example with your company details.'); });
+    document.getElementById('callBtn').addEventListener('click', ()=>{ window.location.href = 'tel:+233201022'; });
+
+  </script>
+</body>
+</html>
