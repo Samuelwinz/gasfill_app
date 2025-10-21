@@ -33,7 +33,7 @@
 
     /* --- App shell --- */
     .app{width:100%;max-width:1200px;margin:0 auto;padding:20px;flex:1;display:flex;flex-direction:column}
-    header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 0}
+    header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 0;position:relative}
     .brand{display:flex;gap:14px;align-items:center}
     .logo{
       width:56px;height:56px;border-radius:12px;
@@ -43,9 +43,16 @@
     }
     .brand h1{margin:0;font-size:1.2rem}
     nav{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    nav a{padding:10px 14px;border-radius:10px;text-decoration:none;color:var(--muted);font-weight:600}
+    nav a{padding:10px 14px;border-radius:10px;text-decoration:none;color:var(--muted);font-weight:600;min-height:44px;min-width:44px;display:flex;align-items:center;justify-content:center}
     nav a.active{background:#fff;border:1px solid #eef6ff;color:var(--accent2);box-shadow:0 6px 20px rgba(11,94,215,0.06)}
-    .cta{background:linear-gradient(90deg,var(--accent2),#0b6ef0);color:#fff;padding:10px 14px;border-radius:10px;font-weight:800;box-shadow:0 10px 40px rgba(11,94,215,0.12)}
+    .cta{background:linear-gradient(90deg,var(--accent2),#0b6ef0);color:#fff;padding:10px 14px;border-radius:10px;font-weight:800;box-shadow:0 10px 40px rgba(11,94,215,0.12);min-height:44px;min-width:44px;border:none;cursor:pointer}
+    
+    /* Hamburger menu */
+    .hamburger{display:none;flex-direction:column;gap:4px;background:none;border:none;cursor:pointer;padding:10px;min-height:44px;min-width:44px;justify-content:center;align-items:center}
+    .hamburger span{display:block;width:24px;height:3px;background:var(--accent2);border-radius:2px;transition:all 0.3s}
+    .hamburger.active span:nth-child(1){transform:rotate(45deg) translate(6px,6px)}
+    .hamburger.active span:nth-child(2){opacity:0}
+    .hamburger.active span:nth-child(3){transform:rotate(-45deg) translate(6px,-6px)}
 
     /* content layout */
     main{flex:1;margin-top:12px}
@@ -55,25 +62,65 @@
     .hero{
       display:flex;gap:18px;align-items:center;padding:20px;border-radius:14px;background:linear-gradient(180deg,#fff,#fbfdff);box-shadow:0 18px 40px rgba(12,40,80,0.06)
     }
-    .hero .text h2{margin:0 0 8px 0;font-size:1.6rem}
-    .hero .text p{margin:0;color:var(--muted)}
+    .hero .text h2{margin:0 0 8px 0;font-size:1.6rem;line-height:1.3}
+    .hero .text p{margin:0;color:var(--muted);line-height:1.5}
 
     /* grids/cards */
     .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
     .card{background:var(--card);padding:14px;border-radius:12px;border:1px solid #f1f5f9;box-shadow:0 8px 28px rgba(12,40,80,0.04)}
     .product-card{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px;text-align:center}
     .product-card img{width:120px;height:120px;object-fit:contain;border-radius:8px}
+    .product-card button{min-height:44px;min-width:120px;padding:12px 16px;background:var(--accent2);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;transition:transform 0.2s}
+    .product-card button:active{transform:scale(0.95)}
     .price{font-weight:800;color:var(--accent2)}
     .small{font-size:0.92rem;color:var(--muted)}
 
     /* responsive */
-    @media (max-width:1000px){ .grid{grid-template-columns:repeat(2,1fr)} .product-card img{width:100px;height:100px} }
-    @media (max-width:640px){ .grid{grid-template-columns:1fr} nav{overflow:auto} .hero{flex-direction:column;align-items:flex-start} }
+    @media (max-width:1000px){ 
+      .grid{grid-template-columns:repeat(2,1fr)} 
+      .product-card img{width:100px;height:100px} 
+    }
+    @media (max-width:768px){
+      .hamburger{display:flex}
+      nav{
+        position:absolute;
+        top:100%;
+        left:0;
+        right:0;
+        background:#fff;
+        flex-direction:column;
+        align-items:stretch;
+        box-shadow:0 8px 24px rgba(12,40,80,0.1);
+        border-radius:12px;
+        margin-top:8px;
+        padding:12px;
+        max-height:0;
+        overflow:hidden;
+        transition:max-height 0.3s ease-out;
+        z-index:100;
+      }
+      nav.mobile-open{max-height:600px;padding:12px}
+      nav a{justify-content:flex-start;width:100%}
+      nav .cta{margin-left:0!important}
+    }
+    @media (max-width:640px){ 
+      .grid{grid-template-columns:1fr} 
+      .hero{flex-direction:column;align-items:flex-start}
+      .hero .text h2{font-size:1.3rem}
+      .hero > div:last-child{width:100%;max-width:300px}
+      .hero svg{width:100%;height:auto}
+      .app{padding:12px}
+      button,a.cta,.product-card button{font-size:0.95rem;padding:12px 16px}
+    }
 
     /* forms */
-    form input,form textarea,form select{width:100%;padding:10px;border-radius:10px;border:1px solid #e6eef8;font-size:0.95rem}
+    form input,form textarea,form select{width:100%;padding:12px;border-radius:10px;border:1px solid #e6eef8;font-size:0.95rem;min-height:44px}
+    form button{min-height:44px;min-width:120px;cursor:pointer}
     .row{display:flex;gap:10px}
     .row .col{flex:1}
+    @media (max-width:640px){
+      .row{flex-direction:column}
+    }
 
     /* footer sticky */
     footer{background:linear-gradient(90deg,#0b1220,#0b2a4d);color:#fff;padding:24px;margin-top:20px;border-top-left-radius:12px;border-top-right-radius:12px;flex-shrink:0}
@@ -81,42 +128,65 @@
     footer a{color:rgba(255,255,255,0.85);text-decoration:none}
 
     /* cart floating */
-    .cart-btn{position:fixed;right:18px;bottom:90px;background:linear-gradient(90deg,var(--accent2),var(--accent1));color:#fff;padding:12px 14px;border-radius:14px;box-shadow:0 12px 36px rgba(11,94,215,0.18);z-index:60;border:none;cursor:pointer;font-weight:800}
-    .cart-count{background:#fff;color:var(--accent2;border-radius:999px;padding:4px 8px;margin-left:8px;border-radius:999px;font-weight:800}
+    .cart-btn{position:fixed;right:18px;bottom:90px;background:linear-gradient(90deg,var(--accent2),var(--accent1));color:#fff;padding:12px 14px;border-radius:14px;box-shadow:0 12px 36px rgba(11,94,215,0.18);z-index:60;border:none;cursor:pointer;font-weight:800;min-height:44px;min-width:44px}
+    .cart-count{background:#fff;color:var(--accent2);border-radius:999px;padding:4px 8px;margin-left:8px;font-weight:800}
 
     /* orders log / badges */
     .orders-log{display:flex;flex-direction:column;gap:10px}
-    .order-row{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:10px;border:1px solid #eef4ff;background:#fff}
-    .badge{padding:6px 10px;border-radius:999px;font-weight:700}
-    .badge-pending{background:#eef2ff;color:var(--accent2)}
+    .order-row{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:10px;border:1px solid #eef4ff;background:#fff;flex-wrap:wrap;gap:8px}
+    .badge{padding:6px 10px;border-radius:999px;font-weight:700;min-height:32px;display:inline-flex;align-items:center}
+    .badge-pending{background:#eef2ff;color:#1e40af}
     .badge-ontheway{background:#fff7ed;color:#92400e}
-    .badge-delivered{background:#ecfccb;color:#166534}
-    .muted-2{color:#94a3b8}
+    .badge-delivered{background:#dcfce7;color:#166534}
+    .muted-2{color:#64748b}
 
-    /* tiny utility */
+    /* utility */
     .center{text-align:center}
+    button:not(.hamburger):not(.cart-btn){
+      min-height:44px;
+      padding:10px 16px;
+      border-radius:8px;
+      border:1px solid #e2e8f0;
+      background:#fff;
+      cursor:pointer;
+      font-weight:600;
+      transition:all 0.2s;
+    }
+    button:not(.hamburger):not(.cart-btn):hover{
+      background:#f8fafc;
+      transform:translateY(-1px);
+    }
+    button:not(.hamburger):not(.cart-btn):active{
+      transform:translateY(0);
+    }
   </style>
 </head>
 <body>
   <div class="app">
     <header>
       <div class="brand">
-        <div class="logo">GF</div>
+        <div class="logo" aria-label="GasFill logo">GF</div>
         <div>
           <h1>GasFill</h1>
           <div class="small">Fast • Safe • Premium</div>
         </div>
       </div>
 
+      <button class="hamburger" id="hamburgerBtn" aria-label="Toggle navigation menu" aria-expanded="false">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+
       <nav id="mainNav" aria-label="Main navigation">
-        <a href="#" data-target="products" class="nav-link active">Products</a>
-        <a href="#" data-target="order" class="nav-link">Order</a>
-        <a href="#" data-target="bulk" class="nav-link">Bulk</a>
-        <a href="#" data-target="safety" class="nav-link">Safety</a>
-        <a href="#" data-target="contact" class="nav-link">Contact</a>
-        <a href="#" data-target="orderNow" class="nav-link">Order Now</a>
-        <a href="#" data-target="dashboard" class="nav-link">Dashboard</a>
-        <button class="cta" id="orderNowBtn" style="margin-left:10px">Order Now</button>
+        <a href="#" data-target="products" class="nav-link active" aria-label="View products">Products</a>
+        <a href="#" data-target="order" class="nav-link" aria-label="Place an order">Order</a>
+        <a href="#" data-target="bulk" class="nav-link" aria-label="Bulk orders">Bulk</a>
+        <a href="#" data-target="safety" class="nav-link" aria-label="Safety information">Safety</a>
+        <a href="#" data-target="contact" class="nav-link" aria-label="Contact us">Contact</a>
+        <a href="#" data-target="orderNow" class="nav-link" aria-label="Quick order">Order Now</a>
+        <a href="#" data-target="dashboard" class="nav-link" aria-label="View dashboard">Dashboard</a>
+        <button class="cta" id="orderNowBtn" style="margin-left:10px" aria-label="Order now">Order Now</button>
       </nav>
     </header>
 
@@ -127,9 +197,9 @@
           <div style="flex:1" class="text">
             <h2>GasFill — Fast, safe cylinder delivery</h2>
             <p class="small">Order premium cylinders, exchange empties, or set up bulk deliveries for your business.</p>
-            <div style="margin-top:12px;display:flex;gap:8px">
-              <button onclick="navigateTo('order')" class="cta">Order Cylinder</button>
-              <button onclick="navigateTo('bulk')" style="background:#fff;border:1px solid #eef6ff;padding:10px 12px;border-radius:10px">Bulk & Business</button>
+            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+              <button onclick="navigateTo('order')" class="cta" aria-label="Order a cylinder">Order Cylinder</button>
+              <button onclick="navigateTo('bulk')" style="background:#fff;border:1px solid #eef6ff;padding:10px 12px;border-radius:10px" aria-label="Bulk and business orders">Bulk & Business</button>
             </div>
           </div>
           <div style="width:360px;display:flex;align-items:center;justify-content:center">
@@ -158,51 +228,51 @@
         <div class="grid" style="margin-top:12px">
           <!-- product objects -->
           <div class="card product-card" data-id="6kg" data-name="6kg Cylinder" data-price="30">
-            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><rect x="12" y="8" width="40" height="48" rx="6" fill="#f6f9ff"/><rect x="22" y="4" width="20" height="6" rx="2" fill="#0b5ed7"/></svg>
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><rect x="12" y="8" width="40" height="48" rx="6" fill="#f6f9ff"/><rect x="22" y="4" width="20" height="6" rx="2" fill="#0b5ed7"/></svg>
             <div style="font-weight:700">6kg Cylinder</div>
             <div class="small">Portable & safe</div>
             <div class="price">₵120</div>
-            <button onclick="addToCart('6kg','6kg Cylinder',120)">Add to cart</button>
+            <button onclick="addToCart('6kg','6kg Cylinder',120)" aria-label="Add 6kg cylinder to cart">Add to cart</button>
           </div>
 
           <div class="card product-card" data-id="12kg" data-name="12.5kg Cylinder" data-price="55">
-            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><rect x="10" y="6" width="44" height="52" rx="8" fill="#fdfaf6"/><rect x="22" y="4" width="20" height="6" rx="2" fill="#0ea5a4"/></svg>
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><rect x="10" y="6" width="44" height="52" rx="8" fill="#fdfaf6"/><rect x="22" y="4" width="20" height="6" rx="2" fill="#0ea5a4"/></svg>
             <div style="font-weight:700">12.5kg Cylinder</div>
             <div class="small">Household standard</div>
             <div class="price">₵220</div>
-            <button onclick="addToCart('12kg','12.5kg Cylinder',220)">Add to cart</button>
+            <button onclick="addToCart('12kg','12.5kg Cylinder',220)" aria-label="Add 12.5kg cylinder to cart">Add to cart</button>
           </div>
 
           <div class="card product-card" data-id="37kg" data-name="37kg Cylinder" data-price="180">
-            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><rect x="8" y="4" width="48" height="56" rx="10" fill="#fff7f0"/><rect x="22" y="6" width="20" height="8" rx="3" fill="#f97316"/></svg>
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><rect x="8" y="4" width="48" height="56" rx="10" fill="#fff7f0"/><rect x="22" y="6" width="20" height="8" rx="3" fill="#f97316"/></svg>
             <div style="font-weight:700">37kg Cylinder</div>
             <div class="small">Commercial / restaurant</div>
             <div class="price">₵680</div>
-            <button onclick="addToCart('37kg','37kg Cylinder',680)">Add to cart</button>
+            <button onclick="addToCart('37kg','37kg Cylinder',680)" aria-label="Add 37kg cylinder to cart">Add to cart</button>
           </div>
 
           <div class="card product-card" data-id="reg" data-name="Regulator" data-price="25">
-            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><circle cx="32" cy="32" r="24" fill="#f0f9ff"/><rect x="28" y="26" width="8" height="12" rx="2" fill="#0b5ed7"/></svg>
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><circle cx="32" cy="32" r="24" fill="#f0f9ff"/><rect x="28" y="26" width="8" height="12" rx="2" fill="#0b5ed7"/></svg>
             <div style="font-weight:700">Regulator</div>
             <div class="small">Safety certified</div>
             <div class="price">₵80</div>
-            <button onclick="addToCart('reg','Regulator',80)">Add to cart</button>
+            <button onclick="addToCart('reg','Regulator',80)" aria-label="Add regulator to cart">Add to cart</button>
           </div>
 
           <div class="card product-card" data-id="hose" data-name="Hose" data-price="15">
-            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><path d="M10 32c8-10 40-12 44 0" stroke="#0ea5a4" stroke-width="4" fill="none"/></svg>
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><path d="M10 32c8-10 40-12 44 0" stroke="#0ea5a4" stroke-width="4" fill="none"/></svg>
             <div style="font-weight:700">Hose</div>
             <div class="small">High-pressure rubber</div>
             <div class="price">₵45</div>
-            <button onclick="addToCart('hose','Hose',45)">Add to cart</button>
+            <button onclick="addToCart('hose','Hose',45)" aria-label="Add hose to cart">Add to cart</button>
           </div>
 
           <div class="card product-card" data-id="burner" data-name="Gas Burner" data-price="40">
-            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><rect x="14" y="18" width="36" height="28" rx="6" fill="#fff8f0"/><circle cx="32" cy="32" r="6" fill="#f97316"/></svg>
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><rect x="14" y="18" width="36" height="28" rx="6" fill="#fff8f0"/><circle cx="32" cy="32" r="6" fill="#f97316"/></svg>
             <div style="font-weight:700">Gas Burner</div>
             <div class="small">Sturdy stainless</div>
             <div class="price">₵150</div>
-            <button onclick="addToCart('burner','Gas Burner',150)">Add to cart</button>
+            <button onclick="addToCart('burner','Gas Burner',150)" aria-label="Add gas burner to cart">Add to cart</button>
           </div>
         </div>
       </section>
@@ -230,9 +300,9 @@
             <label style="margin-top:8px">Delivery address</label>
             <textarea id="o_address" rows="3" required></textarea>
 
-            <div style="display:flex;gap:10px;margin-top:12px;align-items:center">
-              <button type="button" id="placeOrderBtn" class="cta">Submit Order</button>
-              <div class="small muted-2">Or <button type="button" class="small" onclick="openWhatsAppOrder()">send via WhatsApp</button></div>
+            <div style="display:flex;gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap">
+              <button type="button" id="placeOrderBtn" class="cta" aria-label="Submit order">Submit Order</button>
+              <div class="small muted-2">Or <button type="button" class="small" onclick="openWhatsAppOrder()" aria-label="Send order via WhatsApp">send via WhatsApp</button></div>
             </div>
             <div id="orderFeedback" class="small" style="margin-top:8px;color:green"></div>
           </form>
@@ -250,19 +320,19 @@
               <h3>Standard Bulk Pack</h3>
               <p class="small">10 × 12.5kg cylinders, priority delivery</p>
               <p class="price">From ₵1,900</p>
-              <button onclick="fillBulk('Standard')">Request Quote</button>
+              <button onclick="fillBulk('Standard')" aria-label="Request quote for standard bulk pack">Request Quote</button>
             </div>
             <div class="card">
               <h3>Restaurant Pack</h3>
               <p class="small">20 × 37kg cylinders, weekly delivery</p>
               <p class="price">From ₵12,800</p>
-              <button onclick="fillBulk('Restaurant')">Request Quote</button>
+              <button onclick="fillBulk('Restaurant')" aria-label="Request quote for restaurant pack">Request Quote</button>
             </div>
             <div class="card">
               <h3>Retailer Pack</h3>
               <p class="small">Mixed cylinders + accessories</p>
               <p class="price">Custom pricing</p>
-              <button onclick="fillBulk('Retailer')">Request Quote</button>
+              <button onclick="fillBulk('Retailer')" aria-label="Request quote for retailer pack">Request Quote</button>
             </div>
           </div>
 
@@ -272,7 +342,7 @@
               <input id="b_company" placeholder="Company / Business name" />
               <input id="b_contact" placeholder="Contact phone / email" />
               <textarea id="b_details" placeholder="Tell us your monthly usage & preferred schedule"></textarea>
-              <div style="display:flex;gap:8px;margin-top:8px"><button type="button" onclick="submitBulk()">Send Request</button></div>
+              <div style="display:flex;gap:8px;margin-top:8px"><button type="button" onclick="submitBulk()" aria-label="Send bulk quote request">Send Request</button></div>
               <div id="bulkFeedback" class="small" style="margin-top:8px;color:green"></div>
             </form>
           </div>
@@ -310,17 +380,17 @@
             <div class="card">
               <h3>Hotline</h3>
               <p class="small">+233 201 022 153</p>
-              <button onclick="callHotline()">Call</button>
+              <button onclick="callHotline()" aria-label="Call hotline">Call</button>
             </div>
             <div class="card">
               <h3>WhatsApp</h3>
               <p class="small">+233 201 022 153 (fastest)</p>
-              <button onclick="openWhatsApp()">Open WhatsApp</button>
+              <button onclick="openWhatsApp()" aria-label="Open WhatsApp">Open WhatsApp</button>
             </div>
             <div class="card">
               <h3>Email</h3>
               <p class="small">support@gasfill.example</p>
-              <button onclick="composeEmail()">Email Us</button>
+              <button onclick="composeEmail()" aria-label="Email us">Email Us</button>
             </div>
           </div>
 
@@ -330,7 +400,7 @@
               <input id="c_name" placeholder="Your name" />
               <input id="c_email" placeholder="Your email" />
               <textarea id="c_msg" placeholder="Message"></textarea>
-              <div style="margin-top:8px"><button type="button" onclick="submitContact()">Send Message</button></div>
+              <div style="margin-top:8px"><button type="button" onclick="submitContact()" aria-label="Send message">Send Message</button></div>
               <div id="contactFeedback" class="small" style="margin-top:8px;color:green"></div>
             </form>
           </div>
@@ -343,9 +413,9 @@
           <h2>Quick Order</h2>
           <p class="small">Select a product and place a one-click order.</p>
           <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
-            <button onclick="oneClickOrder('12.5kg Cylinder',220)">12.5kg — ₵220</button>
-            <button onclick="oneClickOrder('6kg Cylinder',120)">6kg — ₵120</button>
-            <button onclick="oneClickOrder('37kg Cylinder',680)">37kg — ₵680</button>
+            <button onclick="oneClickOrder('12.5kg Cylinder',220)" aria-label="Quick order 12.5kg cylinder for 220">12.5kg — ₵220</button>
+            <button onclick="oneClickOrder('6kg Cylinder',120)" aria-label="Quick order 6kg cylinder for 120">6kg — ₵120</button>
+            <button onclick="oneClickOrder('37kg Cylinder',680)" aria-label="Quick order 37kg cylinder for 680">37kg — ₵680</button>
           </div>
           <div id="quickFeedback" class="small" style="margin-top:10px;color:green"></div>
         </div>
@@ -382,19 +452,19 @@
     </main>
 
     <!-- Floating cart -->
-    <button class="cart-btn" id="openCartBtn" title="Open cart">Cart (<span id="cartCount">0</span>)</button>
+    <button class="cart-btn" id="openCartBtn" title="Open cart" aria-label="Open shopping cart">Cart (<span id="cartCount">0</span>)</button>
 
     <!-- Cart Modal (simple) -->
-    <div id="cartModal" style="display:none;position:fixed;inset:0;background:rgba(4,8,15,0.45);align-items:center;justify-content:center;z-index:80">
-      <div style="width:100%;max-width:520px;background:#fff;border-radius:12px;padding:18px;box-shadow:0 16px 40px rgba(2,6,23,0.2)">
-        <div style="display:flex;align-items:center;justify-content:space-between"><h3 style="margin:0">Your Cart</h3><button onclick="closeCart()" class="small">Close</button></div>
+    <div id="cartModal" style="display:none;position:fixed;inset:0;background:rgba(4,8,15,0.45);align-items:center;justify-content:center;z-index:80" role="dialog" aria-labelledby="cartTitle" aria-modal="true">
+      <div style="width:100%;max-width:520px;background:#fff;border-radius:12px;padding:18px;box-shadow:0 16px 40px rgba(2,6,23,0.2);margin:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between"><h3 id="cartTitle" style="margin:0">Your Cart</h3><button onclick="closeCart()" class="small" aria-label="Close cart">Close</button></div>
         <div id="cartItems" style="margin-top:12px;display:flex;flex-direction:column;gap:10px"></div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
           <div class="small muted-2">Total</div><div id="cartTotal" style="font-weight:800">₵0</div>
         </div>
-        <div style="margin-top:12px;display:flex;gap:8px">
-          <button onclick="checkoutCart()" class="cta">Checkout</button>
-          <button onclick="clearCart()" style="background:#fff;border:1px solid #eef6ff;padding:8px;border-radius:8px">Clear</button>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="checkoutCart()" class="cta" aria-label="Checkout cart">Checkout</button>
+          <button onclick="clearCart()" style="background:#fff;border:1px solid #eef6ff;padding:8px;border-radius:8px" aria-label="Clear cart">Clear</button>
         </div>
         <div id="cartFeedback" class="small" style="margin-top:8px;color:green"></div>
       </div>
@@ -415,9 +485,47 @@
 
   <script>
     // -------------------------
+    // Utility: Debounce function for performance
+    // -------------------------
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
+
+    // -------------------------
+    // Hamburger menu for mobile
+    // -------------------------
+    const hamburgerBtn = document.getElementById('hamburgerBtn');
+    const mainNav = document.getElementById('mainNav');
+    
+    hamburgerBtn.addEventListener('click', () => {
+      const isOpen = mainNav.classList.toggle('mobile-open');
+      hamburgerBtn.classList.toggle('active');
+      hamburgerBtn.setAttribute('aria-expanded', isOpen);
+    });
+
+    // Close menu when clicking nav link on mobile
+    const navLinks = document.querySelectorAll('.nav-link');
+    navLinks.forEach(link => {
+      link.addEventListener('click', () => {
+        if (window.innerWidth <= 768) {
+          mainNav.classList.remove('mobile-open');
+          hamburgerBtn.classList.remove('active');
+          hamburgerBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+    });
+
+    // -------------------------
     // Simple SPA routing (no framework)
     // -------------------------
-    const navLinks = document.querySelectorAll('.nav-link');
     navLinks.forEach(a=> a.addEventListener('click', e=>{
       e.preventDefault();
       const tgt = a.getAttribute('data-target');
@@ -471,17 +579,25 @@
 
     function renderCartItems(){
       const ct = document.getElementById('cartItems');
+      const totalEl = document.getElementById('cartTotal');
       const cart = loadCart();
       ct.innerHTML = '';
       let total = 0;
-      if(!cart.length){ ct.innerHTML = '<div class="small muted-2">Cart is empty</div>'; document.getElementById('cartTotal').textContent = '₵0'; return; }
+      if(!cart.length){ 
+        ct.innerHTML = '<div class="small muted-2">Cart is empty</div>'; 
+        totalEl.textContent = '₵0'; 
+        return; 
+      }
+      const fragment = document.createDocumentFragment();
       cart.forEach(item=>{
-        const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center';
-        row.innerHTML = `<div style="min-width:0"><div style="font-weight:800">${escapeHtml(item.name)} <span class="small" style="color:#94a3b8">x${item.qty}</span></div><div class="small muted-2">₵${item.price} each</div></div><div style="display:flex;gap:8px;align-items:center"><button onclick="changeQty('${item.id}',-1)" style="padding:6px;border-radius:8px">-</button><button onclick="changeQty('${item.id}',1)" style="padding:6px;border-radius:8px">+</button></div>`;
-        ct.appendChild(row);
+        const row = document.createElement('div'); 
+        row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap';
+        row.innerHTML = `<div style="min-width:0"><div style="font-weight:800">${escapeHtml(item.name)} <span class="small" style="color:#94a3b8">x${item.qty}</span></div><div class="small muted-2">₵${item.price} each</div></div><div style="display:flex;gap:8px;align-items:center"><button onclick="changeQty('${item.id}',-1)" style="padding:6px;border-radius:8px" aria-label="Decrease quantity">-</button><button onclick="changeQty('${item.id}',1)" style="padding:6px;border-radius:8px" aria-label="Increase quantity">+</button></div>`;
+        fragment.appendChild(row);
         total += item.price * item.qty;
       });
-      document.getElementById('cartTotal').textContent = '₵'+total;
+      ct.appendChild(fragment);
+      totalEl.textContent = '₵'+total;
     }
 
     function changeQty(id,delta){
@@ -571,31 +687,53 @@
     function composeEmail(){ window.location.href = 'mailto:support@gasfill.example'; }
 
     // -------------------------
-    // DASHBOARD render
+    // DASHBOARD render - optimized
     // -------------------------
     function renderDashboard(){
       const orders = loadOrders();
-      document.getElementById('statOrders').textContent = orders.length;
+      const statOrdersEl = document.getElementById('statOrders');
+      const statPendingEl = document.getElementById('statPending');
+      const statRevenueEl = document.getElementById('statRevenue');
+      const recentOrdersEl = document.getElementById('recentOrders');
+      
+      statOrdersEl.textContent = orders.length;
       const pending = orders.filter(o => o.status === 'pending').length;
-      document.getElementById('statPending').textContent = pending;
+      statPendingEl.textContent = pending;
       const revenue = orders.reduce((s,o)=> s + (Number(o.total)||0), 0);
-      document.getElementById('statRevenue').textContent = '₵' + revenue;
-      const recent = document.getElementById('recentOrders');
-      recent.innerHTML = '';
+      statRevenueEl.textContent = '₵' + revenue;
+      
+      recentOrdersEl.innerHTML = '';
+      const fragment = document.createDocumentFragment();
+      
       orders.slice(0,8).forEach(o=>{
         const div = document.createElement('div'); div.className='order-row';
         const left = document.createElement('div'); left.innerHTML = `<div style="font-weight:800">${escapeHtml(o.product||'Cart order')} <span class="small" style="color:#94a3b8">(${o.qty||1})</span></div><div class="small muted-2">${new Date(o.createdAt).toLocaleString()}</div>`;
-        const right = document.createElement('div'); const badge = document.createElement('div');
+        const right = document.createElement('div'); 
+        right.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:center';
+        
+        const badge = document.createElement('div');
         badge.className = 'badge ' + (o.status==='pending' ? 'badge-pending' : o.status==='accepted' ? 'badge-ontheway' : 'badge-delivered');
         badge.textContent = o.status==='pending' ? 'Pending' : o.status==='accepted' ? 'On the way' : 'Delivered';
         right.appendChild(badge);
+        
         // track & mark actions
-        const trackBtn = document.createElement('button'); trackBtn.textContent='Track'; trackBtn.style.marginLeft='8px'; trackBtn.onclick = ()=> alert('Tracker demo — not connected');
-        const markBtn = document.createElement('button'); markBtn.textContent='Mark Delivered'; markBtn.style.marginLeft='8px'; markBtn.onclick = ()=>{ updateOrderStatus(o.id,'delivered'); renderDashboard(); };
-        right.appendChild(trackBtn); right.appendChild(markBtn);
-        div.appendChild(left); div.appendChild(right);
-        recent.appendChild(div);
+        const trackBtn = document.createElement('button'); 
+        trackBtn.textContent='Track'; 
+        trackBtn.onclick = ()=> alert('Tracker demo — not connected');
+        trackBtn.setAttribute('aria-label', 'Track order');
+        
+        const markBtn = document.createElement('button'); 
+        markBtn.textContent='Mark Delivered'; 
+        markBtn.onclick = ()=>{ updateOrderStatus(o.id,'delivered'); renderDashboard(); };
+        markBtn.setAttribute('aria-label', 'Mark order as delivered');
+        
+        right.appendChild(trackBtn); 
+        right.appendChild(markBtn);
+        div.appendChild(left); 
+        div.appendChild(right);
+        fragment.appendChild(div);
       });
+      recentOrdersEl.appendChild(fragment);
     }
 
     function updateOrderStatus(id,status){
@@ -605,16 +743,21 @@
       orders[idx].status = status; saveOrders(orders); renderDashboard();
     }
 
-    // auto-rotate older orders statuses (demo)
-    setInterval(()=>{
+    // auto-rotate older orders statuses (demo) - optimized with debouncing
+    const updateOrderStatuses = debounce(() => {
       const orders = loadOrders();
       let changed=false;
       orders.forEach(o=>{
         if(o.status === 'pending'){ o.status = 'accepted'; changed=true; }
         else if(o.status === 'accepted'){ o.status = 'delivered'; changed=true; }
       });
-      if(changed){ saveOrders(orders); if(document.getElementById('dashboard').classList.contains('active')) renderDashboard(); }
-    }, 25000);
+      if(changed){ 
+        saveOrders(orders); 
+        if(document.getElementById('dashboard').classList.contains('active')) renderDashboard(); 
+      }
+    }, 300);
+    
+    setInterval(updateOrderStatuses, 25000);
 
     // -------------------------
     // small utils & init
@@ -653,6 +796,30 @@
       const mapping = { products:'products', order:'order', bulk:'bulk', safety:'safety', contact:'contact', orderNow:'orderNow', dashboard:'dashboard' };
       if(mapping[h]) activateSection(mapping[h]);
     }
+
+    // -------------------------
+    // Service Worker Registration
+    // -------------------------
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => console.log('SW registered:', registration))
+          .catch(err => console.log('SW registration failed:', err));
+      });
+    }
+
+    // -------------------------
+    // Handle window resize - close mobile menu if resized to desktop
+    // -------------------------
+    const handleResize = debounce(() => {
+      if (window.innerWidth > 768) {
+        mainNav.classList.remove('mobile-open');
+        hamburgerBtn.classList.remove('active');
+        hamburgerBtn.setAttribute('aria-expanded', 'false');
+      }
+    }, 250);
+
+    window.addEventListener('resize', handleResize);
   </script>
 </body>
 </html>
