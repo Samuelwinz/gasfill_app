@@ -334,8 +334,8 @@ except ImportError:
 # Development server configuration
 if __name__ == "__main__":
     print("🚀 Starting GasFill Python Backend Server...")
-    print("📊 API Documentation: http://localhost:5000/api/docs")
-    print("🔄 Health Check: http://localhost:5000/api/health")
+    print("📊 API Documentation: http://localhost:5002/api/docs")
+    print("🔄 Health Check: http://localhost:5002/api/health")
     print("🔐 Authentication: JWT-based with email/password")
     print("📦 Orders: Full CRUD operations")
     print("⚡ Real-time: WebSocket support available")
@@ -343,7 +343,7 @@ if __name__ == "__main__":
     uvicorn.run(
         app,
         host="127.0.0.1",
-        port=5001,
+        port=5002,
         reload=False,
         log_level="info"
     )
