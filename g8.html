@@ -16,6 +16,38 @@
       --accent2:#0b5ed7;
       --accent3:#f97316;
       --glass: rgba(255,255,255,0.7);
+      
+      /* Enhanced Color Palette */
+      --primary-50: #eff6ff;
+      --primary-100: #dbeafe;
+      --primary-500: #3b82f6;
+      --primary-600: #2563eb;
+      --primary-700: #1d4ed8;
+      
+      --success-50: #f0fdf4;
+      --success-500: #22c55e;
+      --success-600: #16a34a;
+      --warning-50: #fefce8;
+      --warning-500: #eab308;
+      --error-50: #fef2f2;
+      --error-500: #ef4444;
+      
+      /* Enhanced Spacing & Shadows */
+      --space-xs: 0.25rem;
+      --space-sm: 0.5rem;
+      --space-md: 1rem;
+      --space-lg: 1.5rem;
+      --space-xl: 2rem;
+      
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+      --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+      
+      --radius-sm: 0.375rem;
+      --radius-md: 0.5rem;
+      --radius-lg: 0.75rem;
+      --radius-xl: 1rem;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -67,12 +99,27 @@
 
     /* grids/cards */
     .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-    .card{background:var(--card);padding:14px;border-radius:12px;border:1px solid #f1f5f9;box-shadow:0 8px 28px rgba(12,40,80,0.04)}
-    .product-card{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px;text-align:center}
+    .card{background:var(--card);padding:14px;border-radius:12px;border:1px solid #f1f5f9;box-shadow:0 8px 28px rgba(12,40,80,0.04);transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1)}
+    .card:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+    
+    .product-card{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px;text-align:center;position:relative;overflow:hidden}
+    .product-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--accent2),var(--accent1));transform:scaleX(0);transition:transform 0.3s ease}
+    .product-card:hover::before{transform:scaleX(1)}
+    .product-card:hover{transform:translateY(-8px);box-shadow:var(--shadow-xl);border-color:#e2e8f0}
+    
     .product-card img{width:120px;height:120px;object-fit:contain;border-radius:8px}
-    .product-card button{min-height:44px;min-width:120px;padding:12px 16px;background:var(--accent2);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;transition:transform 0.2s}
+    .product-card button{min-height:44px;min-width:120px;padding:12px 16px;background:linear-gradient(135deg,var(--accent2),var(--primary-600));color:#fff;border:none;border-radius:var(--radius-lg);cursor:pointer;font-weight:600;transition:all 0.2s ease;box-shadow:var(--shadow-md);position:relative;overflow:hidden}
+    .product-card button::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent);transition:left 0.5s ease}
+    .product-card button:hover::before{left:100%}
+    .product-card button:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
     .product-card button:active{transform:scale(0.95)}
-    .price{font-weight:800;color:var(--accent2)}
+    
+    .product-status{position:absolute;top:var(--space-sm);right:var(--space-sm);padding:var(--space-xs) var(--space-sm);border-radius:var(--radius-md);font-size:0.75rem;font-weight:600}
+    .product-status.available{background:var(--success-50);color:var(--success-600);border:1px solid var(--success-200)}
+    .product-status.low-stock{background:var(--warning-50);color:var(--warning-600);border:1px solid var(--warning-200)}
+    
+    .price{font-weight:800;color:var(--accent2);font-size:1.1rem}
+    .original-price{text-decoration:line-through;color:var(--muted);font-size:0.9rem;margin-left:var(--space-xs)}
     .small{font-size:0.92rem;color:var(--muted)}
 
     /* responsive */
@@ -133,11 +180,21 @@
 
     /* orders log / badges */
     .orders-log{display:flex;flex-direction:column;gap:10px}
-    .order-row{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:10px;border:1px solid #eef4ff;background:#fff;flex-wrap:wrap;gap:8px}
-    .badge{padding:6px 10px;border-radius:999px;font-weight:700;min-height:32px;display:inline-flex;align-items:center}
-    .badge-pending{background:#eef2ff;color:#1e40af}
-    .badge-ontheway{background:#fff7ed;color:#92400e}
-    .badge-delivered{background:#dcfce7;color:#166534}
+    .order-row{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:10px;border:1px solid #eef4ff;background:#fff;flex-wrap:wrap;gap:8px;transition:all 0.2s ease}
+    .order-row:hover{background:#f8fafc;border-color:#cbd5e1;transform:translateX(4px)}
+    
+    .badge{padding:6px 10px;border-radius:999px;font-weight:700;min-height:32px;display:inline-flex;align-items:center;font-size:0.875rem}
+    .badge-pending{background:var(--warning-50);color:var(--warning-600);border:1px solid var(--warning-200)}
+    .badge-assigned{background:var(--primary-50);color:var(--primary-600);border:1px solid var(--primary-200)}
+    .badge-in-transit{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
+    .badge-nearby{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
+    .badge-delivered{background:var(--success-50);color:var(--success-600);border:1px solid var(--success-200)}
+    .badge-cancelled{background:var(--error-50);color:var(--error-500);border:1px solid var(--error-200)}
+    
+    .order-tracking{display:flex;align-items:center;gap:var(--space-sm);font-size:0.875rem;color:var(--muted)}
+    .rider-info{display:flex;align-items:center;gap:var(--space-xs);color:var(--accent2);font-weight:600}
+    .eta-badge{background:#f0f9ff;color:#0369a1;padding:2px 6px;border-radius:4px;font-size:0.75rem}
+    
     .muted-2{color:#64748b}
 
     /* utility */
@@ -159,6 +216,40 @@
     button:not(.hamburger):not(.cart-btn):active{
       transform:translateY(0);
     }
+    
+    /* Enhanced Notifications & Feedback */
+    .toast-notification{position:fixed;top:20px;right:20px;background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow-xl);border:1px solid #e5e7eb;z-index:1000;animation:slideInRight 0.3s ease-out}
+    .toast-content{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-md)}
+    .toast-icon{font-size:1.25rem}
+    .toast-message{font-weight:600;color:#374151}
+    
+    .cart-feedback-toast{position:fixed;bottom:120px;right:20px;background:var(--success-500);color:white;border-radius:var(--radius-lg);box-shadow:var(--shadow-xl);z-index:1000;animation:slideUp 0.3s ease-out}
+    .feedback-content{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-md)}
+    .feedback-button{background:rgba(255,255,255,0.2);border:none;color:white;padding:var(--space-xs) var(--space-sm);border-radius:var(--radius-md);cursor:pointer;font-weight:600;transition:background 0.2s}
+    .feedback-button:hover{background:rgba(255,255,255,0.3)}
+    
+    /* Loading States */
+    .loading-skeleton{background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;animation:loading 1.5s infinite;border-radius:var(--radius-md)}
+    .btn-loading{position:relative;color:transparent!important}
+    .btn-loading::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:20px;height:20px;border:2px solid rgba(255,255,255,0.3);border-top:2px solid white;border-radius:50%;animation:spin 1s linear infinite}
+    
+    /* Cart Animations */
+    .cart-added{animation:cartBounce 0.3s ease-out}
+    .cart-updated{animation:cartPulse 0.3s ease-out}
+    
+    @keyframes slideInRight{from{opacity:0;transform:translateX(100px)}to{opacity:1;transform:translateX(0)}}
+    @keyframes slideUp{from{opacity:0;transform:translateY(100px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes loading{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    @keyframes spin{0%{transform:translate(-50%,-50%) rotate(0deg)}100%{transform:translate(-50%,-50%) rotate(360deg)}}
+    @keyframes cartBounce{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+    @keyframes cartPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+    
+    /* Status Indicators with Icons */
+    .status-indicator{display:inline-flex;align-items:center;gap:var(--space-xs);font-size:0.875rem;font-weight:500}
+    .status-icon{width:8px;height:8px;border-radius:50%;animation:pulse 2s infinite}
+    .status-icon.pending{background:var(--warning-500)}
+    .status-icon.in-transit{background:var(--primary-500)}
+    .status-icon.delivered{background:var(--success-500)}
   </style>
 </head>
 <body>
@@ -227,52 +318,58 @@
 
         <div class="grid" style="margin-top:12px">
           <!-- product objects -->
-          <div class="card product-card" data-id="6kg" data-name="6kg Cylinder" data-price="30">
+          <div class="card product-card" data-id="6kg" data-name="6kg Cylinder" data-price="120">
+            <div class="product-status available">✅ In Stock</div>
             <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><rect x="12" y="8" width="40" height="48" rx="6" fill="#f6f9ff"/><rect x="22" y="4" width="20" height="6" rx="2" fill="#0b5ed7"/></svg>
             <div style="font-weight:700">6kg Cylinder</div>
-            <div class="small">Portable & safe</div>
+            <div class="small">Portable & safe • Perfect for small households</div>
             <div class="price">₵120</div>
-            <button onclick="addToCart('6kg','6kg Cylinder',120)" aria-label="Add 6kg cylinder to cart">Add to cart</button>
+            <button onclick="addToCartEnhanced('6kg','6kg Cylinder',120)" aria-label="Add 6kg cylinder to cart">Add to cart</button>
           </div>
 
-          <div class="card product-card" data-id="12kg" data-name="12.5kg Cylinder" data-price="55">
+          <div class="card product-card" data-id="12kg" data-name="12.5kg Cylinder" data-price="220">
+            <div class="product-status available">✅ In Stock</div>
             <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><rect x="10" y="6" width="44" height="52" rx="8" fill="#fdfaf6"/><rect x="22" y="4" width="20" height="6" rx="2" fill="#0ea5a4"/></svg>
             <div style="font-weight:700">12.5kg Cylinder</div>
-            <div class="small">Household standard</div>
+            <div class="small">Household standard • Most popular choice</div>
             <div class="price">₵220</div>
-            <button onclick="addToCart('12kg','12.5kg Cylinder',220)" aria-label="Add 12.5kg cylinder to cart">Add to cart</button>
+            <button onclick="addToCartEnhanced('12kg','12.5kg Cylinder',220)" aria-label="Add 12.5kg cylinder to cart">Add to cart</button>
           </div>
 
-          <div class="card product-card" data-id="37kg" data-name="37kg Cylinder" data-price="180">
+          <div class="card product-card" data-id="37kg" data-name="37kg Cylinder" data-price="680">
+            <div class="product-status low-stock">⚠️ Low Stock</div>
             <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><rect x="8" y="4" width="48" height="56" rx="10" fill="#fff7f0"/><rect x="22" y="6" width="20" height="8" rx="3" fill="#f97316"/></svg>
             <div style="font-weight:700">37kg Cylinder</div>
-            <div class="small">Commercial / restaurant</div>
+            <div class="small">Commercial grade • Restaurant & business use</div>
             <div class="price">₵680</div>
-            <button onclick="addToCart('37kg','37kg Cylinder',680)" aria-label="Add 37kg cylinder to cart">Add to cart</button>
+            <button onclick="addToCartEnhanced('37kg','37kg Cylinder',680)" aria-label="Add 37kg cylinder to cart">Add to cart</button>
           </div>
 
-          <div class="card product-card" data-id="reg" data-name="Regulator" data-price="25">
+          <div class="card product-card" data-id="reg" data-name="Regulator" data-price="80">
+            <div class="product-status available">✅ In Stock</div>
             <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><circle cx="32" cy="32" r="24" fill="#f0f9ff"/><rect x="28" y="26" width="8" height="12" rx="2" fill="#0b5ed7"/></svg>
-            <div style="font-weight:700">Regulator</div>
-            <div class="small">Safety certified</div>
+            <div style="font-weight:700">Gas Regulator</div>
+            <div class="small">Safety certified • High-quality brass</div>
             <div class="price">₵80</div>
-            <button onclick="addToCart('reg','Regulator',80)" aria-label="Add regulator to cart">Add to cart</button>
+            <button onclick="addToCartEnhanced('reg','Regulator',80)" aria-label="Add regulator to cart">Add to cart</button>
           </div>
 
-          <div class="card product-card" data-id="hose" data-name="Hose" data-price="15">
+          <div class="card product-card" data-id="hose" data-name="Gas Hose" data-price="45">
+            <div class="product-status available">✅ In Stock</div>
             <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><path d="M10 32c8-10 40-12 44 0" stroke="#0ea5a4" stroke-width="4" fill="none"/></svg>
-            <div style="font-weight:700">Hose</div>
-            <div class="small">High-pressure rubber</div>
+            <div style="font-weight:700">Gas Hose</div>
+            <div class="small">High-pressure rated • 1.5m length</div>
             <div class="price">₵45</div>
-            <button onclick="addToCart('hose','Hose',45)" aria-label="Add hose to cart">Add to cart</button>
+            <button onclick="addToCartEnhanced('hose','Gas Hose',45)" aria-label="Add hose to cart">Add to cart</button>
           </div>
 
-          <div class="card product-card" data-id="burner" data-name="Gas Burner" data-price="40">
+          <div class="card product-card" data-id="burner" data-name="Gas Burner" data-price="150">
+            <div class="product-status available">✅ In Stock</div>
             <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><rect x="14" y="18" width="36" height="28" rx="6" fill="#fff8f0"/><circle cx="32" cy="32" r="6" fill="#f97316"/></svg>
             <div style="font-weight:700">Gas Burner</div>
-            <div class="small">Sturdy stainless</div>
+            <div class="small">Stainless steel • Double ring burner</div>
             <div class="price">₵150</div>
-            <button onclick="addToCart('burner','Gas Burner',150)" aria-label="Add gas burner to cart">Add to cart</button>
+            <button onclick="addToCartEnhanced('burner','Gas Burner',150)" aria-label="Add gas burner to cart">Add to cart</button>
           </div>
         </div>
       </section>
@@ -485,7 +582,7 @@
 
   <script>
     // -------------------------
-    // Utility: Debounce function for performance
+    // Enhanced Utility Functions
     // -------------------------
     function debounce(func, wait) {
       let timeout;
@@ -497,6 +594,213 @@
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
       };
+    }
+
+    // -------------------------
+    // Enhanced Cart Management System
+    // -------------------------
+    class EnhancedCartManager {
+      static addToCart(id, name, price) {
+        const cart = loadCart();
+        const existingItem = cart.find(item => item.id === id);
+        
+        if (existingItem) {
+          existingItem.qty++;
+          this.showCartAnimation('updated');
+        } else {
+          cart.push({ 
+            id, 
+            name, 
+            price, 
+            qty: 1, 
+            addedAt: new Date().toISOString(),
+            category: this.getProductCategory(id)
+          });
+          this.showCartAnimation('added');
+        }
+        
+        saveCart(cart);
+        this.updateCartUI();
+        this.showAddToCartFeedback(name);
+        
+        // Analytics tracking
+        this.trackAddToCart(id, name, price);
+      }
+      
+      static getProductCategory(id) {
+        const categories = {
+          '6kg': 'cylinders',
+          '12kg': 'cylinders', 
+          '37kg': 'cylinders',
+          'reg': 'accessories',
+          'hose': 'accessories',
+          'burner': 'accessories'
+        };
+        return categories[id] || 'other';
+      }
+      
+      static showAddToCartFeedback(productName) {
+        const feedback = document.createElement('div');
+        feedback.className = 'cart-feedback-toast';
+        feedback.innerHTML = `
+          <div class="feedback-content">
+            <span class="feedback-icon">✅</span>
+            <span class="feedback-text">${productName} added to cart!</span>
+            <button onclick="openCart()" class="feedback-button">View Cart</button>
+          </div>
+        `;
+        
+        document.body.appendChild(feedback);
+        setTimeout(() => feedback.remove(), 4000);
+      }
+      
+      static showCartAnimation(action) {
+        const cartBtn = document.getElementById('openCartBtn');
+        cartBtn.classList.add(`cart-${action}`);
+        setTimeout(() => cartBtn.classList.remove(`cart-${action}`), 300);
+      }
+      
+      static trackAddToCart(id, name, price) {
+        // Analytics tracking for business intelligence
+        const analytics = JSON.parse(localStorage.getItem('gasfill_analytics_v1') || '[]');
+        analytics.push({
+          event: 'add_to_cart',
+          productId: id,
+          productName: name,
+          price: price,
+          timestamp: new Date().toISOString(),
+          sessionId: this.getSessionId()
+        });
+        
+        // Keep only last 100 events
+        if (analytics.length > 100) {
+          analytics.splice(0, analytics.length - 100);
+        }
+        
+        localStorage.setItem('gasfill_analytics_v1', JSON.stringify(analytics));
+      }
+      
+      static getSessionId() {
+        let sessionId = sessionStorage.getItem('gasfill_session');
+        if (!sessionId) {
+          sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+          sessionStorage.setItem('gasfill_session', sessionId);
+        }
+        return sessionId;
+      }
+    }
+
+    // -------------------------
+    // Real-time Order Status Management
+    // -------------------------
+    class OrderStatusManager {
+      static riders = [
+        { id: 'rider_1', name: 'Kwame Asante', phone: '+233241234567', rating: 4.8, vehicle: 'Motorcycle' },
+        { id: 'rider_2', name: 'Ama Osei', phone: '+233267890123', rating: 4.9, vehicle: 'Van' },
+        { id: 'rider_3', name: 'Kofi Mensah', phone: '+233208765432', rating: 4.7, vehicle: 'Motorcycle' },
+        { id: 'rider_4', name: 'Akosua Nimako', phone: '+233245678901', rating: 4.8, vehicle: 'Truck' }
+      ];
+      
+      static initializeRealTimeUpdates() {
+        // Simulate real-time updates every 30 seconds
+        setInterval(() => {
+          this.processOrderUpdates();
+        }, 30000);
+        
+        // Initialize immediately
+        this.processOrderUpdates();
+      }
+      
+      static processOrderUpdates() {
+        const orders = loadOrders();
+        let hasUpdates = false;
+        
+        orders.forEach(order => {
+          const timeSinceCreated = Date.now() - new Date(order.createdAt).getTime();
+          const minutesElapsed = Math.floor(timeSinceCreated / 60000);
+          
+          // Simulate realistic order progression
+          if (order.status === 'pending' && minutesElapsed > 2 && Math.random() > 0.6) {
+            order.status = 'assigned';
+            order.rider = this.assignBestRider(order);
+            order.estimatedArrival = new Date(Date.now() + (25 + Math.random() * 10) * 60000).toISOString();
+            hasUpdates = true;
+            this.showStatusNotification(`Order ${order.id.slice(-6)} assigned to ${order.rider.name}!`);
+          } else if (order.status === 'assigned' && minutesElapsed > 5 && Math.random() > 0.7) {
+            order.status = 'picked_up';
+            order.pickedUpAt = new Date().toISOString();
+            hasUpdates = true;
+            this.showStatusNotification(`Your order is on the way!`);
+          } else if (order.status === 'picked_up' && minutesElapsed > 8 && Math.random() > 0.8) {
+            order.status = 'in_transit';
+            order.estimatedArrival = new Date(Date.now() + 10 * 60000).toISOString();
+            hasUpdates = true;
+          } else if (order.status === 'in_transit' && minutesElapsed > 12 && Math.random() > 0.9) {
+            order.status = 'nearby';
+            order.estimatedArrival = new Date(Date.now() + 3 * 60000).toISOString();
+            hasUpdates = true;
+            this.showStatusNotification(`Your rider is nearby! Please be available.`);
+          }
+        });
+        
+        if (hasUpdates) {
+          saveOrders(orders);
+          if (document.getElementById('dashboard').classList.contains('active')) {
+            renderDashboard();
+          }
+        }
+      }
+      
+      static assignBestRider(order) {
+        // Simulate intelligent rider assignment
+        const availableRiders = this.riders.filter(rider => Math.random() > 0.3);
+        if (availableRiders.length === 0) return this.riders[0];
+        
+        // Select rider based on rating and vehicle suitability
+        const bestRider = availableRiders.reduce((best, current) => {
+          const currentScore = current.rating + (this.isVehicleSuitable(current.vehicle, order) ? 0.5 : 0);
+          const bestScore = best.rating + (this.isVehicleSuitable(best.vehicle, order) ? 0.5 : 0);
+          return currentScore > bestScore ? current : best;
+        });
+        
+        return bestRider;
+      }
+      
+      static isVehicleSuitable(vehicle, order) {
+        const heavyItems = ['37kg'];
+        const hasHeavyItems = order.items?.some(item => heavyItems.includes(item.id)) || 
+                             order.product?.includes('37kg');
+        
+        return hasHeavyItems ? vehicle === 'Van' || vehicle === 'Truck' : true;
+      }
+      
+      static showStatusNotification(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast-notification';
+        toast.innerHTML = `
+          <div class="toast-content">
+            <span class="toast-icon">🚚</span>
+            <span class="toast-message">${message}</span>
+          </div>
+        `;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => toast.remove(), 5000);
+      }
+      
+      static getStatusDisplay(status) {
+        const statusMap = {
+          'pending': { text: 'Order Received', icon: '📋', class: 'badge-pending' },
+          'assigned': { text: 'Rider Assigned', icon: '👤', class: 'badge-assigned' },
+          'picked_up': { text: 'Picked Up', icon: '📦', class: 'badge-in-transit' },
+          'in_transit': { text: 'On the Way', icon: '🚗', class: 'badge-in-transit' },
+          'nearby': { text: 'Nearby (5 min)', icon: '📍', class: 'badge-nearby' },
+          'delivered': { text: 'Delivered', icon: '✅', class: 'badge-delivered' },
+          'cancelled': { text: 'Cancelled', icon: '❌', class: 'badge-cancelled' }
+        };
+        
+        return statusMap[status] || statusMap['pending'];
+      }
     }
 
     // -------------------------
@@ -547,7 +851,7 @@
     function navigateTo(id){ activateSection(id); }
 
     // -------------------------
-    // CART (localStorage)
+    // CART (localStorage) - Enhanced Version
     // -------------------------
     const CART_KEY = 'gasfill_cart_v1';
     const ORDERS_KEY = 'gasfill_orders_v1';
@@ -555,19 +859,44 @@
     function loadCart(){ try{ return JSON.parse(localStorage.getItem(CART_KEY) || '[]') }catch(e){ return [] } }
     function saveCart(items){ localStorage.setItem(CART_KEY, JSON.stringify(items)); updateCartUI() }
 
-    function addToCart(id,name,price){
-      const cart = loadCart();
-      const found = cart.find(i=>i.id===id);
-      if(found) found.qty++;
-      else cart.push({id,name,price,qty:1});
-      saveCart(cart);
-      showFeedback('Added to cart: '+name);
+    // Enhanced addToCart function
+    function addToCartEnhanced(id, name, price) {
+      // Show loading state on button
+      const button = event.target;
+      const originalText = button.textContent;
+      button.classList.add('btn-loading');
+      button.disabled = true;
+      
+      // Simulate network delay for better UX
+      setTimeout(() => {
+        EnhancedCartManager.addToCart(id, name, price);
+        
+        // Restore button state
+        button.classList.remove('btn-loading');
+        button.disabled = false;
+        button.textContent = originalText;
+      }, 500);
+    }
+
+    // Keep backward compatibility
+    function addToCart(id, name, price) {
+      return addToCartEnhanced(id, name, price);
     }
 
     function updateCartUI(){
       const cart = loadCart();
       const count = cart.reduce((s,i)=>s+i.qty,0);
-      document.getElementById('cartCount').textContent = count;
+      const countEl = document.getElementById('cartCount');
+      if (countEl) {
+        countEl.textContent = count;
+        
+        // Add animation when count changes
+        if (count > 0) {
+          countEl.parentElement.classList.add('cart-has-items');
+        } else {
+          countEl.parentElement.classList.remove('cart-has-items');
+        }
+      }
     }
 
     document.getElementById('openCartBtn').addEventListener('click', openCart);
@@ -687,7 +1016,7 @@
     function composeEmail(){ window.location.href = 'mailto:support@gasfill.example'; }
 
     // -------------------------
-    // DASHBOARD render - optimized
+    // ENHANCED DASHBOARD render - with rider info and tracking
     // -------------------------
     function renderDashboard(){
       const orders = loadOrders();
@@ -697,43 +1026,106 @@
       const recentOrdersEl = document.getElementById('recentOrders');
       
       statOrdersEl.textContent = orders.length;
-      const pending = orders.filter(o => o.status === 'pending').length;
+      const pending = orders.filter(o => ['pending', 'assigned', 'picked_up', 'in_transit', 'nearby'].includes(o.status)).length;
       statPendingEl.textContent = pending;
       const revenue = orders.reduce((s,o)=> s + (Number(o.total)||0), 0);
-      statRevenueEl.textContent = '₵' + revenue;
+      statRevenueEl.textContent = '₵' + revenue.toLocaleString();
       
       recentOrdersEl.innerHTML = '';
       const fragment = document.createDocumentFragment();
       
-      orders.slice(0,8).forEach(o=>{
-        const div = document.createElement('div'); div.className='order-row';
-        const left = document.createElement('div'); left.innerHTML = `<div style="font-weight:800">${escapeHtml(o.product||'Cart order')} <span class="small" style="color:#94a3b8">(${o.qty||1})</span></div><div class="small muted-2">${new Date(o.createdAt).toLocaleString()}</div>`;
+      orders.slice(0,12).forEach(o=>{
+        const div = document.createElement('div'); 
+        div.className='order-row';
+        
+        const statusInfo = OrderStatusManager.getStatusDisplay(o.status);
+        const timeAgo = getTimeAgo(new Date(o.createdAt));
+        
+        const left = document.createElement('div'); 
+        left.innerHTML = `
+          <div style="font-weight:800;display:flex;align-items:center;gap:8px">
+            ${escapeHtml(o.product||'Cart order')} 
+            <span class="small" style="color:#94a3b8">(${o.qty||1})</span>
+            ${o.rider ? `<div class="rider-info">👤 ${o.rider.name}</div>` : ''}
+          </div>
+          <div class="small muted-2">${timeAgo} • ${o.total ? '₵' + o.total : 'Total pending'}</div>
+          ${o.estimatedArrival ? `<div class="eta-badge">ETA: ${getTimeFromNow(new Date(o.estimatedArrival))}</div>` : ''}
+        `;
+        
         const right = document.createElement('div'); 
         right.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:center';
         
         const badge = document.createElement('div');
-        badge.className = 'badge ' + (o.status==='pending' ? 'badge-pending' : o.status==='accepted' ? 'badge-ontheway' : 'badge-delivered');
-        badge.textContent = o.status==='pending' ? 'Pending' : o.status==='accepted' ? 'On the way' : 'Delivered';
+        badge.className = `badge ${statusInfo.class}`;
+        badge.innerHTML = `<span class="status-icon ${o.status}"></span> ${statusInfo.icon} ${statusInfo.text}`;
         right.appendChild(badge);
         
-        // track & mark actions
-        const trackBtn = document.createElement('button'); 
-        trackBtn.textContent='Track'; 
-        trackBtn.onclick = ()=> alert('Tracker demo — not connected');
-        trackBtn.setAttribute('aria-label', 'Track order');
+        // Action buttons based on status
+        if (o.status === 'nearby') {
+          const callBtn = document.createElement('button'); 
+          callBtn.textContent='Call Rider'; 
+          callBtn.onclick = ()=> window.location.href = `tel:${o.rider?.phone || '+233201022153'}`;
+          callBtn.setAttribute('aria-label', 'Call rider');
+          right.appendChild(callBtn);
+        } else if (o.status === 'delivered') {
+          const rateBtn = document.createElement('button'); 
+          rateBtn.textContent='Rate Order'; 
+          rateBtn.onclick = ()=> openRatingModal(o.id);
+          rateBtn.setAttribute('aria-label', 'Rate this order');
+          right.appendChild(rateBtn);
+        } else {
+          const trackBtn = document.createElement('button'); 
+          trackBtn.textContent='Track'; 
+          trackBtn.onclick = ()=> openTrackingModal(o.id);
+          trackBtn.setAttribute('aria-label', 'Track order');
+          right.appendChild(trackBtn);
+        }
         
-        const markBtn = document.createElement('button'); 
-        markBtn.textContent='Mark Delivered'; 
-        markBtn.onclick = ()=>{ updateOrderStatus(o.id,'delivered'); renderDashboard(); };
-        markBtn.setAttribute('aria-label', 'Mark order as delivered');
-        
-        right.appendChild(trackBtn); 
-        right.appendChild(markBtn);
         div.appendChild(left); 
         div.appendChild(right);
         fragment.appendChild(div);
       });
+      
       recentOrdersEl.appendChild(fragment);
+    }
+    
+    function getTimeAgo(date) {
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMins / 60);
+      const diffDays = Math.floor(diffHours / 24);
+      
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      return `${diffDays}d ago`;
+    }
+    
+    function getTimeFromNow(date) {
+      const now = new Date();
+      const diffMs = date - now;
+      const diffMins = Math.floor(diffMs / 60000);
+      
+      if (diffMins < 1) return 'Now';
+      if (diffMins < 60) return `${diffMins} min`;
+      const diffHours = Math.floor(diffMins / 60);
+      return `${diffHours}h ${diffMins % 60}m`;
+    }
+    
+    function openTrackingModal(orderId) {
+      const order = loadOrders().find(o => o.id === orderId);
+      if (!order) return;
+      
+      alert(`Order Tracking:\n\nOrder: ${order.product || 'Multiple items'}\nStatus: ${OrderStatusManager.getStatusDisplay(order.status).text}\nRider: ${order.rider?.name || 'Not assigned'}\nETA: ${order.estimatedArrival ? getTimeFromNow(new Date(order.estimatedArrival)) : 'Calculating...'}`);
+    }
+    
+    function openRatingModal(orderId) {
+      const rating = prompt('Rate your order (1-5 stars):');
+      if (rating && rating >= 1 && rating <= 5) {
+        alert(`Thank you for your ${rating}-star rating! Your feedback helps us improve.`);
+        // In real implementation, save rating to order
+      }
     }
 
     function updateOrderStatus(id,status){
@@ -760,23 +1152,69 @@
     setInterval(updateOrderStatuses, 25000);
 
     // -------------------------
-    // small utils & init
+    // small utils & init - Enhanced
     // -------------------------
     function escapeHtml(s){ return (s+'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c)); }
-    function showFeedback(text){ const el = document.getElementById('cartFeedback'); if(el){ el.textContent = text; setTimeout(()=>el.textContent='',3000) } }
+    function showFeedback(text){ 
+      const el = document.getElementById('cartFeedback'); 
+      if(el){ 
+        el.textContent = text; 
+        setTimeout(()=>el.textContent='',3000) 
+      } 
+    }
     function addOrderToLocal(order){ const arr = loadOrders(); arr.unshift(order); saveOrders(arr); renderDashboard(); }
 
-    // initial state & UI
-    if(!localStorage.getItem(ORDERS_KEY)) saveOrders([]);
-    if(!localStorage.getItem(CART_KEY)) saveCart([]);
-    updateCartUI();
-    renderDashboard();
+    // Enhanced initialization
+    function initializeApp() {
+      // Initialize data stores
+      if(!localStorage.getItem(ORDERS_KEY)) saveOrders([]);
+      if(!localStorage.getItem(CART_KEY)) saveCart([]);
+      
+      // Initialize UI
+      updateCartUI();
+      renderDashboard();
+      
+      // Start real-time features
+      OrderStatusManager.initializeRealTimeUpdates();
+      
+      // Add cart indicator styles
+      addCartStyles();
+      
+      console.log('🚀 GasFill Enhanced App Initialized');
+    }
+    
+    function addCartStyles() {
+      const style = document.createElement('style');
+      style.textContent = `
+        .cart-has-items .cart-count {
+          background: var(--warning-500) !important;
+          color: white !important;
+          animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.7; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
 
-    // helper to show messages
-    function showMsg(msg){ const el = document.getElementById('cartFeedback'); if(!el) return; el.textContent = msg; setTimeout(()=>el.textContent='',3500); }
+    // helper to show messages - Enhanced
+    function showMsg(msg, type = 'info'){ 
+      const el = document.getElementById('cartFeedback'); 
+      if(!el) return; 
+      
+      el.textContent = msg;
+      el.className = `small cart-feedback-${type}`;
+      setTimeout(()=>{
+        el.textContent='';
+        el.className = 'small';
+      },3500); 
+    }
 
-    // small helpers called by HTML buttons
-    window.addToCart = addToCart;
+    // small helpers called by HTML buttons - Enhanced
+    window.addToCart = addToCartEnhanced;
+    window.addToCartEnhanced = addToCartEnhanced;
     window.openWhatsApp = openWhatsApp;
     window.openWhatsAppOrder = openWhatsAppOrder;
     window.callHotline = callHotline;
@@ -820,6 +1258,19 @@
     }, 250);
 
     window.addEventListener('resize', handleResize);
+    
+    // -------------------------
+    // Initialize Enhanced App
+    // -------------------------
+    document.addEventListener('DOMContentLoaded', initializeApp);
+    
+    // Fallback initialization if DOMContentLoaded already fired
+    if (document.readyState === 'loading') {
+      // Wait for DOMContentLoaded
+    } else {
+      // DOM is already ready
+      initializeApp();
+    }
   </script>
 </body>
 </html>
