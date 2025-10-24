@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GasFill - LPG Delivery Service</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0f766e;
+            --primary-light: #14b8a6;
+            --secondary: #1e40af;
+            --accent: #f59e0b;
+            --success: #059669;
+            --error: #dc2626;
+            --warning: #d97706;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text: #0f172a;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: var(--surface);
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--background);
+            border-radius: 0.5rem;
+            border: 1px solid var(--border);
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            box-shadow: var(--shadow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-secondary {
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--background);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--error) 0%, #ef4444 100%);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--success) 0%, #10b981 100%);
+            color: white;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border-radius: 1rem;
+            box-shadow: var(--shadow);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-header {
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgb(15 118 110 / 0.1);
+        }
+
+        /* Grid */
+        .grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .grid-2 {
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+
+        .grid-3 {
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        }
+
+        /* Product Cards */
+        .product-card {
+            background: var(--surface);
+            border-radius: 1rem;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+
+        .product-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .product-image {
+            height: 200px;
+            background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            color: white;
+        }
+
+        .product-info {
+            padding: 1.5rem;
+        }
+
+        .product-name {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .product-price {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+
+        /* Notifications */
+        .notification {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: var(--shadow-lg);
+            z-index: 1000;
+            color: white;
+            font-weight: 500;
+            min-width: 300px;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification-success {
+            background: var(--success);
+        }
+
+        .notification-error {
+            background: var(--error);
+        }
+
+        .notification-warning {
+            background: var(--warning);
+        }
+
+        /* Loading */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Sections */
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        /* Cart */
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .cart-item:last-child {
+            border-bottom: none;
+        }
+
+        .cart-total {
+            font-size: 1.5rem;
+            font-weight: 700;
+            text-align: right;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 2px solid var(--border);
+        }
+
+        /* Orders */
+        .order-item {
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .order-id {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .status-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-accepted {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .status-delivered {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        /* Mobile Responsiveness */
+        @media (max-width: 768px) {
+            .nav {
+                padding: 1rem;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+
+            .nav-buttons {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .grid-3 {
+                grid-template-columns: 1fr;
+            }
+
+            .notification {
+                left: 1rem;
+                right: 1rem;
+                min-width: auto;
+            }
+        }
+
+        /* Hide sections by default */
+        #auth-section { display: block; }
+        #main-app { display: none; }
+    </style>
+</head>
+<body>
+    <!-- Authentication Section -->
+    <div id="auth-section">
+        <div class="container" style="max-width: 400px; margin-top: 5rem;">
+            <div class="card">
+                <div class="card-header">
+                    <h1 class="logo" style="text-align: center; font-size: 2rem;">GasFill</h1>
+                    <p style="text-align: center; color: var(--text-muted);">LPG Delivery Service</p>
+                </div>
+
+                <!-- Login Form -->
+                <div id="login-form">
+                    <h2 class="card-title">Login to Your Account</h2>
+                    <form id="loginForm">
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-input" id="loginEmail" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-input" id="loginPassword" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">
+                            <span id="loginLoader" class="loading" style="display: none;"></span>
+                            <span id="loginText">Login</span>
+                        </button>
+                    </form>
+                    <p style="text-align: center; margin-top: 1rem;">
+                        Don't have an account? 
+                        <a href="#" onclick="showRegister()" style="color: var(--primary); text-decoration: none;">Register here</a>
+                    </p>
+                </div>
+
+                <!-- Registration Form -->
+                <div id="register-form" style="display: none;">
+                    <h2 class="card-title">Create New Account</h2>
+                    <form id="registerForm">
+                        <div class="form-group">
+                            <label class="form-label">Username</label>
+                            <input type="text" class="form-input" id="registerUsername" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-input" id="registerEmail" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-input" id="registerPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Phone (Optional)</label>
+                            <input type="tel" class="form-input" id="registerPhone">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">
+                            <span id="registerLoader" class="loading" style="display: none;"></span>
+                            <span id="registerText">Create Account</span>
+                        </button>
+                    </form>
+                    <p style="text-align: center; margin-top: 1rem;">
+                        Already have an account? 
+                        <a href="#" onclick="showLogin()" style="color: var(--primary); text-decoration: none;">Login here</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="main-app">
+        <!-- Header -->
+        <header class="header">
+            <nav class="nav">
+                <div class="logo">GasFill</div>
+                <div class="nav-buttons">
+                    <div class="user-info">
+                        <span id="userEmail">user@example.com</span>
+                    </div>
+                    <button class="btn btn-secondary" onclick="showSection('products')">Products</button>
+                    <button class="btn btn-secondary" onclick="showSection('cart')">Cart (<span id="cartCount">0</span>)</button>
+                    <button class="btn btn-secondary" onclick="showSection('orders')">Orders</button>
+                    <button class="btn btn-danger" onclick="logout()">Logout</button>
+                </div>
+            </nav>
+        </header>
+
+        <!-- Products Section -->
+        <div id="products-section" class="section active">
+            <div class="container">
+                <h2 class="card-title" style="margin-bottom: 2rem;">Our Gas Cylinders</h2>
+                <div class="grid grid-3" id="productsGrid">
+                    <!-- Products will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Cart Section -->
+        <div id="cart-section" class="section">
+            <div class="container">
+                <div class="grid grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Your Cart</h2>
+                        </div>
+                        <div id="cartItems">
+                            <p style="text-align: center; color: var(--text-muted);">Your cart is empty</p>
+                        </div>
+                        <div id="cartTotal" class="cart-total" style="display: none;">
+                            Total: ₵<span id="totalAmount">0.00</span>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Checkout</h3>
+                        </div>
+                        <form id="checkoutForm">
+                            <div class="form-group">
+                                <label class="form-label">Customer Name</label>
+                                <input type="text" class="form-input" id="customerName" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Phone Number</label>
+                                <input type="tel" class="form-input" id="customerPhone" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Delivery Address</label>
+                                <textarea class="form-input" id="customerAddress" rows="3" required></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Delivery Type</label>
+                                <select class="form-input" id="deliveryType">
+                                    <option value="standard">Standard (2-3 hours) - Free</option>
+                                    <option value="express">Express (1 hour) - ₵10</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-success" style="width: 100%;" id="checkoutBtn" disabled>
+                                <span id="checkoutLoader" class="loading" style="display: none;"></span>
+                                <span id="checkoutText">Place Order</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Orders Section -->
+        <div id="orders-section" class="section">
+            <div class="container">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Your Orders</h2>
+                        <button class="btn btn-secondary" onclick="loadOrders()">Refresh</button>
+                    </div>
+                    <div id="ordersList">
+                        <p style="text-align: center; color: var(--text-muted);">Loading orders...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer"></div>
+
+    <script>
+        // Configuration
+        const API_BASE = 'http://localhost:5002/api';
+        let authToken = localStorage.getItem('authToken');
+        let currentUser = null;
+        let cart = [];
+        let products = [
+            { id: 'gas-6kg', name: '6kg Gas Cylinder', price: 45.00, icon: '⛽' },
+            { id: 'gas-13kg', name: '13kg Gas Cylinder', price: 80.00, icon: '🔥' },
+            { id: 'gas-14kg', name: '14.5kg Gas Cylinder', price: 85.00, icon: '💨' }
+        ];
+
+        // Utility Functions
+        function showNotification(message, type = 'success') {
+            const container = document.getElementById('notificationContainer');
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.textContent = message;
+            
+            container.appendChild(notification);
+            
+            setTimeout(() => notification.classList.add('show'), 100);
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => container.removeChild(notification), 300);
+            }, 3000);
+        }
+
+        async function apiCall(endpoint, options = {}) {
+            const url = `${API_BASE}${endpoint}`;
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                },
+                ...options
+            };
+
+            if (authToken) {
+                config.headers.Authorization = `Bearer ${authToken}`;
+            }
+
+            try {
+                const response = await fetch(url, config);
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || `HTTP ${response.status}`);
+                }
+                
+                return data;
+            } catch (error) {
+                console.error('API Error:', error);
+                throw error;
+            }
+        }
+
+        // Authentication Functions
+        async function login(email, password) {
+            const data = await apiCall('/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({ email, password })
+            });
+            
+            authToken = data.token;
+            currentUser = data.user;
+            localStorage.setItem('authToken', authToken);
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            
+            return data;
+        }
+
+        async function register(userData) {
+            const data = await apiCall('/auth/register', {
+                method: 'POST',
+                body: JSON.stringify(userData)
+            });
+            
+            authToken = data.token;
+            currentUser = data.user;
+            localStorage.setItem('authToken', authToken);
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            
+            return data;
+        }
+
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('currentUser');
+            
+            document.getElementById('auth-section').style.display = 'block';
+            document.getElementById('main-app').style.display = 'none';
+            
+            showNotification('Logged out successfully');
+        }
+
+        // UI Functions
+        function showLogin() {
+            document.getElementById('login-form').style.display = 'block';
+            document.getElementById('register-form').style.display = 'none';
+        }
+
+        function showRegister() {
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('register-form').style.display = 'block';
+        }
+
+        function showMainApp() {
+            document.getElementById('auth-section').style.display = 'none';
+            document.getElementById('main-app').style.display = 'block';
+            
+            // Update user info
+            if (currentUser) {
+                document.getElementById('userEmail').textContent = currentUser.email;
+            }
+            
+            loadProducts();
+            updateCartUI();
+        }
+
+        function showSection(sectionName) {
+            // Hide all sections
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            // Show selected section
+            document.getElementById(`${sectionName}-section`).classList.add('active');
+            
+            if (sectionName === 'orders') {
+                loadOrders();
+            }
+        }
+
+        // Product Functions
+        function loadProducts() {
+            const grid = document.getElementById('productsGrid');
+            grid.innerHTML = '';
+            
+            products.forEach(product => {
+                const productCard = document.createElement('div');
+                productCard.className = 'product-card';
+                productCard.innerHTML = `
+                    <div class="product-image">${product.icon}</div>
+                    <div class="product-info">
+                        <h3 class="product-name">${product.name}</h3>
+                        <div class="product-price">₵${product.price.toFixed(2)}</div>
+                        <button class="btn btn-primary" style="width: 100%;" onclick="addToCart('${product.id}')">
+                            Add to Cart
+                        </button>
+                    </div>
+                `;
+                grid.appendChild(productCard);
+            });
+        }
+
+        // Cart Functions
+        function addToCart(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            
+            const existingItem = cart.find(item => item.id === productId);
+            if (existingItem) {
+                existingItem.quantity += 1;
+            } else {
+                cart.push({
+                    id: product.id,
+                    name: product.name,
+                    price: product.price,
+                    quantity: 1
+                });
+            }
+            
+            updateCartUI();
+            showNotification(`${product.name} added to cart`);
+        }
+
+        function removeFromCart(productId) {
+            cart = cart.filter(item => item.id !== productId);
+            updateCartUI();
+        }
+
+        function updateQuantity(productId, change) {
+            const item = cart.find(item => item.id === productId);
+            if (item) {
+                item.quantity += change;
+                if (item.quantity <= 0) {
+                    removeFromCart(productId);
+                } else {
+                    updateCartUI();
+                }
+            }
+        }
+
+        function updateCartUI() {
+            const cartCount = document.getElementById('cartCount');
+            const cartItems = document.getElementById('cartItems');
+            const cartTotal = document.getElementById('cartTotal');
+            const totalAmount = document.getElementById('totalAmount');
+            const checkoutBtn = document.getElementById('checkoutBtn');
+            
+            const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+            const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            
+            cartCount.textContent = itemCount;
+            
+            if (cart.length === 0) {
+                cartItems.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Your cart is empty</p>';
+                cartTotal.style.display = 'none';
+                checkoutBtn.disabled = true;
+            } else {
+                cartItems.innerHTML = cart.map(item => `
+                    <div class="cart-item">
+                        <div>
+                            <strong>${item.name}</strong><br>
+                            <small>₵${item.price.toFixed(2)} each</small>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem;" onclick="updateQuantity('${item.id}', -1)">-</button>
+                            <span>${item.quantity}</span>
+                            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem;" onclick="updateQuantity('${item.id}', 1)">+</button>
+                            <button class="btn btn-danger" style="padding: 0.25rem 0.5rem;" onclick="removeFromCart('${item.id}')">×</button>
+                        </div>
+                    </div>
+                `).join('');
+                
+                cartTotal.style.display = 'block';
+                totalAmount.textContent = total.toFixed(2);
+                checkoutBtn.disabled = false;
+            }
+        }
+
+        // Order Functions
+        async function createOrder(orderData) {
+            return await apiCall('/orders', {
+                method: 'POST',
+                body: JSON.stringify(orderData)
+            });
+        }
+
+        async function loadOrders() {
+            const ordersList = document.getElementById('ordersList');
+            ordersList.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Loading orders...</p>';
+            
+            try {
+                const orders = await apiCall('/orders');
+                
+                if (orders.length === 0) {
+                    ordersList.innerHTML = '<p style="text-align: center; color: var(--text-muted);">No orders found</p>';
+                } else {
+                    ordersList.innerHTML = orders.map(order => `
+                        <div class="order-item">
+                            <div class="order-header">
+                                <span class="order-id">${order.id}</span>
+                                <span class="status-badge status-${order.status}">${order.status}</span>
+                            </div>
+                            <p><strong>Total:</strong> ₵${order.total.toFixed(2)}</p>
+                            <p><strong>Items:</strong> ${order.items.length} item(s)</p>
+                            <p><strong>Date:</strong> ${new Date(order.createdAt).toLocaleDateString()}</p>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                ordersList.innerHTML = '<p style="text-align: center; color: var(--error);">Failed to load orders</p>';
+                showNotification('Failed to load orders', 'error');
+            }
+        }
+
+        // Event Listeners
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const loader = document.getElementById('loginLoader');
+            const text = document.getElementById('loginText');
+            
+            loader.style.display = 'block';
+            text.style.display = 'none';
+            
+            try {
+                await login(email, password);
+                showNotification('Login successful!');
+                showMainApp();
+            } catch (error) {
+                showNotification(error.message, 'error');
+            } finally {
+                loader.style.display = 'none';
+                text.style.display = 'block';
+            }
+        });
+
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('registerUsername').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            const phone = document.getElementById('registerPhone').value;
+            const loader = document.getElementById('registerLoader');
+            const text = document.getElementById('registerText');
+            
+            loader.style.display = 'block';
+            text.style.display = 'none';
+            
+            try {
+                await register({ username, email, password, phone });
+                showNotification('Account created successfully!');
+                showMainApp();
+            } catch (error) {
+                showNotification(error.message, 'error');
+            } finally {
+                loader.style.display = 'none';
+                text.style.display = 'block';
+            }
+        });
+
+        document.getElementById('checkoutForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const customerName = document.getElementById('customerName').value;
+            const customerPhone = document.getElementById('customerPhone').value;
+            const customerAddress = document.getElementById('customerAddress').value;
+            const deliveryType = document.getElementById('deliveryType').value;
+            const loader = document.getElementById('checkoutLoader');
+            const text = document.getElementById('checkoutText');
+            
+            const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const deliveryFee = deliveryType === 'express' ? 10 : 0;
+            const finalTotal = total + deliveryFee;
+            
+            const orderData = {
+                customer_name: customerName,
+                customer_phone: customerPhone,
+                customer_address: customerAddress,
+                items: cart,
+                total: finalTotal,
+                delivery_type: deliveryType
+            };
+            
+            loader.style.display = 'block';
+            text.style.display = 'none';
+            
+            try {
+                await createOrder(orderData);
+                cart = [];
+                updateCartUI();
+                document.getElementById('checkoutForm').reset();
+                showNotification('Order placed successfully!');
+                showSection('orders');
+            } catch (error) {
+                showNotification(error.message, 'error');
+            } finally {
+                loader.style.display = 'none';
+                text.style.display = 'block';
+            }
+        });
+
+        // Initialize App
+        function initApp() {
+            const storedToken = localStorage.getItem('authToken');
+            const storedUser = localStorage.getItem('currentUser');
+            
+            if (storedToken && storedUser) {
+                authToken = storedToken;
+                try {
+                    currentUser = JSON.parse(storedUser);
+                    showMainApp();
+                } catch (error) {
+                    logout();
+                }
+            }
+        }
+
+        // Start the app
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>

@@ -68,10 +68,11 @@ class OrderItem(BaseModel):
 
 class OrderCreate(BaseModel):
     items: List[OrderItem]
-    customerName: Optional[str] = None
-    customerPhone: Optional[str] = None
-    deliveryAddress: Optional[str] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    customer_address: Optional[str] = None
     total: float
+    delivery_type: Optional[str] = "standard"
 
 class OrderStatusUpdate(BaseModel):
     status: str
@@ -220,9 +221,9 @@ async def create_order(order_data: OrderCreate):
     order = {
         "id": f"ORD-{order_counter}",
         "items": [item.dict() for item in order_data.items],
-        "customerName": order_data.customerName or "Anonymous",
-        "customerPhone": order_data.customerPhone or "",
-        "deliveryAddress": order_data.deliveryAddress or "To be provided",
+        "customerName": order_data.customer_name or "Anonymous",
+        "customerPhone": order_data.customer_phone or "",
+        "deliveryAddress": order_data.customer_address or "To be provided",
         "total": order_data.total,
         "status": "pending",
         "createdAt": datetime.utcnow().isoformat(),
