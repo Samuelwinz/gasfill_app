@@ -9,18 +9,10 @@ require('dotenv').config();
 
 // Import routes
 const authRoutes = require('./routes/auth');
-const userRoutes = require('./routes/users');
-const productRoutes = require('./routes/products');
 const orderRoutes = require('./routes/orders');
-const riderRoutes = require('./routes/riders');
-const adminRoutes = require('./routes/admin');
 
 // Import middleware
-const errorHandler = require('./middleware/errorHandler');
-const logger = require('./middleware/logger');
-
-// Import socket handlers
-const socketHandler = require('./socket/socketHandler');
+const { errorHandler, notFound, logger, createRateLimit } = require('./middleware/error');
 
 const app = express();
 const server = createServer(app);
@@ -47,14 +39,7 @@ app.use(cors({
 }));
 
 // Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-  message: {
-    error: 'Too many requests from this IP, please try again later.'
-  }
-});
-app.use('/api/', limiter);
+app.use('/api/', createRateLimit());
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -75,17 +60,34 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
-app.use('/api/riders', riderRoutes);
-app.use('/api/admin', adminRoutes);
 
 // Serve static files for uploads
 app.use('/uploads', express.static('uploads'));
 
-// Socket.IO setup
-socketHandler(io);
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+    console.log('User connected:', socket.id);
+    
+    socket.on('join_room', (room) => {
+        socket.join(room);
+        console.log(`User ${socket.id} joined room: ${room}`);
+    });
+    
+    socket.on('order_update', (data) => {
+        // Broadcast order updates to relevant users
+        socket.to(`order_${data.orderId}`).emit('order_status_update', data);
+    });
+    
+    socket.on('rider_location', (data) => {
+        // Broadcast rider location updates
+        socket.to(`order_${data.orderId}`).emit('rider_location_update', data);
+    });
+    
+    socket.on('disconnect', () => {
+        console.log('User disconnected:', socket.id);
+    });
+});
 
 // Make io accessible to routes
 app.set('io', io);

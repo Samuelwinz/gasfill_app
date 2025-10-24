@@ -250,6 +250,38 @@
     .status-icon.pending{background:var(--warning-500)}
     .status-icon.in-transit{background:var(--primary-500)}
     .status-icon.delivered{background:var(--success-500)}
+    
+    /* Authentication Styles */
+    .auth-tabs{display:flex;justify-content:center;gap:var(--space-md);border-bottom:1px solid #e5e7eb;margin-bottom:var(--space-xl)}
+    .auth-tab{background:none;border:none;padding:var(--space-md) var(--space-lg);border-bottom:2px solid transparent;font-weight:600;color:var(--muted);cursor:pointer;transition:all 0.3s ease;font-size:1rem}
+    .auth-tab.active{color:var(--accent1);border-bottom-color:var(--accent1)}
+    .auth-tab:hover{color:var(--accent1)}
+    
+    .auth-form-container{max-width:480px;margin:0 auto;padding:var(--space-xl)}
+    .form-container{background:var(--card);border-radius:var(--radius-xl);padding:var(--space-xl);box-shadow:var(--shadow-lg);border:1px solid #e5e7eb}
+    .form-container h3{margin:0 0 var(--space-sm) 0;font-size:1.5rem;font-weight:800;color:#1f2937}
+    .form-container p{margin:0 0 var(--space-xl) 0;color:var(--muted)}
+    
+    .form-group{margin-bottom:var(--space-lg)}
+    .form-group label{display:block;margin-bottom:var(--space-sm);font-weight:600;color:#374151;font-size:0.875rem}
+    .form-group input,.form-group textarea{width:100%;padding:var(--space-md);border:1px solid #d1d5db;border-radius:var(--radius-md);font-size:1rem;transition:all 0.2s ease;box-sizing:border-box}
+    .form-group input:focus,.form-group textarea:focus{outline:none;border-color:var(--accent1);box-shadow:0 0 0 3px rgba(14,165,164,0.1)}
+    .form-group small{display:block;margin-top:var(--space-xs);color:var(--muted);font-size:0.75rem}
+    
+    .auth-feedback{margin-top:var(--space-md);padding:var(--space-md);border-radius:var(--radius-md);font-size:0.875rem;font-weight:500}
+    .auth-feedback.success{background:var(--success-50);color:var(--success-600);border:1px solid rgba(34,197,94,0.2)}
+    .auth-feedback.error{background:var(--error-50);color:var(--error-500);border:1px solid rgba(239,68,68,0.2)}
+    .auth-feedback.loading{background:var(--primary-50);color:var(--primary-600);border:1px solid rgba(59,130,246,0.2)}
+    
+    .profile-info{background:#f9fafb;border-radius:var(--radius-lg);padding:var(--space-lg);margin:var(--space-lg) 0}
+    .profile-field{display:flex;justify-content:space-between;align-items:center;padding:var(--space-sm) 0;border-bottom:1px solid #e5e7eb}
+    .profile-field:last-child{border-bottom:none}
+    .profile-field strong{color:#374151;font-weight:600}
+    .profile-field span{color:var(--muted)}
+    
+    .profile-actions{display:flex;gap:var(--space-md);flex-wrap:wrap;justify-content:center}
+    .profile-actions button{padding:var(--space-md) var(--space-lg);border-radius:var(--radius-md);border:none;font-weight:600;cursor:pointer;transition:all 0.2s ease;color:white}
+    .profile-actions button:hover{transform:translateY(-1px);box-shadow:var(--shadow-md)}
   </style>
 </head>
 <body>
@@ -277,6 +309,7 @@
         <a href="#" data-target="contact" class="nav-link" aria-label="Contact us">Contact</a>
         <a href="#" data-target="orderNow" class="nav-link" aria-label="Quick order">Order Now</a>
         <a href="#" data-target="dashboard" class="nav-link" aria-label="View dashboard">Dashboard</a>
+        <a href="#" data-target="auth" class="nav-link" aria-label="Sign in or register">Account</a>
         <button class="cta" id="orderNowBtn" style="margin-left:10px" aria-label="Order now">Order Now</button>
       </nav>
     </header>
@@ -546,6 +579,152 @@
         </div>
       </section>
 
+      <!-- Authentication Section -->
+      <section id="auth">
+        <div class="hero">
+          <div class="hero-content">
+            <h1>Sign In to GasFill</h1>
+            <p class="large">Access your account to track orders and manage deliveries</p>
+          </div>
+        </div>
+
+        <!-- Auth Toggle Tabs -->
+        <div class="auth-tabs" style="text-align: center; margin: 2rem 0;">
+          <button id="loginTab" class="auth-tab active" onclick="showLoginForm()">Sign In</button>
+          <button id="registerTab" class="auth-tab" onclick="showRegisterForm()">Sign Up</button>
+        </div>
+
+        <!-- Login Form -->
+        <div id="loginForm" class="auth-form-container">
+          <div class="form-container">
+            <h3>Welcome Back!</h3>
+            <p class="muted-2">Sign in to your GasFill account</p>
+            
+            <form id="loginFormElement" onsubmit="handleLogin(event)">
+              <div class="form-group">
+                <label for="loginEmail">Email Address</label>
+                <input type="email" id="loginEmail" name="email" required 
+                       placeholder="Enter your email" autocomplete="email">
+              </div>
+              
+              <div class="form-group">
+                <label for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" name="password" required 
+                       placeholder="Enter your password" autocomplete="current-password">
+              </div>
+              
+              <div class="form-group" style="display: flex; align-items: center; justify-content: space-between;">
+                <label style="display: flex; align-items: center; gap: 8px;">
+                  <input type="checkbox" id="rememberMe"> Remember me
+                </label>
+                <a href="#" onclick="showForgotPassword()" style="color: var(--accent1); text-decoration: none;">
+                  Forgot password?
+                </a>
+              </div>
+              
+              <button type="submit" class="cta" id="loginBtn" style="width: 100%;">
+                Sign In
+              </button>
+              
+              <div id="loginFeedback" class="auth-feedback"></div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Register Form -->
+        <div id="registerForm" class="auth-form-container" style="display: none;">
+          <div class="form-container">
+            <h3>Create Account</h3>
+            <p class="muted-2">Join GasFill for fast and reliable gas delivery</p>
+            
+            <form id="registerFormElement" onsubmit="handleRegister(event)">
+              <div class="form-group">
+                <label for="registerName">Full Name</label>
+                <input type="text" id="registerName" name="name" required 
+                       placeholder="Enter your full name" autocomplete="name">
+              </div>
+              
+              <div class="form-group">
+                <label for="registerEmail">Email Address</label>
+                <input type="email" id="registerEmail" name="email" required 
+                       placeholder="Enter your email" autocomplete="email">
+              </div>
+              
+              <div class="form-group">
+                <label for="registerPhone">Phone Number</label>
+                <input type="tel" id="registerPhone" name="phone" required 
+                       placeholder="+233 XX XXX XXXX" autocomplete="tel">
+              </div>
+              
+              <div class="form-group">
+                <label for="registerAddress">Address (Optional)</label>
+                <textarea id="registerAddress" name="address" 
+                          placeholder="Enter your delivery address" 
+                          autocomplete="street-address" rows="2"></textarea>
+              </div>
+              
+              <div class="form-group">
+                <label for="registerPassword">Password</label>
+                <input type="password" id="registerPassword" name="password" required 
+                       placeholder="Create a strong password" autocomplete="new-password">
+                <small class="muted-2">Password must be at least 6 characters long</small>
+              </div>
+              
+              <div class="form-group">
+                <label for="confirmPassword">Confirm Password</label>
+                <input type="password" id="confirmPassword" name="confirmPassword" required 
+                       placeholder="Confirm your password" autocomplete="new-password">
+              </div>
+              
+              <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 8px;">
+                  <input type="checkbox" id="agreeTerms" required>
+                  I agree to the <a href="#" style="color: var(--accent1);">Terms of Service</a> 
+                  and <a href="#" style="color: var(--accent1);">Privacy Policy</a>
+                </label>
+              </div>
+              
+              <button type="submit" class="cta" id="registerBtn" style="width: 100%;">
+                Create Account
+              </button>
+              
+              <div id="registerFeedback" class="auth-feedback"></div>
+            </form>
+          </div>
+        </div>
+
+        <!-- User Profile Section (shown when authenticated) -->
+        <div id="userProfile" class="auth-form-container" style="display: none;">
+          <div class="form-container">
+            <h3>My Profile</h3>
+            <p class="muted-2">Manage your account information</p>
+            
+            <div class="profile-info">
+              <div class="profile-field">
+                <strong>Name:</strong> <span id="profileName">-</span>
+              </div>
+              <div class="profile-field">
+                <strong>Email:</strong> <span id="profileEmail">-</span>
+              </div>
+              <div class="profile-field">
+                <strong>Phone:</strong> <span id="profilePhone">-</span>
+              </div>
+              <div class="profile-field">
+                <strong>Address:</strong> <span id="profileAddress">-</span>
+              </div>
+            </div>
+            
+            <div class="profile-actions" style="margin-top: 2rem; display: flex; gap: 1rem; flex-wrap: wrap;">
+              <button onclick="editProfile()" class="cta">Edit Profile</button>
+              <button onclick="changePassword()" style="background: var(--accent2);">Change Password</button>
+              <button onclick="logout()" style="background: var(--error-500);">Sign Out</button>
+            </div>
+            
+            <div id="profileFeedback" class="auth-feedback"></div>
+          </div>
+        </div>
+      </section>
+
     </main>
 
     <!-- Floating cart -->
@@ -581,6 +760,261 @@
   </div>
 
   <script>
+    // -------------------------
+    // API Configuration & Service Layer
+    // -------------------------
+    class APIService {
+      static BASE_URL = 'http://localhost:5000/api';
+      static authToken = localStorage.getItem('authToken');
+      
+      // Set authentication token
+      static setAuthToken(token) {
+        this.authToken = token;
+        localStorage.setItem('authToken', token);
+      }
+      
+      // Remove authentication token
+      static clearAuthToken() {
+        this.authToken = null;
+        localStorage.removeItem('authToken');
+      }
+      
+      // Get auth headers
+      static getAuthHeaders() {
+        const headers = {
+          'Content-Type': 'application/json',
+        };
+        
+        if (this.authToken) {
+          headers['Authorization'] = `Bearer ${this.authToken}`;
+        }
+        
+        return headers;
+      }
+      
+      // Generic HTTP request method
+      static async request(endpoint, options = {}) {
+        const url = `${this.BASE_URL}${endpoint}`;
+        const config = {
+          headers: this.getAuthHeaders(),
+          ...options
+        };
+        
+        try {
+          const response = await fetch(url, config);
+          const data = await response.json();
+          
+          if (!response.ok) {
+            throw new Error(data.message || `HTTP error! status: ${response.status}`);
+          }
+          
+          return data;
+        } catch (error) {
+          console.error('API Request failed:', error);
+          this.handleAPIError(error);
+          throw error;
+        }
+      }
+      
+      // Handle API errors
+      static handleAPIError(error) {
+        if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+          this.clearAuthToken();
+          this.showNotification('Session expired. Please log in again.', 'error');
+          setTimeout(() => {
+            this.showAuthModal();
+          }, 1000);
+        } else {
+          this.showNotification(error.message || 'Something went wrong. Please try again.', 'error');
+        }
+      }
+      
+      // Authentication API calls
+      static async register(userData) {
+        return await this.request('/auth/register', {
+          method: 'POST',
+          body: JSON.stringify(userData)
+        });
+      }
+      
+      static async login(credentials) {
+        return await this.request('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify(credentials)
+        });
+      }
+      
+      static async getProfile() {
+        return await this.request('/auth/profile');
+      }
+      
+      static async updateProfile(userData) {
+        return await this.request('/auth/profile', {
+          method: 'PUT',
+          body: JSON.stringify(userData)
+        });
+      }
+      
+      // Orders API calls
+      static async createOrder(orderData) {
+        return await this.request('/orders', {
+          method: 'POST',
+          body: JSON.stringify(orderData)
+        });
+      }
+      
+      static async getOrders() {
+        return await this.request('/orders');
+      }
+      
+      static async getOrder(orderId) {
+        return await this.request(`/orders/${orderId}`);
+      }
+      
+      static async updateOrderStatus(orderId, status, additionalData = {}) {
+        return await this.request(`/orders/${orderId}/status`, {
+          method: 'PUT',
+          body: JSON.stringify({ status, ...additionalData })
+        });
+      }
+      
+      static async cancelOrder(orderId) {
+        return await this.request(`/orders/${orderId}`, {
+          method: 'DELETE'
+        });
+      }
+      
+      // Utility methods
+      static showNotification(message, type = 'info') {
+        // Use existing notification system
+        if (typeof showNotification === 'function') {
+          showNotification(message, type);
+        } else {
+          // Fallback notification
+          const notification = document.createElement('div');
+          notification.className = `notification notification-${type}`;
+          notification.textContent = message;
+          notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 10000;
+            animation: slideIn 0.3s ease-out;
+            background: ${type === 'error' ? 'var(--error-500)' : 
+                        type === 'success' ? 'var(--success-500)' : 
+                        'var(--primary-500)'};
+          `;
+          
+          document.body.appendChild(notification);
+          setTimeout(() => {
+            notification.remove();
+          }, 3000);
+        }
+      }
+      
+      static showAuthModal() {
+        // Show authentication modal
+        if (typeof activateSection === 'function') {
+          activateSection('auth');
+        }
+      }
+      
+      // Health check
+      static async healthCheck() {
+        try {
+          const response = await fetch(`${this.BASE_URL.replace('/api', '')}/health`);
+          const data = await response.json();
+          console.log('Backend health check:', data);
+          return data.success;
+        } catch (error) {
+          console.error('Backend health check failed:', error);
+          return false;
+        }
+      }
+    }
+    
+    // -------------------------
+    // Socket.IO Real-Time Connection
+    // -------------------------
+    class RealTimeService {
+      static socket = null;
+      static isConnected = false;
+      
+      static async connect() {
+        if (typeof io === 'undefined') {
+          console.warn('Socket.IO not loaded. Loading from CDN...');
+          await this.loadSocketIO();
+        }
+        
+        try {
+          this.socket = io('http://localhost:5000', {
+            transports: ['websocket', 'polling'],
+            timeout: 10000
+          });
+          
+          this.socket.on('connect', () => {
+            console.log('Connected to real-time server');
+            this.isConnected = true;
+            APIService.showNotification('Connected to real-time updates', 'success');
+          });
+          
+          this.socket.on('disconnect', () => {
+            console.log('Disconnected from real-time server');
+            this.isConnected = false;
+          });
+          
+          this.socket.on('order_status_update', (data) => {
+            this.handleOrderUpdate(data);
+          });
+          
+          this.socket.on('rider_location_update', (data) => {
+            this.handleRiderLocationUpdate(data);
+          });
+          
+          return this.socket;
+        } catch (error) {
+          console.error('Failed to connect to real-time server:', error);
+          return null;
+        }
+      }
+      
+      static async loadSocketIO() {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdn.socket.io/4.7.4/socket.io.min.js';
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
+      
+      static joinOrderRoom(orderId) {
+        if (this.socket && this.isConnected) {
+          this.socket.emit('join_room', `order_${orderId}`);
+        }
+      }
+      
+      static handleOrderUpdate(data) {
+        console.log('Order status update received:', data);
+        // Update UI with new order status
+        if (typeof OrderStatusManager !== 'undefined') {
+          OrderStatusManager.handleRealTimeUpdate(data);
+        }
+      }
+      
+      static handleRiderLocationUpdate(data) {
+        console.log('Rider location update received:', data);
+        // Update rider location on map or UI
+        if (typeof updateRiderLocation === 'function') {
+          updateRiderLocation(data);
+        }
+      }
+    }
+    
     // -------------------------
     // Enhanced Utility Functions
     // -------------------------
@@ -941,19 +1375,50 @@
 
     function clearCart(){ localStorage.removeItem(CART_KEY); updateCartUI(); renderCartItems(); }
 
-    function checkoutCart(){
+    async function checkoutCart(){
       const cart = loadCart();
       if(!cart.length){ showFeedback('Cart is empty'); return; }
-      // create order object & store locally (demo)
+      
       const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
-      const orders = loadOrders();
-      const id = 'ORD-'+Date.now();
-      const order = { id, items: cart, total, status:'pending', createdAt: new Date().toISOString() };
-      orders.unshift(order);
-      saveOrders(orders);
-      clearCart();
-      closeCart();
-      showFeedback('Checkout successful — order recorded.');
+      
+      // Prepare order data for API
+      const orderData = {
+        items: cart.map(item => ({
+          name: item.name,
+          quantity: item.qty,
+          price: item.price
+        })),
+        total: total,
+        customerName: 'Cart Order', // Will be updated when user management is added
+        customerPhone: '', // Will be updated when user management is added
+        deliveryAddress: 'To be provided' // Will be updated when user management is added
+      };
+      
+      try {
+        // Try to create order via API
+        const result = await APIService.createOrder(orderData);
+        
+        // Also save locally for offline access
+        const orders = loadOrders();
+        const localOrder = { id: result.id, items: cart, total, status:'pending', createdAt: new Date().toISOString() };
+        orders.unshift(localOrder);
+        saveOrders(orders);
+        
+        clearCart();
+        closeCart();
+        showFeedback('Checkout successful — Order ID: ' + result.id);
+      } catch (error) {
+        // Fallback to localStorage if API fails
+        console.log('API unavailable, saving locally:', error.message);
+        const orders = loadOrders();
+        const id = 'ORD-'+Date.now();
+        const order = { id, items: cart, total, status:'pending', createdAt: new Date().toISOString() };
+        orders.unshift(order);
+        saveOrders(orders);
+        clearCart();
+        closeCart();
+        showFeedback('Checkout successful — order recorded locally.');
+      }
       renderDashboard();
     }
 
@@ -964,20 +1429,49 @@
     function saveOrders(arr){ localStorage.setItem(ORDERS_KEY, JSON.stringify(arr)); }
 
     // single order form
-    document.getElementById('placeOrderBtn').addEventListener('click', ()=>{
+    document.getElementById('placeOrderBtn').addEventListener('click', async ()=>{
       const product = document.getElementById('o_product').value;
       const name = document.getElementById('o_name').value.trim();
       const phone = document.getElementById('o_phone').value.trim();
       const qty = Number(document.getElementById('o_qty').value) || 1;
       const addr = document.getElementById('o_address').value.trim();
       if(!name || !phone || !addr){ alert('Please fill name, phone and address.'); return; }
-      const orders = loadOrders();
-      const id = 'ORD-'+Date.now();
+      
       const priceMap = { '12.5kg Cylinder — Refill':220, '5kg Cylinder — Refill':120, '37kg Cylinder — Commercial':680, 'Empty Exchange': 0 };
       const total = (priceMap[product]||100)*qty;
-      orders.unshift({id, product, name, phone, qty, address:addr, total, status:'pending', createdAt:new Date().toISOString()});
-      saveOrders(orders);
-      document.getElementById('orderFeedback').textContent = 'Order recorded. We will contact you shortly.';
+      
+      const orderData = {
+        items: [{
+          name: product,
+          quantity: qty,
+          price: priceMap[product] || 100
+        }],
+        customerName: name,
+        customerPhone: phone,
+        deliveryAddress: addr,
+        total: total
+      };
+      
+      try {
+        // Try to create order via API
+        const result = await APIService.createOrder(orderData);
+        document.getElementById('orderFeedback').textContent = 'Order submitted successfully! Order ID: ' + result.id;
+        
+        // Also save locally for offline access
+        const orders = loadOrders();
+        const localOrder = {id: result.id, product, name, phone, qty, address:addr, total, status:'pending', createdAt:new Date().toISOString()};
+        orders.unshift(localOrder);
+        saveOrders(orders);
+      } catch (error) {
+        // Fallback to localStorage if API fails
+        console.log('API unavailable, saving locally:', error.message);
+        const orders = loadOrders();
+        const id = 'ORD-'+Date.now();
+        orders.unshift({id, product, name, phone, qty, address:addr, total, status:'pending', createdAt:new Date().toISOString()});
+        saveOrders(orders);
+        document.getElementById('orderFeedback').textContent = 'Order recorded locally. We will contact you shortly.';
+      }
+      
       setTimeout(()=>{ document.getElementById('orderFeedback').textContent = ''; },5000);
       renderDashboard();
     });
@@ -990,12 +1484,40 @@
     function submitContact(){ const n=document.getElementById('c_name').value.trim(); const em=document.getElementById('c_email').value.trim(); const msg=document.getElementById('c_msg').value.trim(); if(!n||!em||!msg){ alert('Please fill the form'); return; } document.getElementById('contactFeedback').textContent = 'Message sent. We will respond soon.'; setTimeout(()=>document.getElementById('contactFeedback').textContent='',4000); }
 
     // one-click order
-    function oneClickOrder(product,price){
-      const orders = loadOrders();
-      const id = 'ORD-'+Date.now();
-      orders.unshift({id, product, qty:1, total:price, status:'pending', createdAt:new Date().toISOString()});
-      saveOrders(orders);
-      document.getElementById('quickFeedback').textContent = 'Order placed: '+product;
+    async function oneClickOrder(product,price){
+      const orderData = {
+        items: [{
+          name: product,
+          quantity: 1,
+          price: price
+        }],
+        total: price,
+        customerName: 'Quick Order', // Will be updated when user management is added
+        customerPhone: '', // Will be updated when user management is added
+        deliveryAddress: 'To be provided' // Will be updated when user management is added
+      };
+      
+      try {
+        // Try to create order via API
+        const result = await APIService.createOrder(orderData);
+        
+        // Also save locally for offline access
+        const orders = loadOrders();
+        const localOrder = {id: result.id, product, qty:1, total:price, status:'pending', createdAt:new Date().toISOString()};
+        orders.unshift(localOrder);
+        saveOrders(orders);
+        
+        document.getElementById('quickFeedback').textContent = 'Order placed: '+product+' (ID: '+result.id+')';
+      } catch (error) {
+        // Fallback to localStorage if API fails
+        console.log('API unavailable, saving locally:', error.message);
+        const orders = loadOrders();
+        const id = 'ORD-'+Date.now();
+        orders.unshift({id, product, qty:1, total:price, status:'pending', createdAt:new Date().toISOString()});
+        saveOrders(orders);
+        document.getElementById('quickFeedback').textContent = 'Order placed: '+product;
+      }
+      
       setTimeout(()=>document.getElementById('quickFeedback').textContent='',4000);
       renderDashboard();
     }
@@ -1018,8 +1540,24 @@
     // -------------------------
     // ENHANCED DASHBOARD render - with rider info and tracking
     // -------------------------
-    function renderDashboard(){
-      const orders = loadOrders();
+    async function renderDashboard(){
+      let orders = loadOrders(); // Start with local orders
+      
+      // Try to fetch from API and merge with local orders
+      try {
+        const apiOrders = await APIService.getOrders();
+        // Merge API orders with local orders, avoiding duplicates
+        const allOrders = [...apiOrders];
+        orders.forEach(localOrder => {
+          if (!allOrders.find(order => order.id === localOrder.id)) {
+            allOrders.push(localOrder);
+          }
+        });
+        orders = allOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      } catch (error) {
+        console.log('API unavailable for dashboard, using local orders:', error.message);
+      }
+      
       const statOrdersEl = document.getElementById('statOrders');
       const statPendingEl = document.getElementById('statPending');
       const statRevenueEl = document.getElementById('statRevenue');
@@ -1128,11 +1666,23 @@
       }
     }
 
-    function updateOrderStatus(id,status){
+    async function updateOrderStatus(id,status){
+      // Update locally first
       const orders = loadOrders();
       const idx = orders.findIndex(o=>o.id===id);
       if(idx===-1) return;
-      orders[idx].status = status; saveOrders(orders); renderDashboard();
+      orders[idx].status = status; 
+      saveOrders(orders); 
+      
+      // Try to sync with API
+      try {
+        await APIService.updateOrderStatus(id, status);
+        console.log('Order status synced with API:', id, status);
+      } catch (error) {
+        console.log('Failed to sync order status with API:', error.message);
+      }
+      
+      renderDashboard();
     }
 
     // auto-rotate older orders statuses (demo) - optimized with debouncing
@@ -1165,10 +1715,35 @@
     function addOrderToLocal(order){ const arr = loadOrders(); arr.unshift(order); saveOrders(arr); renderDashboard(); }
 
     // Enhanced initialization
-    function initializeApp() {
+    async function initializeApp() {
+      console.log('🚀 Initializing GasFill Enhanced App...');
+      
       // Initialize data stores
       if(!localStorage.getItem(ORDERS_KEY)) saveOrders([]);
       if(!localStorage.getItem(CART_KEY)) saveCart([]);
+      
+      // Check backend connection
+      const backendHealthy = await APIService.healthCheck();
+      console.log('Backend status:', backendHealthy ? '✅ Connected' : '❌ Disconnected');
+      
+      if (!backendHealthy) {
+        APIService.showNotification(
+          'Backend server is not available. Some features may be limited.', 
+          'warning'
+        );
+      }
+      
+      // Initialize authentication
+      AuthManager.init();
+      
+      // Initialize real-time connection
+      if (backendHealthy) {
+        try {
+          await RealTimeService.connect();
+        } catch (error) {
+          console.warn('Real-time connection failed:', error);
+        }
+      }
       
       // Initialize UI
       updateCartUI();
@@ -1180,7 +1755,7 @@
       // Add cart indicator styles
       addCartStyles();
       
-      console.log('🚀 GasFill Enhanced App Initialized');
+      console.log('🎉 GasFill Enhanced App Initialized Successfully');
     }
     
     function addCartStyles() {
@@ -1224,14 +1799,260 @@
     window.checkoutCart = checkoutCart;
     window.clearCart = clearCart;
     window.oneClickOrder = oneClickOrder;
+    // -------------------------
+    // Authentication Management
+    // -------------------------
+    class AuthManager {
+      static currentUser = null;
+      static isAuthenticated = false;
+      
+      static init() {
+        // Check if user is already authenticated
+        const token = APIService.authToken;
+        if (token) {
+          this.loadUserProfile();
+        }
+        this.updateAuthUI();
+      }
+      
+      static async loadUserProfile() {
+        try {
+          const response = await APIService.getProfile();
+          if (response.success) {
+            this.currentUser = response.data;
+            this.isAuthenticated = true;
+            this.updateAuthUI();
+            console.log('User profile loaded:', this.currentUser);
+          }
+        } catch (error) {
+          console.error('Failed to load user profile:', error);
+          this.logout();
+        }
+      }
+      
+      static updateAuthUI() {
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        const userProfile = document.getElementById('userProfile');
+        
+        if (this.isAuthenticated && this.currentUser) {
+          // Show user profile, hide auth forms
+          loginForm.style.display = 'none';
+          registerForm.style.display = 'none';
+          userProfile.style.display = 'block';
+          
+          // Update profile information
+          document.getElementById('profileName').textContent = this.currentUser.name;
+          document.getElementById('profileEmail').textContent = this.currentUser.email;
+          document.getElementById('profilePhone').textContent = this.currentUser.phone || '-';
+          document.getElementById('profileAddress').textContent = this.currentUser.address || '-';
+          
+          // Update nav to show user name
+          this.updateNavigation();
+        } else {
+          // Show auth forms, hide profile
+          userProfile.style.display = 'none';
+          // Show login form by default
+          this.showLoginForm();
+        }
+      }
+      
+      static updateNavigation() {
+        // Add user menu or indicator in the navigation
+        const nav = document.querySelector('nav');
+        let userMenuItem = document.getElementById('userMenuItem');
+        
+        if (this.isAuthenticated && !userMenuItem) {
+          userMenuItem = document.createElement('a');
+          userMenuItem.id = 'userMenuItem';
+          userMenuItem.href = '#';
+          userMenuItem.textContent = `Hi, ${this.currentUser.name.split(' ')[0]}`;
+          userMenuItem.onclick = () => activateSection('auth');
+          userMenuItem.style.cssText = 'color: var(--accent1); font-weight: 600;';
+          nav.appendChild(userMenuItem);
+        } else if (!this.isAuthenticated && userMenuItem) {
+          userMenuItem.remove();
+        }
+      }
+      
+      static logout() {
+        this.currentUser = null;
+        this.isAuthenticated = false;
+        APIService.clearAuthToken();
+        this.updateAuthUI();
+        APIService.showNotification('You have been logged out', 'info');
+        
+        // Redirect to products page
+        activateSection('products');
+      }
+    }
+    
+    // Auth form functions
+    function showLoginForm() {
+      document.getElementById('loginForm').style.display = 'block';
+      document.getElementById('registerForm').style.display = 'none';
+      document.getElementById('loginTab').classList.add('active');
+      document.getElementById('registerTab').classList.remove('active');
+    }
+    
+    function showRegisterForm() {
+      document.getElementById('loginForm').style.display = 'none';
+      document.getElementById('registerForm').style.display = 'block';
+      document.getElementById('loginTab').classList.remove('active');
+      document.getElementById('registerTab').classList.add('active');
+    }
+    
+    async function handleLogin(event) {
+      event.preventDefault();
+      
+      const form = event.target;
+      const formData = new FormData(form);
+      const loginBtn = document.getElementById('loginBtn');
+      const feedback = document.getElementById('loginFeedback');
+      
+      // Show loading state
+      loginBtn.classList.add('btn-loading');
+      loginBtn.disabled = true;
+      feedback.className = 'auth-feedback loading';
+      feedback.textContent = 'Signing in...';
+      
+      try {
+        const credentials = {
+          email: formData.get('email'),
+          password: formData.get('password')
+        };
+        
+        const response = await APIService.login(credentials);
+        
+        if (response.success) {
+          // Store auth token
+          APIService.setAuthToken(response.data.token);
+          AuthManager.currentUser = response.data;
+          AuthManager.isAuthenticated = true;
+          
+          // Show success feedback
+          feedback.className = 'auth-feedback success';
+          feedback.textContent = 'Login successful! Welcome back.';
+          
+          // Update UI
+          AuthManager.updateAuthUI();
+          
+          // Show success notification
+          APIService.showNotification(`Welcome back, ${response.data.name}!`, 'success');
+          
+          // Redirect to dashboard
+          setTimeout(() => {
+            activateSection('dashboard');
+          }, 1500);
+        }
+      } catch (error) {
+        feedback.className = 'auth-feedback error';
+        feedback.textContent = error.message || 'Login failed. Please try again.';
+      } finally {
+        // Reset button state
+        loginBtn.classList.remove('btn-loading');
+        loginBtn.disabled = false;
+      }
+    }
+    
+    async function handleRegister(event) {
+      event.preventDefault();
+      
+      const form = event.target;
+      const formData = new FormData(form);
+      const registerBtn = document.getElementById('registerBtn');
+      const feedback = document.getElementById('registerFeedback');
+      
+      // Validate password confirmation
+      const password = formData.get('password');
+      const confirmPassword = formData.get('confirmPassword');
+      
+      if (password !== confirmPassword) {
+        feedback.className = 'auth-feedback error';
+        feedback.textContent = 'Passwords do not match.';
+        return;
+      }
+      
+      // Show loading state
+      registerBtn.classList.add('btn-loading');
+      registerBtn.disabled = true;
+      feedback.className = 'auth-feedback loading';
+      feedback.textContent = 'Creating account...';
+      
+      try {
+        const userData = {
+          name: formData.get('name'),
+          email: formData.get('email'),
+          password: formData.get('password'),
+          phone: formData.get('phone'),
+          address: formData.get('address') || ''
+        };
+        
+        const response = await APIService.register(userData);
+        
+        if (response.success) {
+          // Store auth token
+          APIService.setAuthToken(response.data.token);
+          AuthManager.currentUser = response.data;
+          AuthManager.isAuthenticated = true;
+          
+          // Show success feedback
+          feedback.className = 'auth-feedback success';
+          feedback.textContent = 'Account created successfully! Welcome to GasFill.';
+          
+          // Update UI
+          AuthManager.updateAuthUI();
+          
+          // Show success notification
+          APIService.showNotification(`Welcome to GasFill, ${response.data.name}!`, 'success');
+          
+          // Redirect to dashboard
+          setTimeout(() => {
+            activateSection('dashboard');
+          }, 1500);
+        }
+      } catch (error) {
+        feedback.className = 'auth-feedback error';
+        feedback.textContent = error.message || 'Registration failed. Please try again.';
+      } finally {
+        // Reset button state
+        registerBtn.classList.remove('btn-loading');
+        registerBtn.disabled = false;
+      }
+    }
+    
+    function showForgotPassword() {
+      APIService.showNotification('Password reset feature coming soon!', 'info');
+    }
+    
+    function editProfile() {
+      APIService.showNotification('Profile editing feature coming soon!', 'info');
+    }
+    
+    function changePassword() {
+      APIService.showNotification('Password change feature coming soon!', 'info');
+    }
+    
+    function logout() {
+      AuthManager.logout();
+    }
+
     window.activateSection = activateSection;
     window.changeQty = changeQty;
     window.closeCart = closeCart;
+    window.showLoginForm = showLoginForm;
+    window.showRegisterForm = showRegisterForm;
+    window.handleLogin = handleLogin;
+    window.handleRegister = handleRegister;
+    window.showForgotPassword = showForgotPassword;
+    window.editProfile = editProfile;
+    window.changePassword = changePassword;
+    window.logout = logout;
 
     // preserve nav behavior if hash present
     if(location.hash){
       const h = location.hash.replace('#','');
-      const mapping = { products:'products', order:'order', bulk:'bulk', safety:'safety', contact:'contact', orderNow:'orderNow', dashboard:'dashboard' };
+      const mapping = { products:'products', order:'order', bulk:'bulk', safety:'safety', contact:'contact', orderNow:'orderNow', dashboard:'dashboard', auth:'auth' };
       if(mapping[h]) activateSection(mapping[h]);
     }
 
