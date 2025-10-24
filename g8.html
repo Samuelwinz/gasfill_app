@@ -1141,7 +1141,7 @@
     // API Configuration & Service Layer
     // -------------------------
     class APIService {
-      static BASE_URL = 'http://localhost:5000/api';
+      static BASE_URL = 'http://localhost:5001/api';
       static authToken = localStorage.getItem('authToken');
       
       // Set authentication token
@@ -1328,7 +1328,7 @@
         }
         
         try {
-          this.socket = io('http://localhost:5000', {
+          this.socket = io('http://localhost:5001', {
             transports: ['websocket', 'polling'],
             timeout: 10000
           });
