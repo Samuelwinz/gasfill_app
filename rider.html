@@ -1,0 +1,2061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GasFill Rider Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0f766e;
+            --primary-light: #14b8a6;
+            --secondary: #1e40af;
+            --accent: #f59e0b;
+            --success: #059669;
+            --error: #dc2626;
+            --warning: #d97706;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text: #0f172a;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+            --rider-primary: #059669;
+            --rider-secondary: #10b981;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* Rider Header */
+        .rider-header {
+            background: linear-gradient(135deg, var(--rider-primary) 0%, var(--rider-secondary) 100%);
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: var(--shadow-lg);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .rider-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1400px;
+            margin: 0 auto;
+            min-height: 60px;
+            position: relative;
+        }
+
+        .rider-logo {
+            font-size: 1.8rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .rider-logo::before {
+            content: '🏍️';
+            font-size: 1.5rem;
+        }
+
+        .rider-user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-shrink: 0;
+        }
+
+        .rider-user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .rider-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border: 2px solid transparent;
+        }
+
+        .rider-status.available {
+            background: #059669;
+            color: white;
+        }
+
+        .rider-status.busy {
+            background: #d97706;
+            color: white;
+        }
+
+        .rider-status.offline {
+            background: #64748b;
+            color: white;
+        }
+
+        .logout-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Mobile Menu Toggle */
+        .mobile-menu-toggle {
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            transition: all 0.3s ease;
+            z-index: 1001;
+            min-width: 44px;
+            min-height: 44px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .mobile-menu-toggle:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .mobile-menu-toggle span {
+            width: 25px;
+            height: 3px;
+            background: white;
+            border-radius: 3px;
+            transition: all 0.3s ease;
+            transform-origin: center;
+            display: block;
+        }
+
+        .mobile-menu-toggle.active span:nth-child(1) {
+            transform: rotate(45deg) translate(6px, 6px);
+        }
+
+        .mobile-menu-toggle.active span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .mobile-menu-toggle.active span:nth-child(3) {
+            transform: rotate(-45deg) translate(6px, -6px);
+        }
+
+        /* Main Layout */
+        .rider-container {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            min-height: calc(100vh - 80px);
+            max-width: 1400px;
+            margin: 0 auto;
+            gap: 2rem;
+            padding: 2rem;
+        }
+
+        /* Sidebar */
+        .rider-sidebar {
+            background: var(--surface);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            height: fit-content;
+            position: sticky;
+            top: 100px;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar-nav {
+            list-style: none;
+        }
+
+        .sidebar-nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-nav a {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .sidebar-nav a:hover,
+        .sidebar-nav a.active {
+            background: var(--rider-primary);
+            color: white;
+        }
+
+        .sidebar-nav a .icon {
+            font-size: 1.2rem;
+        }
+
+        /* Main Content */
+        .rider-main {
+            background: var(--surface);
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+        }
+
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .section-title .icon {
+            font-size: 2rem;
+        }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, var(--surface) 0%, #f1f5f9 100%);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            border: 1px solid var(--border);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .stat-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--text);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+
+        /* Status Toggle */
+        .status-toggle {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .status-btn {
+            padding: 0.75rem 1.5rem;
+            border: 2px solid transparent;
+            border-radius: 0.75rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-btn.available {
+            background: var(--success);
+            color: white;
+        }
+
+        .status-btn.busy {
+            background: var(--warning);
+            color: white;
+        }
+
+        .status-btn.offline {
+            background: var(--text-muted);
+            color: white;
+        }
+
+        /* Orders */
+        .orders-container {
+            margin-top: 2rem;
+        }
+
+        .orders-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .orders-tabs {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .tab-btn {
+            padding: 0.5rem 1rem;
+            border: 2px solid var(--border);
+            background: var(--surface);
+            color: var(--text-muted);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            background: var(--rider-primary);
+            color: white;
+            border-color: var(--rider-primary);
+        }
+
+        .orders-list {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .order-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .order-card:hover {
+            box-shadow: var(--shadow);
+            transform: translateY(-1px);
+        }
+
+        .order-card:active {
+            transform: translateY(0);
+        }
+
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .order-id {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--text);
+        }
+
+        .order-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .order-status.pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .order-status.assigned {
+            background: #ddd6fe;
+            color: #5b21b6;
+        }
+
+        .order-status.picked_up {
+            background: #bfdbfe;
+            color: #1e40af;
+        }
+
+        .order-status.in_transit {
+            background: #fed7aa;
+            color: #c2410c;
+        }
+
+        .order-status.delivered {
+            background: #bbf7d0;
+            color: #059669;
+        }
+
+        .order-details {
+            margin-bottom: 1rem;
+        }
+
+        .order-customer {
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 0.5rem;
+        }
+
+        .order-address {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .order-items {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .order-actions {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            min-height: 44px;
+            min-width: 44px;
+            justify-content: center;
+            white-space: nowrap;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn:focus {
+            outline: 2px solid var(--rider-primary);
+            outline-offset: 2px;
+        }
+
+        .btn:active {
+            transform: translateY(1px);
+        }
+
+        .btn-primary {
+            background: var(--rider-primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary);
+        }
+
+        .btn-secondary {
+            background: var(--text-muted);
+            color: white;
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        /* Loading */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Login Form */
+        .rider-login {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--rider-primary) 0%, var(--rider-secondary) 100%);
+        }
+
+        .login-card {
+            background: var(--surface);
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: var(--shadow-lg);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-title {
+            font-size: 2rem;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 2rem;
+            color: var(--text);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--border);
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--rider-primary);
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--rider-primary);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .login-btn:hover {
+            background: var(--primary);
+        }
+
+        .error-message {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+        }
+
+        /* Responsive Design */
+        
+        /* Large tablets and small desktops */
+        @media (max-width: 1200px) {
+            .rider-container {
+                gap: 1.5rem;
+                padding: 1.5rem;
+            }
+            
+            .dashboard-grid {
+                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            }
+        }
+
+        /* Tablets */
+        @media (max-width: 1024px) {
+            .rider-container {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+                padding: 1rem;
+            }
+
+            .rider-sidebar {
+                position: fixed;
+                top: 0;
+                left: -280px;
+                width: 280px;
+                height: 100vh;
+                z-index: 1000;
+                transition: left 0.3s ease;
+                border-radius: 0;
+                padding-top: 100px;
+                overflow-y: auto;
+                background: var(--surface);
+                box-shadow: var(--shadow-lg);
+            }
+
+            .rider-sidebar.mobile-open {
+                left: 0;
+            }
+
+            .mobile-menu-toggle {
+                display: flex;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 1rem;
+            }
+
+            .rider-main {
+                padding: 1.5rem;
+            }
+
+            .stat-card {
+                padding: 1rem;
+            }
+
+            .stat-number {
+                font-size: 2rem;
+            }
+
+            .section-title {
+                font-size: 1.75rem;
+            }
+
+            .orders-header {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: stretch;
+            }
+
+            .orders-tabs {
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+
+            .tab-btn {
+                flex: 1;
+                min-width: 80px;
+            }
+        }
+
+        /* Small tablets and large phones */
+        @media (max-width: 896px) {
+            .rider-header {
+                padding: 0.875rem 1.25rem;
+            }
+
+            .rider-logo {
+                font-size: 1.6rem;
+            }
+
+            .rider-user-info {
+                gap: 0.75rem;
+            }
+
+            .rider-user-info > div:not(.rider-user-avatar):not(.logout-btn):not(.rider-status) {
+                display: none;
+            }
+
+            .status-toggle {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+
+            .status-btn {
+                text-align: center;
+                justify-content: center;
+            }
+        }
+
+        /* Phones */
+        @media (max-width: 768px) {
+            .rider-nav {
+                padding: 0;
+            }
+
+            .rider-header {
+                padding: 0.75rem 1rem;
+            }
+
+            .rider-logo {
+                font-size: 1.5rem;
+            }
+
+            .rider-user-info {
+                gap: 0.5rem;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1rem;
+            }
+
+            .rider-main {
+                padding: 1rem;
+            }
+
+            .section-title {
+                font-size: 1.5rem;
+                text-align: center;
+                margin-bottom: 1.5rem;
+            }
+
+            .stat-card {
+                padding: 1rem;
+                text-align: center;
+            }
+
+            .stat-number {
+                font-size: 1.75rem;
+            }
+
+            .order-actions {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .btn {
+                justify-content: center;
+                padding: 0.75rem 1rem;
+                font-size: 0.875rem;
+            }
+
+            .order-card {
+                padding: 1rem;
+            }
+
+            .order-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .order-id {
+                font-size: 1rem;
+            }
+
+            .orders-tabs {
+                gap: 0.5rem;
+            }
+
+            .tab-btn {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.75rem;
+                border-radius: 0.375rem;
+            }
+        }
+
+        /* Small phones */
+        @media (max-width: 480px) {
+            .rider-header {
+                padding: 0.5rem 0.75rem;
+            }
+
+            .rider-nav {
+                min-height: 50px;
+            }
+
+            .rider-logo {
+                font-size: 1.25rem;
+            }
+
+            .rider-logo::before {
+                font-size: 1.25rem;
+            }
+
+            .rider-user-info {
+                gap: 0.25rem;
+            }
+
+            .rider-user-avatar {
+                width: 32px;
+                height: 32px;
+                font-size: 0.75rem;
+            }
+
+            .rider-status {
+                padding: 0.25rem 0.5rem;
+                font-size: 0.75rem;
+            }
+
+            .logout-btn {
+                padding: 0.375rem 0.5rem;
+                font-size: 0.75rem;
+            }
+
+            .mobile-menu-toggle {
+                padding: 0.375rem;
+                min-width: 40px;
+                min-height: 40px;
+            }
+
+            .mobile-menu-toggle span {
+                width: 20px;
+                height: 2px;
+            }
+
+            .rider-container {
+                padding: 0.5rem;
+            }
+
+            .rider-main {
+                padding: 0.75rem;
+                border-radius: 0.5rem;
+            }
+
+            .section-title {
+                font-size: 1.25rem;
+                margin-bottom: 1rem;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+                gap: 0.75rem;
+            }
+
+            .stat-card {
+                padding: 0.75rem;
+                text-align: center;
+            }
+
+            .stat-number {
+                font-size: 1.5rem;
+            }
+
+            .stat-icon {
+                font-size: 2rem;
+                margin-bottom: 0.5rem;
+            }
+
+            .status-toggle {
+                gap: 0.5rem;
+            }
+
+            .status-btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.875rem;
+            }
+
+            .order-card {
+                padding: 0.75rem;
+                border-radius: 0.5rem;
+            }
+
+            .order-customer {
+                font-size: 0.875rem;
+            }
+
+            .order-address,
+            .order-items {
+                font-size: 0.75rem;
+            }
+
+            .btn {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.75rem;
+                min-height: 44px;
+            }
+
+            .orders-tabs {
+                grid-template-columns: repeat(3, 1fr);
+                display: grid;
+                gap: 0.25rem;
+            }
+
+            .tab-btn {
+                padding: 0.5rem 0.25rem;
+                font-size: 0.7rem;
+                text-align: center;
+            }
+        }
+
+        /* Extra small phones */
+        @media (max-width: 360px) {
+            .rider-header {
+                padding: 0.5rem;
+            }
+
+            .rider-logo {
+                font-size: 1.125rem;
+            }
+
+            .rider-container {
+                padding: 0.25rem;
+            }
+
+            .rider-main {
+                padding: 0.5rem;
+            }
+
+            .section-title {
+                font-size: 1.125rem;
+            }
+
+            .stat-card {
+                padding: 0.5rem;
+            }
+
+            .stat-number {
+                font-size: 1.25rem;
+            }
+
+            .order-card {
+                padding: 0.5rem;
+            }
+
+            .btn {
+                padding: 0.5rem;
+                font-size: 0.7rem;
+            }
+        }
+
+        /* Sidebar Overlay */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            -webkit-tap-highlight-color: transparent;
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+
+        /* Mobile Sidebar */
+        @media (max-width: 1024px) {
+            .mobile-menu-toggle {
+                display: flex;
+            }
+        }
+
+        /* Enhanced animations and transitions for mobile */
+        @keyframes slideInLeft {
+            from {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOutLeft {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes ripple {
+            0% {
+                transform: scale(0);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        /* Ripple effect for touch feedback */
+        .ripple-effect {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ripple-effect::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .ripple-effect:active::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        /* Enhanced loading states */
+        .loading-skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Pull-to-refresh indicator */
+        .pull-to-refresh {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--accent1);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 0 0 8px 8px;
+            font-size: 0.875rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+
+        .pull-to-refresh.visible {
+            opacity: 1;
+        }
+
+        /* Smooth scrolling for all elements */
+        * {
+            scroll-behavior: smooth;
+        }
+
+        /* Enhanced focus indicators for accessibility */
+        button:focus-visible,
+        a:focus-visible,
+        input:focus-visible,
+        select:focus-visible {
+            outline: 2px solid var(--accent1);
+            outline-offset: 2px;
+            box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.1);
+        }
+
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+            .card {
+                border: 2px solid #000;
+            }
+            
+            .btn-primary {
+                border: 2px solid #000;
+            }
+            
+            .nav-link:hover {
+                background: #000;
+                color: #fff;
+            }
+        }
+
+        /* Reduced motion support */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
+
+        /* Print styles */
+        @media print {
+            .sidebar,
+            .mobile-menu-toggle,
+            .btn,
+            .floating-action {
+                display: none !important;
+            }
+            
+            .main-content {
+                margin-left: 0 !important;
+                padding: 0 !important;
+            }
+            
+            .card {
+                border: 1px solid #000;
+                break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Rider Login Section -->
+    <div id="rider-login-section" class="rider-login">
+        <div class="login-card">
+            <h1 class="login-title">🏍️ Rider Dashboard</h1>
+            <div id="login-error" class="error-message" style="display: none;"></div>
+            <form id="rider-login-form">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" id="rider-email" required value="rider1@gasfill.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="rider-password" required value="rider123">
+                </div>
+                <button type="submit" class="login-btn" id="login-btn">
+                    <span id="login-loader" class="loading" style="display: none;"></span>
+                    <span id="login-text">Login to Dashboard</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Rider Dashboard Section -->
+    <div id="rider-dashboard-section" style="display: none;">
+        <!-- Rider Header -->
+        <header class="rider-header">
+            <nav class="rider-nav">
+                <div class="rider-logo">GasFill Rider</div>
+                
+                <!-- Mobile Menu Toggle -->
+                <button class="mobile-menu-toggle" id="mobile-menu-toggle" onclick="toggleMobileMenu()">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+
+                <div class="rider-user-info">
+                    <div class="rider-user-avatar" id="rider-avatar">R</div>
+                    <div>
+                        <div id="rider-username">Rider</div>
+                        <div style="font-size: 0.875rem; opacity: 0.8;" id="rider-email-display">rider@gasfill.com</div>
+                    </div>
+                    <div class="rider-status" id="rider-status">offline</div>
+                    <button class="logout-btn" onclick="riderLogout()">Logout</button>
+                </div>
+            </nav>
+        </header>
+
+        <!-- Rider Container -->
+        <div class="rider-container">
+            <!-- Sidebar Overlay for Mobile -->
+            <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeMobileMenu()"></div>
+            
+            <!-- Sidebar -->
+            <aside class="rider-sidebar" id="rider-sidebar">
+                <ul class="sidebar-nav">
+                    <li><a href="#" onclick="showSection('dashboard')" class="active">
+                        <span class="icon">📊</span> Dashboard
+                    </a></li>
+                    <li><a href="#" onclick="showSection('orders')">
+                        <span class="icon">📦</span> My Orders
+                    </a></li>
+                    <li><a href="#" onclick="showSection('available')">
+                        <span class="icon">🎯</span> Available Orders
+                    </a></li>
+                    <li><a href="#" onclick="showSection('earnings')">
+                        <span class="icon">💰</span> Earnings
+                    </a></li>
+                    <li><a href="#" onclick="showSection('profile')">
+                        <span class="icon">👤</span> Profile
+                    </a></li>
+                </ul>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="rider-main">
+                <!-- Dashboard Section -->
+                <section id="dashboard-section" class="section active">
+                    <h2 class="section-title">
+                        <span class="icon">📊</span>
+                        Dashboard
+                    </h2>
+
+                    <!-- Status Toggle -->
+                    <div class="status-toggle">
+                        <button class="status-btn available" onclick="updateRiderStatus('available')">
+                            🟢 Available
+                        </button>
+                        <button class="status-btn busy" onclick="updateRiderStatus('busy')">
+                            🟡 Busy
+                        </button>
+                        <button class="status-btn offline" onclick="updateRiderStatus('offline')">
+                            🔴 Offline
+                        </button>
+                    </div>
+
+                    <!-- Stats Grid -->
+                    <div class="dashboard-grid">
+                        <div class="stat-card">
+                            <span class="stat-icon">📦</span>
+                            <div class="stat-number" id="pending-orders">0</div>
+                            <div class="stat-label">Pending Orders</div>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-icon">✅</span>
+                            <div class="stat-number" id="completed-today">0</div>
+                            <div class="stat-label">Completed Today</div>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-icon">⭐</span>
+                            <div class="stat-number" id="rider-rating">0.0</div>
+                            <div class="stat-label">Rating</div>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-icon">💰</span>
+                            <div class="stat-number" id="total-earnings">₵0</div>
+                            <div class="stat-label">Total Earnings</div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Orders -->
+                    <div class="orders-container">
+                        <h3>Recent Orders</h3>
+                        <div id="recent-orders" class="orders-list">
+                            <!-- Orders will be loaded here -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Orders Section -->
+                <section id="orders-section" class="section">
+                    <h2 class="section-title">
+                        <span class="icon">📦</span>
+                        My Orders
+                    </h2>
+
+                    <div class="orders-header">
+                        <div class="orders-tabs">
+                            <button class="tab-btn active" onclick="filterOrders('all')">All</button>
+                            <button class="tab-btn" onclick="filterOrders('assigned')">Assigned</button>
+                            <button class="tab-btn" onclick="filterOrders('picked_up')">Picked Up</button>
+                            <button class="tab-btn" onclick="filterOrders('in_transit')">In Transit</button>
+                            <button class="tab-btn" onclick="filterOrders('delivered')">Delivered</button>
+                        </div>
+                    </div>
+
+                    <div id="my-orders" class="orders-list">
+                        <!-- Orders will be loaded here -->
+                    </div>
+                </section>
+
+                <!-- Available Orders Section -->
+                <section id="available-section" class="section">
+                    <h2 class="section-title">
+                        <span class="icon">🎯</span>
+                        Available Orders
+                    </h2>
+
+                    <div id="available-orders" class="orders-list">
+                        <!-- Available orders will be loaded here -->
+                    </div>
+                </section>
+
+                <!-- Earnings Section -->
+                <section id="earnings-section" class="section">
+                    <h2 class="section-title">
+                        <span class="icon">💰</span>
+                        Earnings
+                    </h2>
+
+                    <div class="dashboard-grid">
+                        <div class="stat-card">
+                            <span class="stat-icon">📅</span>
+                            <div class="stat-number" id="today-earnings">₵0</div>
+                            <div class="stat-label">Today's Earnings</div>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-icon">📊</span>
+                            <div class="stat-number" id="week-earnings">₵0</div>
+                            <div class="stat-label">This Week</div>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-icon">📈</span>
+                            <div class="stat-number" id="month-earnings">₵0</div>
+                            <div class="stat-label">This Month</div>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-icon">🎯</span>
+                            <div class="stat-number" id="avg-per-delivery">₵0</div>
+                            <div class="stat-label">Avg per Delivery</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Profile Section -->
+                <section id="profile-section" class="section">
+                    <h2 class="section-title">
+                        <span class="icon">👤</span>
+                        Profile
+                    </h2>
+
+                    <div id="rider-profile">
+                        <!-- Profile details will be loaded here -->
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let riderAuthToken = null;
+        let currentRider = null;
+        const BASE_URL = 'http://localhost:5002';
+
+        // API functions
+        async function apiCall(endpoint, options = {}) {
+            const url = `${BASE_URL}${endpoint}`;
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+
+            if (riderAuthToken) {
+                headers['Authorization'] = `Bearer ${riderAuthToken}`;
+            }
+
+            const response = await fetch(url, {
+                ...options,
+                headers
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'API request failed');
+            }
+
+            return response.json();
+        }
+
+        // Authentication
+        document.getElementById('rider-login-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('rider-email').value;
+            const password = document.getElementById('rider-password').value;
+            const errorDiv = document.getElementById('login-error');
+            const loader = document.getElementById('login-loader');
+            const text = document.getElementById('login-text');
+
+            errorDiv.style.display = 'none';
+            loader.style.display = 'inline-block';
+            text.style.display = 'none';
+
+            try {
+                const response = await apiCall('/api/auth/rider-login', {
+                    method: 'POST',
+                    body: JSON.stringify({ email, password })
+                });
+
+                riderAuthToken = response.token;
+                currentRider = response.rider;
+
+                localStorage.setItem('riderToken', riderAuthToken);
+                localStorage.setItem('currentRider', JSON.stringify(currentRider));
+
+                showRiderDashboard();
+                loadDashboardData();
+                
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                loader.style.display = 'none';
+                text.style.display = 'block';
+            }
+        });
+
+        // Show rider dashboard
+        function showRiderDashboard() {
+            document.getElementById('rider-login-section').style.display = 'none';
+            document.getElementById('rider-dashboard-section').style.display = 'block';
+            
+            // Update rider info in header
+            if (currentRider) {
+                document.getElementById('rider-avatar').textContent = currentRider.username.charAt(0).toUpperCase();
+                document.getElementById('rider-username').textContent = currentRider.username;
+                document.getElementById('rider-email-display').textContent = currentRider.email;
+                updateStatusDisplay(currentRider.status);
+            }
+        }
+
+        // Load dashboard data
+        async function loadDashboardData() {
+            try {
+                const dashboardData = await apiCall('/api/rider/dashboard');
+                
+                // Update stats
+                document.getElementById('pending-orders').textContent = dashboardData.stats.pending_orders;
+                document.getElementById('completed-today').textContent = dashboardData.stats.completed_today;
+                document.getElementById('rider-rating').textContent = dashboardData.rider.rating;
+                document.getElementById('total-earnings').textContent = `₵${dashboardData.rider.earnings}`;
+
+                // Load recent orders
+                displayOrders(dashboardData.orders.pending, 'recent-orders');
+                
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+            }
+        }
+
+        // Update rider status
+        async function updateRiderStatus(status) {
+            try {
+                await apiCall('/api/rider/status', {
+                    method: 'PUT',
+                    body: JSON.stringify({ status })
+                });
+
+                currentRider.status = status;
+                updateStatusDisplay(status);
+                
+            } catch (error) {
+                console.error('Error updating status:', error);
+            }
+        }
+
+        // Update status display
+        function updateStatusDisplay(status) {
+            const statusElement = document.getElementById('rider-status');
+            statusElement.textContent = status;
+            statusElement.className = `rider-status ${status}`;
+        }
+
+        // Display orders
+        function displayOrders(orders, containerId) {
+            const container = document.getElementById(containerId);
+            
+            if (!orders || orders.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 2rem;">No orders found</p>';
+                return;
+            }
+
+            container.innerHTML = orders.map(order => `
+                <div class="order-card">
+                    <div class="order-header">
+                        <div class="order-id">${order.id}</div>
+                        <div class="order-status ${order.status}">${order.status.replace('_', ' ')}</div>
+                    </div>
+                    <div class="order-details">
+                        <div class="order-customer">${order.customer_name}</div>
+                        <div class="order-address">📍 ${order.customer_address}</div>
+                        <div class="order-items">${order.items.length} items - ₵${order.total}</div>
+                    </div>
+                    <div class="order-actions">
+                        ${getOrderActions(order)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Get order actions based on status
+        function getOrderActions(order) {
+            const actions = [];
+            
+            if (order.status === 'pending') {
+                actions.push(`<button class="btn btn-primary" onclick="acceptOrder('${order.id}')">Accept Order</button>`);
+            } else if (order.status === 'assigned') {
+                actions.push(`<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}', 'picked_up')">Mark Picked Up</button>`);
+            } else if (order.status === 'picked_up') {
+                actions.push(`<button class="btn btn-warning" onclick="updateOrderStatus('${order.id}', 'in_transit')">Start Delivery</button>`);
+            } else if (order.status === 'in_transit') {
+                actions.push(`<button class="btn btn-success" onclick="updateOrderStatus('${order.id}', 'delivered')">Mark Delivered</button>`);
+            }
+            
+            return actions.join('');
+        }
+
+        // Accept order
+        async function acceptOrder(orderId) {
+            try {
+                await apiCall(`/api/rider/orders/${orderId}/accept`, {
+                    method: 'POST'
+                });
+                
+                // Refresh current section
+                const activeSection = document.querySelector('.section.active').id;
+                if (activeSection === 'dashboard-section') {
+                    loadDashboardData();
+                } else if (activeSection === 'available-section') {
+                    loadAvailableOrders();
+                } else if (activeSection === 'orders-section') {
+                    loadMyOrders();
+                }
+                
+            } catch (error) {
+                alert('Error accepting order: ' + error.message);
+            }
+        }
+
+        // Update order status
+        async function updateOrderStatus(orderId, status) {
+            try {
+                await apiCall(`/api/rider/orders/${orderId}/status`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ 
+                        order_id: parseInt(orderId.split('-')[1]),
+                        status 
+                    })
+                });
+                
+                // Refresh current section
+                const activeSection = document.querySelector('.section.active').id;
+                if (activeSection === 'dashboard-section') {
+                    loadDashboardData();
+                } else if (activeSection === 'orders-section') {
+                    loadMyOrders();
+                }
+                
+            } catch (error) {
+                alert('Error updating order status: ' + error.message);
+            }
+        }
+
+        // Load my orders
+        async function loadMyOrders() {
+            try {
+                const orders = await apiCall('/api/rider/orders');
+                displayOrders(orders, 'my-orders');
+            } catch (error) {
+                console.error('Error loading orders:', error);
+            }
+        }
+
+        // Load available orders
+        async function loadAvailableOrders() {
+            try {
+                const orders = await apiCall('/api/rider/orders/available');
+                displayOrders(orders, 'available-orders');
+            } catch (error) {
+                console.error('Error loading available orders:', error);
+            }
+        }
+
+        // Load earnings
+        async function loadEarnings() {
+            try {
+                const earnings = await apiCall('/api/rider/earnings');
+                
+                document.getElementById('today-earnings').textContent = `₵${earnings.today_earnings}`;
+                document.getElementById('week-earnings').textContent = `₵${earnings.week_earnings}`;
+                document.getElementById('month-earnings').textContent = `₵${earnings.month_earnings}`;
+                document.getElementById('avg-per-delivery').textContent = `₵${earnings.average_per_delivery}`;
+                
+            } catch (error) {
+                console.error('Error loading earnings:', error);
+            }
+        }
+
+        // Load profile
+        async function loadProfile() {
+            try {
+                const profile = await apiCall('/api/rider/profile');
+                
+                document.getElementById('rider-profile').innerHTML = `
+                    <div class="dashboard-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Username</div>
+                            <div class="stat-number" style="font-size: 1.5rem;">${profile.username}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Email</div>
+                            <div class="stat-number" style="font-size: 1.5rem;">${profile.email}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Phone</div>
+                            <div class="stat-number" style="font-size: 1.5rem;">${profile.phone}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Vehicle Type</div>
+                            <div class="stat-number" style="font-size: 1.5rem;">${profile.vehicle_type}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Vehicle Number</div>
+                            <div class="stat-number" style="font-size: 1.5rem;">${profile.vehicle_number}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">License Number</div>
+                            <div class="stat-number" style="font-size: 1.5rem;">${profile.license_number}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Area Coverage</div>
+                            <div class="stat-number" style="font-size: 1.5rem;">${profile.area_coverage}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Deliveries</div>
+                            <div class="stat-number" style="font-size: 1.5rem;">${profile.total_deliveries}</div>
+                        </div>
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error('Error loading profile:', error);
+            }
+        }
+
+        // Navigation
+        function showSection(sectionName) {
+            // Hide all sections
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
+
+            // Show target section
+            document.getElementById(`${sectionName}-section`).classList.add('active');
+
+            // Update nav active state
+            document.querySelectorAll('.sidebar-nav a').forEach(link => {
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Load section data
+            switch(sectionName) {
+                case 'dashboard':
+                    loadDashboardData();
+                    break;
+                case 'orders':
+                    loadMyOrders();
+                    break;
+                case 'available':
+                    loadAvailableOrders();
+                    break;
+                case 'earnings':
+                    loadEarnings();
+                    break;
+                case 'profile':
+                    loadProfile();
+                    break;
+            }
+
+            // Close mobile menu
+            closeMobileMenu();
+        }
+
+        // Filter orders
+        function filterOrders(status) {
+            // Update tab active state
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Load filtered orders
+            if (status === 'all') {
+                loadMyOrders();
+            } else {
+                apiCall(`/api/rider/orders?status=${status}`)
+                    .then(orders => displayOrders(orders, 'my-orders'))
+                    .catch(error => console.error('Error filtering orders:', error));
+            }
+        }
+
+        // Mobile menu functions
+        function toggleMobileMenu() {
+            const sidebar = document.getElementById('rider-sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            const toggle = document.getElementById('mobile-menu-toggle');
+            
+            const isOpen = sidebar.classList.contains('mobile-open');
+            
+            if (isOpen) {
+                closeMobileMenu();
+            } else {
+                openMobileMenu();
+            }
+        }
+
+        function openMobileMenu() {
+            const sidebar = document.getElementById('rider-sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            const toggle = document.getElementById('mobile-menu-toggle');
+            
+            sidebar.classList.add('mobile-open');
+            overlay.style.display = 'block';
+            overlay.classList.add('active');
+            toggle.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeMobileMenu() {
+            const sidebar = document.getElementById('rider-sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            const toggle = document.getElementById('mobile-menu-toggle');
+            
+            sidebar.classList.remove('mobile-open');
+            overlay.classList.remove('active');
+            toggle.classList.remove('active');
+            document.body.style.overflow = '';
+            
+            setTimeout(() => {
+                overlay.style.display = 'none';
+            }, 300);
+        }
+
+        // Rider logout
+        function riderLogout() {
+            riderAuthToken = null;
+            currentRider = null;
+            localStorage.removeItem('riderToken');
+            localStorage.removeItem('currentRider');
+            
+            document.getElementById('rider-login-section').style.display = 'flex';
+            document.getElementById('rider-dashboard-section').style.display = 'none';
+            
+            // Reset form
+            document.getElementById('rider-login-form').reset();
+        }
+
+        // Initialize rider dashboard
+        function initRiderDashboard() {
+            const storedToken = localStorage.getItem('riderToken');
+            const storedRider = localStorage.getItem('currentRider');
+            
+            if (storedToken && storedRider) {
+                riderAuthToken = storedToken;
+                try {
+                    currentRider = JSON.parse(storedRider);
+                    showRiderDashboard();
+                    loadDashboardData();
+                } catch (error) {
+                    riderLogout();
+                }
+            }
+
+            // Setup responsive features
+            setupResponsiveFeatures();
+        }
+
+        // Setup responsive features
+        function setupResponsiveFeatures() {
+            // Close mobile menu on window resize
+            window.addEventListener('resize', () => {
+                if (window.innerWidth > 1024) {
+                    closeMobileMenu();
+                }
+            });
+
+            // Close mobile menu when clicking outside
+            document.addEventListener('click', (e) => {
+                const sidebar = document.getElementById('rider-sidebar');
+                const toggle = document.getElementById('mobile-menu-toggle');
+                
+                if (sidebar && toggle && 
+                    !sidebar.contains(e.target) && 
+                    !toggle.contains(e.target) && 
+                    sidebar.classList.contains('mobile-open')) {
+                    closeMobileMenu();
+                }
+            });
+
+            // Enhanced keyboard navigation
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeMobileMenu();
+                }
+                
+                // Tab navigation for mobile menu
+                if (e.key === 'Tab') {
+                    const sidebar = document.getElementById('rider-sidebar');
+                    if (sidebar && sidebar.classList.contains('mobile-open')) {
+                        const focusableElements = sidebar.querySelectorAll('a, button, [tabindex]:not([tabindex="-1"])');
+                        const firstElement = focusableElements[0];
+                        const lastElement = focusableElements[focusableElements.length - 1];
+                        
+                        if (e.shiftKey && document.activeElement === firstElement) {
+                            e.preventDefault();
+                            lastElement.focus();
+                        } else if (!e.shiftKey && document.activeElement === lastElement) {
+                            e.preventDefault();
+                            firstElement.focus();
+                        }
+                    }
+                }
+            });
+
+            // Enhanced swipe gesture support
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let touchStartTime = 0;
+            let isSwiping = false;
+            
+            document.addEventListener('touchstart', (e) => {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+                touchStartTime = Date.now();
+                isSwiping = false;
+            }, { passive: true });
+            
+            document.addEventListener('touchmove', (e) => {
+                if (!isSwiping) {
+                    const touchX = e.touches[0].clientX;
+                    const touchY = e.touches[0].clientY;
+                    const deltaX = Math.abs(touchX - touchStartX);
+                    const deltaY = Math.abs(touchY - touchStartY);
+                    
+                    // Determine if this is a horizontal swipe
+                    if (deltaX > deltaY && deltaX > 20) {
+                        isSwiping = true;
+                    }
+                }
+            }, { passive: true });
+            
+            document.addEventListener('touchend', (e) => {
+                if (!isSwiping) return;
+                
+                const touchEndX = e.changedTouches[0].clientX;
+                const touchEndY = e.changedTouches[0].clientY;
+                const deltaX = touchEndX - touchStartX;
+                const deltaY = touchEndY - touchStartY;
+                const touchDuration = Date.now() - touchStartTime;
+                
+                // Only trigger on horizontal swipes that are fast enough
+                if (Math.abs(deltaX) > Math.abs(deltaY) && 
+                    Math.abs(deltaX) > 50 && 
+                    touchDuration < 300) {
+                    
+                    const sidebar = document.getElementById('rider-sidebar');
+                    
+                    if (sidebar) {
+                        if (deltaX < -50 && sidebar.classList.contains('mobile-open')) {
+                            // Swipe left to close menu
+                            closeMobileMenu();
+                        } else if (deltaX > 50 && touchStartX < 50 && !sidebar.classList.contains('mobile-open')) {
+                            // Swipe right from left edge to open menu
+                            openMobileMenu();
+                        }
+                    }
+                }
+                
+                isSwiping = false;
+            }, { passive: true });
+
+            // Viewport height fix for mobile browsers
+            function setViewportHeight() {
+                const vh = window.innerHeight * 0.01;
+                document.documentElement.style.setProperty('--vh', `${vh}px`);
+            }
+            
+            setViewportHeight();
+            window.addEventListener('resize', setViewportHeight);
+            window.addEventListener('orientationchange', () => {
+                setTimeout(setViewportHeight, 100);
+            });
+
+            // Prevent zoom on double tap for better mobile experience
+            let lastTouchEnd = 0;
+            document.addEventListener('touchend', function (event) {
+                const now = (new Date()).getTime();
+                if (now - lastTouchEnd <= 300) {
+                    event.preventDefault();
+                }
+                lastTouchEnd = now;
+            }, { passive: false });
+
+            // Enhanced focus management for mobile
+            document.addEventListener('focusin', (e) => {
+                // Ensure focused elements are visible on mobile
+                if (window.innerWidth <= 768) {
+                    setTimeout(() => {
+                        e.target.scrollIntoView({ 
+                            behavior: 'smooth', 
+                            block: 'nearest',
+                            inline: 'nearest'
+                        });
+                    }, 100);
+                }
+            });
+        }
+
+        // Add ripple effect to buttons
+        function addRippleEffect() {
+            const buttons = document.querySelectorAll('.btn, .nav-link, .order-card');
+            buttons.forEach(button => {
+                if (!button.classList.contains('ripple-effect')) {
+                    button.classList.add('ripple-effect');
+                }
+            });
+        }
+
+        // Debounce function for performance
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Enhanced loading state management
+        function showLoadingState(element, text = 'Loading...') {
+            if (element) {
+                element.innerHTML = `
+                    <div class="loading-skeleton" style="height: 20px; border-radius: 4px; margin-bottom: 8px;"></div>
+                    <div class="loading-skeleton" style="height: 16px; width: 60%; border-radius: 4px;"></div>
+                `;
+                element.setAttribute('aria-busy', 'true');
+                element.setAttribute('aria-label', text);
+            }
+        }
+
+        function hideLoadingState(element, content) {
+            if (element) {
+                element.innerHTML = content;
+                element.removeAttribute('aria-busy');
+                element.removeAttribute('aria-label');
+            }
+        }
+
+        // Enhanced error handling with user feedback
+        function showError(message, duration = 5000) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-toast';
+            errorDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #ef4444;
+                color: white;
+                padding: 12px 16px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 1000;
+                animation: slideUp 0.3s ease;
+                max-width: 300px;
+                word-wrap: break-word;
+            `;
+            errorDiv.textContent = message;
+            
+            document.body.appendChild(errorDiv);
+            
+            setTimeout(() => {
+                errorDiv.style.animation = 'slideOutLeft 0.3s ease';
+                setTimeout(() => {
+                    if (errorDiv.parentNode) {
+                        errorDiv.parentNode.removeChild(errorDiv);
+                    }
+                }, 300);
+            }, duration);
+        }
+
+        function showSuccess(message, duration = 3000) {
+            const successDiv = document.createElement('div');
+            successDiv.className = 'success-toast';
+            successDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: var(--accent1);
+                color: white;
+                padding: 12px 16px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 1000;
+                animation: slideUp 0.3s ease;
+                max-width: 300px;
+                word-wrap: break-word;
+            `;
+            successDiv.textContent = message;
+            
+            document.body.appendChild(successDiv);
+            
+            setTimeout(() => {
+                successDiv.style.animation = 'slideOutLeft 0.3s ease';
+                setTimeout(() => {
+                    if (successDiv.parentNode) {
+                        successDiv.parentNode.removeChild(successDiv);
+                    }
+                }, 300);
+            }, duration);
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', initRiderDashboard);
+    </script>
+</body>
+</html>

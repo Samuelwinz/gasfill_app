@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GasFill - Routing System Test</title>
+    <script src="routes.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #0ea5a4;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0b8a89;
+        }
+        .result {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 4px solid #0ea5a4;
+            border-radius: 4px;
+        }
+        .user-info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 GasFill Routing System Test</h1>
+    
+    <div class="test-section">
+        <h2>Current User Status</h2>
+        <div id="userStatus" class="user-info">
+            <p>Loading user information...</p>
+        </div>
+        <button onclick="simulateLogin('customer')">Login as Customer</button>
+        <button onclick="simulateLogin('rider')">Login as Rider</button>
+        <button onclick="simulateLogin('admin')">Login as Admin</button>
+        <button onclick="AppRouter.logout()">Logout</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Route Access Testing</h2>
+        <div id="routeTests"></div>
+        <button onclick="testRouteAccess()">Test Route Access</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Navigation Testing</h2>
+        <button onclick="AppRouter.navigateTo('g8.html')">Go to Main App</button>
+        <button onclick="AppRouter.navigateTo('gasfill_verion3.html')">Go to Landing Page</button>
+        <button onclick="AppRouter.navigateTo('rider_dashboard.html')">Go to Rider Dashboard</button>
+        <button onclick="AppRouter.navigateTo('admin_dashboard.html')">Go to Admin Dashboard</button>
+        <button onclick="AppRouter.navigateTo('app.html')">Go to Auth Page</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Permission Testing</h2>
+        <div id="permissionTests"></div>
+        <button onclick="testPermissions()">Test Permissions</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Navigation Menu</h2>
+        <div id="navigationMenu"></div>
+        <button onclick="showNavigationMenu()">Show Menu for Current User</button>
+    </div>
+
+    <script>
+        // Simulate user login for testing
+        function simulateLogin(role) {
+            const users = {
+                'customer': {
+                    id: 'test-customer-1',
+                    name: 'John Doe',
+                    email: 'john@example.com',
+                    phone: '+233501234567',
+                    role: 'customer'
+                },
+                'rider': {
+                    id: 'test-rider-1',
+                    name: 'Michael Smith',
+                    email: 'michael@gasfill.com',
+                    phone: '+233507654321',
+                    role: 'rider',
+                    vehicle: 'Motorcycle - GH123'
+                },
+                'admin': {
+                    id: 'test-admin-1',
+                    name: 'Sarah Johnson',
+                    email: 'admin@gasfill.com',
+                    phone: '+233509876543',
+                    role: 'admin'
+                }
+            };
+
+            const user = users[role];
+            localStorage.setItem('currentUser', JSON.stringify(user));
+            localStorage.setItem('authToken', 'test-token-' + Date.now());
+            
+            updateUserStatus();
+            showNavigationMenu();
+        }
+
+        // Update user status display
+        function updateUserStatus() {
+            const user = AppRouter.getCurrentUser();
+            const token = localStorage.getItem('authToken');
+            const statusDiv = document.getElementById('userStatus');
+            
+            if (user && token) {
+                statusDiv.innerHTML = `
+                    <p><strong>Logged in as:</strong> ${user.name}</p>
+                    <p><strong>Role:</strong> ${AppRouter.getRoleDisplayName(user.role)}</p>
+                    <p><strong>Email:</strong> ${user.email}</p>
+                    <p><strong>Default Route:</strong> ${AppRouter.getDefaultRoute()}</p>
+                `;
+            } else {
+                statusDiv.innerHTML = '<p>Not logged in</p>';
+            }
+        }
+
+        // Test route access for current user
+        function testRouteAccess() {
+            const routes = Object.keys(AppRouter.ROUTES);
+            const currentRole = AppRouter.getCurrentRole();
+            const testsDiv = document.getElementById('routeTests');
+            
+            let html = `<h3>Route Access for ${AppRouter.getRoleDisplayName(currentRole)}</h3>`;
+            
+            routes.forEach(route => {
+                const hasAccess = AppRouter.hasAccessToRoute(route);
+                const routeInfo = AppRouter.ROUTES[route];
+                html += `
+                    <div class="result">
+                        <strong>${route}</strong> (${routeInfo.name})<br>
+                        Access: ${hasAccess ? '✅ Allowed' : '❌ Denied'}<br>
+                        Required Roles: ${routeInfo.roles.join(', ')}
+                    </div>
+                `;
+            });
+            
+            testsDiv.innerHTML = html;
+        }
+
+        // Test permissions for current user
+        function testPermissions() {
+            const currentRole = AppRouter.getCurrentRole();
+            const permissions = AppRouter.ROLE_PERMISSIONS[currentRole] || {};
+            const testsDiv = document.getElementById('permissionTests');
+            
+            let html = `<h3>Permissions for ${AppRouter.getRoleDisplayName(currentRole)}</h3>`;
+            
+            for (const [permission, allowed] of Object.entries(permissions)) {
+                html += `
+                    <div class="result">
+                        <strong>${permission}:</strong> ${allowed ? '✅ Allowed' : '❌ Denied'}
+                    </div>
+                `;
+            }
+            
+            testsDiv.innerHTML = html;
+        }
+
+        // Show navigation menu for current user
+        function showNavigationMenu() {
+            const menu = AppRouter.getNavigationMenu();
+            const menuDiv = document.getElementById('navigationMenu');
+            
+            let html = `<h3>Available Pages for ${AppRouter.getRoleDisplayName(AppRouter.getCurrentRole())}</h3>`;
+            
+            menu.forEach(item => {
+                html += `
+                    <div class="result">
+                        <strong>${item.name}</strong><br>
+                        File: ${item.route}<br>
+                        Description: ${item.description}
+                    </div>
+                `;
+            });
+            
+            menuDiv.innerHTML = html;
+        }
+
+        // Get current page breadcrumb
+        function showBreadcrumb() {
+            const breadcrumb = AppRouter.getBreadcrumb();
+            console.log('Current breadcrumb:', breadcrumb);
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            updateUserStatus();
+            showNavigationMenu();
+            
+            // Test automatic initialization
+            console.log('AppRouter initialized:', typeof AppRouter);
+            console.log('Current user:', AppRouter.getCurrentUser());
+            console.log('Current role:', AppRouter.getCurrentRole());
+        });
+    </script>
+</body>
+</html>

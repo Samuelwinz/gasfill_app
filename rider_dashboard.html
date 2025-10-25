@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GasFill Rider Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0f766e;
+            --primary-dark: #134e4a;
+            --accent: #14b8a6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --info: #3b82f6;
+            --text: #1f2937;
+            --text-muted: #6b7280;
+            --background: #f9fafb;
+            --surface: #ffffff;
+            --border: #e5e7eb;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--background);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        /* Header */
+        .header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 0;
+            margin-bottom: 2rem;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--primary);
+        }
+
+        .rider-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .rider-status {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .status-online {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .status-offline {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 1px 3px var(--shadow);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .stat-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        /* Service Card */
+        .service-card {
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .service-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .service-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .service-info h4 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .service-meta {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .service-status {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .status-available { background: #dcfce7; color: #15803d; }
+        .status-assigned { background: #dbeafe; color: #1e40af; }
+        .status-in_progress { background: #fef3c7; color: #92400e; }
+        .status-completed { background: #f3e8ff; color: #5b21b6; }
+
+        .service-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+            padding: 1rem;
+            background: var(--background);
+            border-radius: 0.5rem;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .detail-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .detail-value {
+            font-size: 0.875rem;
+            color: var(--text);
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+
+        .btn-danger {
+            background: var(--error);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: var(--border);
+            color: var(--text);
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+        }
+
+        .service-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text);
+        }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            transition: border-color 0.2s ease;
+        }
+
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 0.5rem;
+            }
+
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .service-header {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+
+            .service-actions {
+                flex-direction: column;
+            }
+        }
+
+        /* Loading */
+        .loading {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid transparent;
+            border-top: 2px solid currentColor;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            color: white;
+            font-weight: 600;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .notification.success {
+            background: var(--success);
+        }
+
+        .notification.error {
+            background: var(--error);
+        }
+
+        .notification.info {
+            background: var(--info);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">🚚 GasFill Rider</div>
+                <div class="rider-info">
+                    <span id="riderName">Rider Name</span>
+                    <div class="rider-status" id="riderStatus">
+                        <span id="statusText">Offline</span>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="toggleOnlineStatus()">
+                        <span id="toggleStatusText">Go Online</span>
+                    </button>
+                    <a href="app.html" class="btn btn-info btn-sm">📱 Customer App</a>
+                    <button class="btn btn-danger btn-sm" onclick="logout()">Logout</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Stats Overview -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">📦</div>
+                <div class="stat-value" id="todayServices">0</div>
+                <div class="stat-label">Today's Services</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">💰</div>
+                <div class="stat-value" id="todayEarnings">₵0</div>
+                <div class="stat-label">Today's Earnings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🎯</div>
+                <div class="stat-value" id="completionRate">0%</div>
+                <div class="stat-label">Completion Rate</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">⭐</div>
+                <div class="stat-value" id="rating">5.0</div>
+                <div class="stat-label">Rating</div>
+            </div>
+        </div>
+
+        <!-- Available Services -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Available Services</h2>
+                <button class="btn btn-primary btn-sm" onclick="loadAvailableServices()">
+                    <span id="refreshLoader" class="loading hidden"></span>
+                    Refresh
+                </button>
+            </div>
+            <div id="availableServices">
+                <p style="text-align: center; color: var(--text-muted);">Loading available services...</p>
+            </div>
+        </div>
+
+        <!-- My Active Services -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">My Active Services</h2>
+                <button class="btn btn-secondary btn-sm" onclick="loadMyServices()">
+                    Refresh
+                </button>
+            </div>
+            <div id="myServices">
+                <p style="text-align: center; color: var(--text-muted);">Loading your services...</p>
+            </div>
+        </div>
+
+        <!-- Service History -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Recent Completed Services</h2>
+            </div>
+            <div id="serviceHistory">
+                <p style="text-align: center; color: var(--text-muted);">Loading service history...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Update Modal -->
+    <div id="statusModal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Update Service Status</h3>
+                <button class="modal-close" onclick="closeStatusModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="statusUpdateForm">
+                    <input type="hidden" id="serviceId">
+                    <div class="form-group">
+                        <label class="form-label">New Status</label>
+                        <select class="form-select" id="newStatus" required>
+                            <option value="">Select Status</option>
+                            <option value="pickup_in_progress">Pickup in Progress</option>
+                            <option value="collected">Collected</option>
+                            <option value="refill_in_progress">Refill in Progress</option>
+                            <option value="ready_for_delivery">Ready for Delivery</option>
+                            <option value="delivery_in_progress">Delivery in Progress</option>
+                            <option value="completed">Completed</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Notes (Optional)</label>
+                        <textarea class="form-textarea" id="statusNotes" rows="3" placeholder="Add any notes about this status update..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Location (Optional)</label>
+                        <input type="text" class="form-input" id="currentLocation" placeholder="Current location">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeStatusModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" form="statusUpdateForm">
+                    <span id="statusUpdateLoader" class="loading hidden"></span>
+                    Update Status
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include centralized routing -->
+    <script src="routes.js"></script>
+
+    <script>
+        // Configuration
+        const API_BASE = 'http://localhost:5002/api';
+        
+        let authToken = localStorage.getItem('authToken');
+        let currentRider = null;
+        let isOnline = false;
+
+        // Authentication Check
+        function checkAuth() {
+            const token = localStorage.getItem('authToken');
+            const rider = localStorage.getItem('currentUser');
+            
+            if (!token || !rider) {
+                AppRouter.redirectTo('app.html');
+                return false;
+            }
+            
+            try {
+                currentRider = JSON.parse(rider);
+                authToken = token;
+                
+                // Check if user is a rider or admin using centralized router
+                if (!AppRouter.hasPermission('rider') && !AppRouter.hasPermission('admin')) {
+                    alert('Access denied. This dashboard is for riders and administrators only.');
+                    AppRouter.redirectTo('app.html');
+                    return false;
+                }
+                
+                updateRiderInfo();
+                return true;
+            } catch (error) {
+                logout();
+                return false;
+            }
+        }
+
+        function updateRiderInfo() {
+            if (currentRider) {
+                const riderNameElement = document.getElementById('riderName');
+                const logoElement = document.querySelector('.logo');
+                
+                if (currentRider.role === 'admin') {
+                    riderNameElement.textContent = `${currentRider.name || currentRider.username} (Admin View)`;
+                    logoElement.textContent = '👑 GasFill Admin - Rider Dashboard';
+                    document.title = 'GasFill Admin - Rider Dashboard';
+                } else {
+                    riderNameElement.textContent = currentRider.name || currentRider.username;
+                }
+                
+                loadStats();
+            }
+        }
+
+        async function apiCall(endpoint, options = {}) {
+            const response = await fetch(`${API_BASE}${endpoint}`, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`,
+                    ...options.headers
+                },
+                ...options
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(error || `HTTP ${response.status}`);
+            }
+
+            return response.json();
+        }
+
+        // Online Status Management
+        async function toggleOnlineStatus() {
+            const statusText = document.getElementById('statusText');
+            const toggleText = document.getElementById('toggleStatusText');
+            const statusElement = document.getElementById('riderStatus');
+            
+            try {
+                if (isOnline) {
+                    // Go offline
+                    await apiCall('/rider/status', {
+                        method: 'POST',
+                        body: JSON.stringify({ status: 'offline' })
+                    });
+                    
+                    isOnline = false;
+                    statusText.textContent = 'Offline';
+                    toggleText.textContent = 'Go Online';
+                    statusElement.className = 'rider-status status-offline';
+                } else {
+                    // Go online
+                    await apiCall('/rider/status', {
+                        method: 'POST',
+                        body: JSON.stringify({ status: 'online' })
+                    });
+                    
+                    isOnline = true;
+                    statusText.textContent = 'Online';
+                    toggleText.textContent = 'Go Offline';
+                    statusElement.className = 'rider-status status-online';
+                    
+                    // Load available services when going online
+                    loadAvailableServices();
+                }
+                
+                showNotification(`You are now ${isOnline ? 'online' : 'offline'}`, 'success');
+            } catch (error) {
+                showNotification('Failed to update status', 'error');
+            }
+        }
+
+        // Load Functions
+        async function loadStats() {
+            try {
+                const stats = await apiCall('/rider/stats');
+                
+                document.getElementById('todayServices').textContent = stats.todayServices || 0;
+                document.getElementById('todayEarnings').textContent = `₵${(stats.todayEarnings || 0).toFixed(2)}`;
+                document.getElementById('completionRate').textContent = `${(stats.completionRate || 0).toFixed(1)}%`;
+                document.getElementById('rating').textContent = (stats.rating || 5.0).toFixed(1);
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        async function loadAvailableServices() {
+            const container = document.getElementById('availableServices');
+            const loader = document.getElementById('refreshLoader');
+            
+            loader.classList.remove('hidden');
+            
+            try {
+                // Try to load orders from SQLite database first
+                const orders = await apiCall('/rider/orders/available');
+                
+                if (orders.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: var(--text-muted);">No available orders at the moment</p>';
+                } else {
+                    container.innerHTML = orders.map(order => createAvailableOrderCard(order)).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load orders from /rider/orders/available:', error);
+                
+                // Fallback to services endpoint if orders endpoint fails
+                try {
+                    const services = await apiCall('/rider/services/available');
+                    
+                    if (services.length === 0) {
+                        container.innerHTML = '<p style="text-align: center; color: var(--text-muted);">No available services at the moment</p>';
+                    } else {
+                        container.innerHTML = services.map(service => createAvailableServiceCard(service)).join('');
+                    }
+                } catch (fallbackError) {
+                    container.innerHTML = '<p style="text-align: center; color: var(--error);">Failed to load available orders</p>';
+                    showNotification('Failed to load available orders', 'error');
+                }
+            } finally {
+                loader.classList.add('hidden');
+            }
+        }
+
+        async function loadMyServices() {
+            const container = document.getElementById('myServices');
+            
+            try {
+                // Load active orders with new status flow: assigned, pickup, in_transit
+                const assignedOrders = await apiCall('/rider/orders?status=assigned');
+                const pickupOrders = await apiCall('/rider/orders?status=pickup');
+                const transitOrders = await apiCall('/rider/orders?status=in_transit');
+                
+                // Combine all active orders
+                const allActiveOrders = [...assignedOrders, ...pickupOrders, ...transitOrders];
+                
+                if (allActiveOrders.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: var(--text-muted);">No active orders</p>';
+                } else {
+                    container.innerHTML = allActiveOrders.map(order => createMyOrderCard(order)).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load active orders:', error);
+                container.innerHTML = '<p style="text-align: center; color: var(--error);">Failed to load your active orders</p>';
+                showNotification('Failed to load your active orders', 'error');
+            }
+        }
+
+        async function loadServiceHistory() {
+            const container = document.getElementById('serviceHistory');
+            
+            try {
+                const services = await apiCall('/rider/services/completed?limit=5');
+                
+                if (services.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: var(--text-muted);">No completed services yet</p>';
+                } else {
+                    container.innerHTML = services.map(service => createHistoryServiceCard(service)).join('');
+                }
+            } catch (error) {
+                container.innerHTML = '<p style="text-align: center; color: var(--error);">Failed to load service history</p>';
+            }
+        }
+
+        // Service Card Creation
+        function createAvailableServiceCard(service) {
+            return `
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-info">
+                            <h4>${service.serviceType} - ${service.cylinderCount} × ${service.cylinderSize}</h4>
+                            <div class="service-meta">
+                                Request #${service.id} • ${formatDate(service.createdAt)}
+                            </div>
+                        </div>
+                        <div class="service-status status-available">Available</div>
+                    </div>
+                    <div class="service-details">
+                        <div class="detail-item">
+                            <div class="detail-label">Customer</div>
+                            <div class="detail-value">${service.customerName}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Address</div>
+                            <div class="detail-value">${service.serviceAddress}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Scheduled</div>
+                            <div class="detail-value">${service.serviceDate} ${service.serviceTime}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Payment</div>
+                            <div class="detail-value">₵${service.totalCost.toFixed(2)}</div>
+                        </div>
+                    </div>
+                    <div class="service-actions">
+                        <button class="btn btn-primary" onclick="acceptService('${service.id}')">
+                            Accept Service
+                        </button>
+                        <button class="btn btn-secondary" onclick="viewServiceDetails('${service.id}')">
+                            View Details
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createAvailableOrderCard(order) {
+            // Format items list
+            const itemsList = order.items && order.items.length > 0 
+                ? order.items.map(item => `${item.name} (x${item.quantity})`).join(', ')
+                : 'N/A';
+            
+            return `
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-info">
+                            <h4>Order #${order.id}</h4>
+                            <div class="service-meta">
+                                ${order.customer_name} • ${formatDate(order.created_at)}
+                            </div>
+                        </div>
+                        <div class="service-status status-available">Available</div>
+                    </div>
+                    <div class="service-details">
+                        <div class="detail-item">
+                            <div class="detail-label">Customer</div>
+                            <div class="detail-value">${order.customer_name}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Phone</div>
+                            <div class="detail-value">${order.customer_phone || 'N/A'}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Address</div>
+                            <div class="detail-value">${order.customer_address}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Items</div>
+                            <div class="detail-value">${itemsList}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Total</div>
+                            <div class="detail-value">₵${(order.total || 0).toFixed(2)}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Delivery Type</div>
+                            <div class="detail-value">${order.delivery_type || 'standard'}</div>
+                        </div>
+                    </div>
+                    <div class="service-actions">
+                        <button class="btn btn-primary" onclick="acceptOrder('${order.id}')">
+                            Accept Order
+                        </button>
+                        <button class="btn btn-secondary" onclick="callCustomer('${order.customer_phone}')">
+                            Call Customer
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createMyServiceCard(service) {
+            const canUpdateStatus = ['assigned', 'pickup_in_progress', 'collected', 'refill_in_progress', 'ready_for_delivery', 'delivery_in_progress'].includes(service.status);
+            
+            return `
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-info">
+                            <h4>${service.serviceType} - ${service.cylinderCount} × ${service.cylinderSize}</h4>
+                            <div class="service-meta">
+                                Request #${service.id} • Customer: ${service.customerName}
+                            </div>
+                        </div>
+                        <div class="service-status status-${service.status}">${formatStatusLabel(service.status)}</div>
+                    </div>
+                    <div class="service-details">
+                        <div class="detail-item">
+                            <div class="detail-label">Address</div>
+                            <div class="detail-value">${service.serviceAddress}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Phone</div>
+                            <div class="detail-value">${service.customerPhone}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Scheduled</div>
+                            <div class="detail-value">${service.serviceDate} ${service.serviceTime}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Earning</div>
+                            <div class="detail-value">₵${((service.totalCost || 0) * 0.15).toFixed(2)}</div>
+                        </div>
+                    </div>
+                    <div class="service-actions">
+                        ${canUpdateStatus ? `
+                            <button class="btn btn-warning" onclick="openStatusModal('${service.id}', '${service.status}')">
+                                Update Status
+                            </button>
+                        ` : ''}
+                        <button class="btn btn-primary" onclick="callCustomer('${service.customerPhone}')">
+                            Call Customer
+                        </button>
+                        <button class="btn btn-secondary" onclick="viewServiceDetails('${service.id}')">
+                            Details
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createMyOrderCard(order) {
+            const itemsList = order.items && order.items.length > 0 
+                ? order.items.map(item => `${item.name} (x${item.quantity})`).join(', ')
+                : 'N/A';
+            
+            const statusBadges = {
+                'accepted': 'status-assigned',
+                'pickup_in_progress': 'status-in_progress',
+                'delivery_in_progress': 'status-in_progress',
+                'delivered': 'status-completed'
+            };
+            
+            const statusDisplay = {
+                'accepted': 'Accepted',
+                'pickup_in_progress': 'Picking Up',
+                'delivery_in_progress': 'Delivering',
+                'delivered': 'Delivered'
+            };
+            
+            return `
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-info">
+                            <h4>Order #${order.id}</h4>
+                            <div class="service-meta">
+                                ${order.customer_name} • ${formatDate(order.created_at)}
+                            </div>
+                        </div>
+                        <div class="service-status ${statusBadges[order.status] || 'status-assigned'}">${statusDisplay[order.status] || order.status}</div>
+                    </div>
+                    <div class="service-details">
+                        <div class="detail-item">
+                            <div class="detail-label">Customer</div>
+                            <div class="detail-value">${order.customer_name}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Phone</div>
+                            <div class="detail-value">${order.customer_phone || 'N/A'}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Address</div>
+                            <div class="detail-value">${order.customer_address}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Items</div>
+                            <div class="detail-value">${itemsList}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Total Earnings</div>
+                            <div class="detail-value">₵${((order.total || 0) * 0.15).toFixed(2)}</div>
+                        </div>
+                        ${order.tracking_info && order.tracking_info.current_location ? `
+                            <div class="detail-item">
+                                <div class="detail-label">Current Location</div>
+                                <div class="detail-value">${order.tracking_info.current_location}</div>
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="service-actions">
+                        <button class="btn btn-warning" onclick="openOrderStatusModal('${order.id}', '${order.status}')">
+                            Update Status
+                        </button>
+                        <button class="btn btn-primary" onclick="callCustomer('${order.customer_phone}')">
+                            Call Customer
+                        </button>
+                        <button class="btn btn-info" onclick="viewOrderMap('${order.id}')">
+                            View on Map
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createHistoryServiceCard(service) {
+            return `
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-info">
+                            <h4>${service.serviceType} - ${service.cylinderCount} × ${service.cylinderSize}</h4>
+                            <div class="service-meta">
+                                Completed on ${formatDate(service.completedAt)} • Customer: ${service.customerName}
+                            </div>
+                        </div>
+                        <div class="service-status status-completed">Completed</div>
+                    </div>
+                    <div class="service-details">
+                        <div class="detail-item">
+                            <div class="detail-label">Duration</div>
+                            <div class="detail-value">${service.duration || 'N/A'}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Earned</div>
+                            <div class="detail-value">₵${((service.totalCost || 0) * 0.15).toFixed(2)}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Rating</div>
+                            <div class="detail-value">${service.rating ? `${service.rating}/5 ⭐` : 'Not rated'}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Service Actions
+        async function acceptService(serviceId) {
+            if (!confirm('Are you sure you want to accept this service?')) return;
+            
+            try {
+                await apiCall(`/rider/services/${serviceId}/accept`, {
+                    method: 'POST'
+                });
+                
+                showNotification('Service accepted successfully!', 'success');
+                loadAvailableServices();
+                loadMyServices();
+                loadStats();
+            } catch (error) {
+                showNotification('Failed to accept service', 'error');
+            }
+        }
+
+        async function acceptOrder(orderId) {
+            if (!confirm('Are you sure you want to accept this order for delivery?')) return;
+            
+            try {
+                await apiCall(`/rider/orders/${orderId}/accept`, {
+                    method: 'POST'
+                });
+                
+                showNotification('Order accepted successfully!', 'success');
+                loadAvailableServices();
+                loadMyServices();
+                loadStats();
+            } catch (error) {
+                showNotification('Failed to accept order', 'error');
+                console.error('Error accepting order:', error);
+            }
+        }
+
+        function openStatusModal(serviceId, currentStatus) {
+            document.getElementById('serviceId').value = serviceId;
+            document.getElementById('newStatus').value = '';
+            document.getElementById('statusNotes').value = '';
+            document.getElementById('currentLocation').value = '';
+            
+            // Remove options that don't make sense for current status
+            const statusSelect = document.getElementById('newStatus');
+            const options = statusSelect.querySelectorAll('option');
+            
+            options.forEach(option => {
+                option.style.display = 'block';
+            });
+            
+            document.getElementById('statusModal').classList.remove('hidden');
+        }
+
+        function openOrderStatusModal(orderId, currentStatus) {
+            // Set up modal for order status update
+            document.getElementById('serviceId').value = orderId;
+            document.getElementById('newStatus').value = '';
+            document.getElementById('statusNotes').value = '';
+            document.getElementById('currentLocation').value = '';
+            
+            // Build status options based on current status
+            // Flow: pending -> assigned -> pickup -> in_transit -> delivered
+            const statusSelect = document.getElementById('newStatus');
+            let options = '<option value="">Select Next Status</option>';
+            
+            if (currentStatus === 'assigned') {
+                options += '<option value="pickup">Start Pickup (Going to Depot)</option>';
+            } else if (currentStatus === 'pickup') {
+                options += '<option value="in_transit">In Transit (Heading to Customer)</option>';
+            } else if (currentStatus === 'in_transit') {
+                options += '<option value="delivered">Mark as Delivered</option>';
+            } else if (currentStatus === 'delivered') {
+                options = '<option value="">Order Already Delivered</option>';
+            }
+            
+            statusSelect.innerHTML = options;
+            
+            // Mark as order update (for different endpoint)
+            document.getElementById('statusModal').dataset.isOrder = 'true';
+            document.getElementById('statusModal').classList.remove('hidden');
+        }
+
+        function closeStatusModal() {
+            document.getElementById('statusModal').classList.add('hidden');
+            document.getElementById('statusModal').dataset.isOrder = 'false';
+        }
+
+        async function updateServiceStatus() {
+            const serviceId = document.getElementById('serviceId').value;
+            const newStatus = document.getElementById('newStatus').value;
+            const notes = document.getElementById('statusNotes').value;
+            const location = document.getElementById('currentLocation').value;
+            const loader = document.getElementById('statusUpdateLoader');
+            const isOrder = document.getElementById('statusModal').dataset.isOrder === 'true';
+            
+            if (!newStatus) {
+                showNotification('Please select a status', 'error');
+                return;
+            }
+            
+            loader.classList.remove('hidden');
+            
+            try {
+                const endpoint = isOrder 
+                    ? `/rider/orders/${serviceId}/status`
+                    : `/rider/services/${serviceId}/status`;
+                
+                await apiCall(endpoint, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        status: newStatus,
+                        notes: notes,
+                        location: location
+                    })
+                });
+                
+                showNotification('Status updated successfully!', 'success');
+                closeStatusModal();
+                loadMyServices();
+                loadStats();
+            } catch (error) {
+                showNotification('Failed to update status', 'error');
+                console.error('Status update error:', error);
+            } finally {
+                loader.classList.add('hidden');
+            }
+        }
+
+        function callCustomer(phone) {
+            if (phone) {
+                window.open(`tel:${phone}`, '_self');
+            } else {
+                showNotification('Customer phone number not available', 'error');
+            }
+        }
+
+        function viewServiceDetails(serviceId) {
+            // This would show a detailed modal with service information
+            showNotification('Service details feature coming soon!', 'info');
+        }
+
+        function viewOrderMap(orderId) {
+            // Open map view for order delivery tracking
+            // For now, show a notification
+            showNotification('Map view coming soon! Order: ' + orderId, 'info');
+            // TODO: Integrate with Google Maps or similar for real-time location tracking
+        }
+
+        // Utility Functions
+        function formatDate(dateString) {
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } catch (error) {
+                return dateString;
+            }
+        }
+
+        function formatStatusLabel(status) {
+            const statusLabels = {
+                'pending': 'Pending Assignment',
+                'assigned': 'Assigned to You',
+                'pickup': 'Picking Up',
+                'in_transit': 'In Transit',
+                'delivered': 'Delivered',
+                'cancelled': 'Cancelled'
+            };
+            
+            return statusLabels[status] || status;
+        }
+
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        function logout() {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('currentUser');
+            AppRouter.redirectTo('app.html');
+        }
+
+        // Event Listeners
+        document.getElementById('statusUpdateForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            updateServiceStatus();
+        });
+
+        // Initialize
+        if (checkAuth()) {
+            loadAvailableServices();
+            loadMyServices();
+            loadServiceHistory();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(() => {
+                if (isOnline) {
+                    loadAvailableServices();
+                }
+                loadMyServices();
+                loadStats();
+            }, 30000);
+        }
+    </script>
+
+    <style>
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .modal.hidden {
+            display: none;
+        }
+
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+            background: var(--surface);
+            border-radius: 0.75rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            position: relative;
+            z-index: 1;
+            max-width: 500px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text);
+            margin: 0;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-muted);
+            padding: 0;
+            width: 2rem;
+            height: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.25rem;
+        }
+
+        .modal-close:hover {
+            background: var(--background);
+            color: var(--text);
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            padding: 1.5rem;
+            border-top: 1px solid var(--border);
+        }
+    </style>
+</body>
+</html>

@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>GasFill — Fast, Safe & Premium Cylinder Delivery</title>
   <meta name="description" content="GasFill - premium cylinder delivery and refill service. Order LPG cylinders, exchange empties, and get bulk supply for businesses. Safe handling and fast delivery." />
+  <!-- Centralized Routing System -->
+  <script src="routes.js"></script>
   <style>
     /* Elegant, modern, high-class styling */
     :root{
@@ -378,6 +380,27 @@
     document.getElementById('requestQuoteBtn').addEventListener('click', ()=>{ alert('To request a bulk quote, please contact support@gasfill.example or use the WhatsApp button.'); });
     document.getElementById('partnerBtn').addEventListener('click', ()=>{ alert('Partner signup: send an email to partnerships@gasfill.example with your company details.'); });
     document.getElementById('callBtn').addEventListener('click', ()=>{ window.location.href = 'tel:+233201022'; });
+
+    // Add navigation helpers for accessing other parts of the system
+    function navigateToMainApp() {
+        AppRouter.redirectTo('g8.html');
+    }
+    
+    function navigateToAuth() {
+        AppRouter.redirectTo('app.html');
+    }
+    
+    // Check if user should be redirected based on role
+    document.addEventListener('DOMContentLoaded', function() {
+        const user = AppRouter.getCurrentUser();
+        if (user && user.role === 'rider') {
+            // Riders should use their dashboard instead
+            AppRouter.redirectTo('rider_dashboard.html');
+        } else if (user && user.role === 'admin') {
+            // Admins can stay but could go to admin dashboard
+            console.log('Admin user detected - full system access available');
+        }
+    });
 
   </script>
 </body>

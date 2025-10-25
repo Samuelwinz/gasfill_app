@@ -7,6 +7,10 @@
   <meta name="description" content="GasFill — premium cylinder delivery and refill. SPA demo with dashboard, orders and product catalog."/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <!-- Paystack Inline Script -->
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <!-- Centralized Routing System -->
+  <script src="routes.js"></script>
   <style>
     :root{
       --bg:#f6f8fb;
@@ -16,6 +20,38 @@
       --accent2:#0b5ed7;
       --accent3:#f97316;
       --glass: rgba(255,255,255,0.7);
+      
+      /* Enhanced Color Palette */
+      --primary-50: #eff6ff;
+      --primary-100: #dbeafe;
+      --primary-500: #3b82f6;
+      --primary-600: #2563eb;
+      --primary-700: #1d4ed8;
+      
+      --success-50: #f0fdf4;
+      --success-500: #22c55e;
+      --success-600: #16a34a;
+      --warning-50: #fefce8;
+      --warning-500: #eab308;
+      --error-50: #fef2f2;
+      --error-500: #ef4444;
+      
+      /* Enhanced Spacing & Shadows */
+      --space-xs: 0.25rem;
+      --space-sm: 0.5rem;
+      --space-md: 1rem;
+      --space-lg: 1.5rem;
+      --space-xl: 2rem;
+      
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+      --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+      
+      --radius-sm: 0.375rem;
+      --radius-md: 0.5rem;
+      --radius-lg: 0.75rem;
+      --radius-xl: 1rem;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -33,7 +69,7 @@
 
     /* --- App shell --- */
     .app{width:100%;max-width:1200px;margin:0 auto;padding:20px;flex:1;display:flex;flex-direction:column}
-    header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 0}
+    header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 0;position:relative}
     .brand{display:flex;gap:14px;align-items:center}
     .logo{
       width:56px;height:56px;border-radius:12px;
@@ -43,9 +79,64 @@
     }
     .brand h1{margin:0;font-size:1.2rem}
     nav{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    nav a{padding:10px 14px;border-radius:10px;text-decoration:none;color:var(--muted);font-weight:600}
+    nav a{padding:10px 14px;border-radius:10px;text-decoration:none;color:var(--muted);font-weight:600;min-height:44px;min-width:44px;display:flex;align-items:center;justify-content:center}
     nav a.active{background:#fff;border:1px solid #eef6ff;color:var(--accent2);box-shadow:0 6px 20px rgba(11,94,215,0.06)}
-    .cta{background:linear-gradient(90deg,var(--accent2),#0b6ef0);color:#fff;padding:10px 14px;border-radius:10px;font-weight:800;box-shadow:0 10px 40px rgba(11,94,215,0.12)}
+    /* Enhanced Button Styles */
+    .cta, .btn-primary{
+      background:linear-gradient(135deg,var(--accent2) 0%,#0b6ef0 50%,var(--accent1) 100%);
+      color:#fff;
+      padding:14px 20px;
+      border-radius:12px;
+      font-weight:700;
+      font-size:0.95rem;
+      border:none;
+      cursor:pointer;
+      min-height:48px;
+      min-width:120px;
+      box-shadow:0 4px 15px rgba(11,94,215,0.25), 0 2px 4px rgba(0,0,0,0.1);
+      transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position:relative;
+      overflow:hidden;
+      text-transform:uppercase;
+      letter-spacing:0.5px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+    }
+    
+    .cta:hover, .btn-primary:hover{
+      transform:translateY(-3px) scale(1.02);
+      box-shadow:0 8px 25px rgba(11,94,215,0.35), 0 4px 12px rgba(0,0,0,0.15);
+      background:linear-gradient(135deg,#0b6ef0 0%,var(--accent2) 50%,#0891b2 100%);
+    }
+    
+    .cta:active, .btn-primary:active{
+      transform:translateY(-1px) scale(0.98);
+      box-shadow:0 2px 8px rgba(11,94,215,0.3);
+    }
+    
+    .cta::before, .btn-primary::before{
+      content:'';
+      position:absolute;
+      top:0;
+      left:-100%;
+      width:100%;
+      height:100%;
+      background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent);
+      transition:left 0.6s ease;
+    }
+    
+    .cta:hover::before, .btn-primary:hover::before{
+      left:100%;
+    }
+    
+    /* Hamburger menu */
+    .hamburger{display:none;flex-direction:column;gap:4px;background:none;border:none;cursor:pointer;padding:10px;min-height:44px;min-width:44px;justify-content:center;align-items:center}
+    .hamburger span{display:block;width:24px;height:3px;background:var(--accent2);border-radius:2px;transition:all 0.3s}
+    .hamburger.active span:nth-child(1){transform:rotate(45deg) translate(6px,6px)}
+    .hamburger.active span:nth-child(2){opacity:0}
+    .hamburger.active span:nth-child(3){transform:rotate(-45deg) translate(6px,-6px)}
 
     /* content layout */
     main{flex:1;margin-top:12px}
@@ -55,25 +146,251 @@
     .hero{
       display:flex;gap:18px;align-items:center;padding:20px;border-radius:14px;background:linear-gradient(180deg,#fff,#fbfdff);box-shadow:0 18px 40px rgba(12,40,80,0.06)
     }
-    .hero .text h2{margin:0 0 8px 0;font-size:1.6rem}
-    .hero .text p{margin:0;color:var(--muted)}
+    .hero .text h2{margin:0 0 8px 0;font-size:1.6rem;line-height:1.3}
+    .hero .text p{margin:0;color:var(--muted);line-height:1.5}
 
     /* grids/cards */
     .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-    .card{background:var(--card);padding:14px;border-radius:12px;border:1px solid #f1f5f9;box-shadow:0 8px 28px rgba(12,40,80,0.04)}
-    .product-card{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px;text-align:center}
+    .card{background:var(--card);padding:14px;border-radius:12px;border:1px solid #f1f5f9;box-shadow:0 8px 28px rgba(12,40,80,0.04);transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1)}
+    .card:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+    
+    .product-card{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px;text-align:center;position:relative;overflow:hidden}
+    .product-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--accent2),var(--accent1));transform:scaleX(0);transition:transform 0.3s ease}
+    .product-card:hover::before{transform:scaleX(1)}
+    .product-card:hover{transform:translateY(-8px);box-shadow:var(--shadow-xl);border-color:#e2e8f0}
+    
     .product-card img{width:120px;height:120px;object-fit:contain;border-radius:8px}
-    .price{font-weight:800;color:var(--accent2)}
+    .product-card button{
+      min-height:48px;
+      min-width:140px;
+      padding:14px 20px;
+      background:linear-gradient(135deg,#059669 0%,var(--accent1) 50%,#0891b2 100%);
+      color:#fff;
+      border:none;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:700;
+      font-size:0.9rem;
+      text-transform:uppercase;
+      letter-spacing:0.5px;
+      transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow:0 4px 12px rgba(5,150,105,0.25), 0 2px 4px rgba(0,0,0,0.1);
+      position:relative;
+      overflow:hidden;
+    }
+    
+    .product-card button::before{
+      content:'';
+      position:absolute;
+      top:0;
+      left:-100%;
+      width:100%;
+      height:100%;
+      background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent);
+      transition:left 0.6s ease;
+    }
+    
+    .product-card button:hover::before{
+      left:100%;
+    }
+    
+    .product-card button:hover{
+      transform:translateY(-3px) scale(1.05);
+      box-shadow:0 8px 20px rgba(5,150,105,0.35), 0 4px 8px rgba(0,0,0,0.15);
+      background:linear-gradient(135deg,#10b981 0%,#14b8a6 50%,#0891b2 100%);
+    }
+    
+    .product-card button:active{
+      transform:translateY(-1px) scale(0.98);
+    }
+    
+    .product-status{position:absolute;top:var(--space-sm);right:var(--space-sm);padding:var(--space-xs) var(--space-sm);border-radius:var(--radius-md);font-size:0.75rem;font-weight:600}
+    .product-status.available{background:var(--success-50);color:var(--success-600);border:1px solid var(--success-200)}
+    .product-status.low-stock{background:var(--warning-50);color:var(--warning-600);border:1px solid var(--warning-200)}
+    
+    .price{font-weight:800;color:var(--accent2);font-size:1.1rem}
+    .original-price{text-decoration:line-through;color:var(--muted);font-size:0.9rem;margin-left:var(--space-xs)}
     .small{font-size:0.92rem;color:var(--muted)}
 
     /* responsive */
-    @media (max-width:1000px){ .grid{grid-template-columns:repeat(2,1fr)} .product-card img{width:100px;height:100px} }
-    @media (max-width:640px){ .grid{grid-template-columns:1fr} nav{overflow:auto} .hero{flex-direction:column;align-items:flex-start} }
+    @media (max-width:1000px){ 
+      .grid{grid-template-columns:repeat(2,1fr)} 
+      .product-card img{width:100px;height:100px} 
+    }
+    @media (max-width:768px){
+      .hamburger{display:flex}
+      nav{
+        position:absolute;
+        top:100%;
+        left:0;
+        right:0;
+        background:#fff;
+        flex-direction:column;
+        align-items:stretch;
+        box-shadow:0 8px 24px rgba(12,40,80,0.1);
+        border-radius:12px;
+        margin-top:8px;
+        padding:12px;
+        max-height:0;
+        overflow:hidden;
+        transition:max-height 0.3s ease-out;
+        z-index:100;
+      }
+      nav.mobile-open{max-height:600px;padding:12px}
+      nav a{justify-content:flex-start;width:100%}
+      /* Navigation Button Styles */
+      nav .cta{
+        margin-left:0!important;
+        padding:12px 18px;
+        font-size:0.9rem;
+        min-height:44px;
+        border-radius:10px;
+      }
+      
+      nav a{
+        position:relative;
+        overflow:hidden;
+      }
+      
+      nav a::before{
+        content:'';
+        position:absolute;
+        top:0;
+        left:-100%;
+        width:100%;
+        height:100%;
+        background:linear-gradient(90deg,transparent,rgba(11,94,215,0.1),transparent);
+        transition:left 0.5s ease;
+      }
+      
+      nav a:hover::before{
+        left:100%;
+      }
+      
+      nav a.active{
+        background:linear-gradient(135deg,#ffffff 0%,#f8fafc 100%);
+        border:2px solid var(--accent2);
+        color:var(--accent2);
+        box-shadow:0 4px 12px rgba(11,94,215,0.15);
+        font-weight:700;
+        transform:scale(1.02);
+      }
+    }
+    @media (max-width:640px){ 
+      .grid{grid-template-columns:1fr} 
+      .hero{flex-direction:column;align-items:flex-start}
+      .hero .text h2{font-size:1.3rem}
+      .hero > div:last-child{width:100%;max-width:300px}
+      .hero svg{width:100%;height:auto}
+      .app{padding:12px}
+      /* Mobile Button Adjustments */
+      button, .cta, .btn-primary, .btn-secondary, .product-card button{
+        font-size:0.9rem;
+        padding:16px 20px;
+        min-height:50px;
+        min-width:140px;
+        border-radius:14px;
+      }
+      
+      .product-card button{
+        font-size:0.85rem;
+        padding:14px 18px;
+        min-width:130px;
+      }
+      
+      /* Touch-friendly mobile buttons */
+      @media (max-width: 640px) {
+        .cta, .btn-primary, .btn-secondary, form button{
+          min-height:52px;
+          padding:18px 24px;
+          font-size:0.95rem;
+        }
+        
+        .product-card button{
+          min-height:48px;
+          padding:16px 20px;
+          font-size:0.9rem;
+        }
+      }
+    }
 
     /* forms */
-    form input,form textarea,form select{width:100%;padding:10px;border-radius:10px;border:1px solid #e6eef8;font-size:0.95rem}
+    form input,form textarea,form select{width:100%;padding:12px;border-radius:10px;border:1px solid #e6eef8;font-size:0.95rem;min-height:44px}
+    /* Form Buttons */
+    form button, .btn-secondary{
+      min-height:48px;
+      min-width:140px;
+      padding:14px 20px;
+      cursor:pointer;
+      border:2px solid var(--accent2);
+      background:linear-gradient(135deg,#ffffff 0%,#f8fafc 100%);
+      color:var(--accent2);
+      border-radius:12px;
+      font-weight:600;
+      font-size:0.9rem;
+      text-transform:uppercase;
+      letter-spacing:0.5px;
+      transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow:0 2px 8px rgba(11,94,215,0.15);
+      position:relative;
+      overflow:hidden;
+    }
+    
+    form button:hover, .btn-secondary:hover{
+      background:linear-gradient(135deg,var(--accent2) 0%,#0b6ef0 100%);
+      color:#ffffff;
+      transform:translateY(-2px) scale(1.02);
+      box-shadow:0 6px 16px rgba(11,94,215,0.3);
+    }
+    
+    form button:active, .btn-secondary:active{
+      transform:translateY(0) scale(0.98);
+    }
+    
+    /* Danger/Warning Buttons */
+    .btn-danger{
+      background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%);
+      color:#ffffff;
+      border:none;
+      padding:12px 18px;
+      border-radius:10px;
+      font-weight:600;
+      cursor:pointer;
+      min-height:44px;
+      transition:all 0.3s ease;
+      box-shadow:0 3px 10px rgba(220,38,38,0.25);
+    }
+    
+    .btn-danger:hover{
+      background:linear-gradient(135deg,#b91c1c 0%,#991b1b 100%);
+      transform:translateY(-2px);
+      box-shadow:0 6px 16px rgba(220,38,38,0.35);
+    }
+    
+    /* Success/Confirm Buttons */
+    .btn-success{
+      background:linear-gradient(135deg,#059669 0%,#047857 100%);
+      color:#ffffff;
+      border:none;
+      padding:12px 18px;
+      border-radius:10px;
+      font-weight:600;
+      cursor:pointer;
+      min-height:44px;
+      transition:all 0.3s ease;
+      box-shadow:0 3px 10px rgba(5,150,105,0.25);
+    }
+    
+    .btn-success:hover{
+      background:linear-gradient(135deg,#047857 0%,#065f46 100%);
+      transform:translateY(-2px);
+      box-shadow:0 6px 16px rgba(5,150,105,0.35);
+    }
     .row{display:flex;gap:10px}
     .row .col{flex:1}
+    @media (max-width:640px){
+      .row{flex-direction:column}
+    }
 
     /* footer sticky */
     footer{background:linear-gradient(90deg,#0b1220,#0b2a4d);color:#fff;padding:24px;margin-top:20px;border-top-left-radius:12px;border-top-right-radius:12px;flex-shrink:0}
@@ -81,42 +398,300 @@
     footer a{color:rgba(255,255,255,0.85);text-decoration:none}
 
     /* cart floating */
-    .cart-btn{position:fixed;right:18px;bottom:90px;background:linear-gradient(90deg,var(--accent2),var(--accent1));color:#fff;padding:12px 14px;border-radius:14px;box-shadow:0 12px 36px rgba(11,94,215,0.18);z-index:60;border:none;cursor:pointer;font-weight:800}
-    .cart-count{background:#fff;color:var(--accent2;border-radius:999px;padding:4px 8px;margin-left:8px;border-radius:999px;font-weight:800}
+    .cart-btn{position:fixed;right:18px;bottom:90px;background:linear-gradient(90deg,var(--accent2),var(--accent1));color:#fff;padding:12px 14px;border-radius:14px;box-shadow:0 12px 36px rgba(11,94,215,0.18);z-index:60;border:none;cursor:pointer;font-weight:800;min-height:44px;min-width:44px}
+    .cart-count{background:#fff;color:var(--accent2);border-radius:999px;padding:4px 8px;margin-left:8px;font-weight:800}
 
     /* orders log / badges */
     .orders-log{display:flex;flex-direction:column;gap:10px}
-    .order-row{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:10px;border:1px solid #eef4ff;background:#fff}
-    .badge{padding:6px 10px;border-radius:999px;font-weight:700}
-    .badge-pending{background:#eef2ff;color:var(--accent2)}
-    .badge-ontheway{background:#fff7ed;color:#92400e}
-    .badge-delivered{background:#ecfccb;color:#166534}
-    .muted-2{color:#94a3b8}
+    .order-row{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:10px;border:1px solid #eef4ff;background:#fff;flex-wrap:wrap;gap:8px;transition:all 0.2s ease}
+    .order-row:hover{background:#f8fafc;border-color:#cbd5e1;transform:translateX(4px)}
+    
+    .badge{padding:6px 10px;border-radius:999px;font-weight:700;min-height:32px;display:inline-flex;align-items:center;font-size:0.875rem}
+    .badge-pending{background:var(--warning-50);color:var(--warning-600);border:1px solid var(--warning-200)}
+    .badge-assigned{background:var(--primary-50);color:var(--primary-600);border:1px solid var(--primary-200)}
+    .badge-in-transit{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
+    .badge-nearby{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
+    .badge-delivered{background:var(--success-50);color:var(--success-600);border:1px solid var(--success-200)}
+    .badge-cancelled{background:var(--error-50);color:var(--error-500);border:1px solid var(--error-200)}
+    
+    .order-tracking{display:flex;align-items:center;gap:var(--space-sm);font-size:0.875rem;color:var(--muted)}
+    .rider-info{display:flex;align-items:center;gap:var(--space-xs);color:var(--accent2);font-weight:600}
+    .eta-badge{background:#f0f9ff;color:#0369a1;padding:2px 6px;border-radius:4px;font-size:0.75rem}
+    
+    .muted-2{color:#64748b}
 
-    /* tiny utility */
+    /* utility */
     .center{text-align:center}
+    button:not(.hamburger):not(.cart-btn){
+      min-height:44px;
+      padding:10px 16px;
+      border-radius:8px;
+      border:1px solid #e2e8f0;
+      background:#fff;
+      cursor:pointer;
+      font-weight:600;
+      transition:all 0.2s;
+    }
+    button:not(.hamburger):not(.cart-btn):hover{
+      background:#f8fafc;
+      transform:translateY(-1px);
+    }
+    button:not(.hamburger):not(.cart-btn):active{
+      transform:translateY(0);
+    }
+    
+    /* Enhanced Notifications & Feedback */
+    .toast-notification{position:fixed;top:20px;right:20px;background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow-xl);border:1px solid #e5e7eb;z-index:1000;animation:slideInRight 0.3s ease-out}
+    .toast-content{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-md)}
+    .toast-icon{font-size:1.25rem}
+    .toast-message{font-weight:600;color:#374151}
+    
+    .cart-feedback-toast{position:fixed;bottom:120px;right:20px;background:var(--success-500);color:white;border-radius:var(--radius-lg);box-shadow:var(--shadow-xl);z-index:1000;animation:slideUp 0.3s ease-out}
+    .feedback-content{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-md)}
+    /* Special Action Buttons */
+    .feedback-button, .cart-button, .checkout-button{
+      background:linear-gradient(135deg,rgba(255,255,255,0.2) 0%,rgba(255,255,255,0.1) 100%);
+      border:2px solid rgba(255,255,255,0.3);
+      color:white;
+      padding:12px 18px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:600;
+      font-size:0.9rem;
+      transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      backdrop-filter:blur(10px);
+      min-height:44px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    
+    .feedback-button:hover, .cart-button:hover, .checkout-button:hover{
+      background:linear-gradient(135deg,rgba(255,255,255,0.3) 0%,rgba(255,255,255,0.2) 100%);
+      border-color:rgba(255,255,255,0.5);
+      transform:translateY(-2px) scale(1.05);
+      box-shadow:0 4px 12px rgba(0,0,0,0.2);
+    }
+    
+    /* Animated Checkout Button */
+    .checkout-button{
+      background:linear-gradient(135deg,#10b981 0%,#059669 100%);
+      border:none;
+      color:#ffffff;
+      font-weight:700;
+      text-transform:uppercase;
+      letter-spacing:1px;
+    }
+    
+    .checkout-button:hover{
+      background:linear-gradient(135deg,#059669 0%,#047857 100%);
+      transform:translateY(-3px) scale(1.05);
+      box-shadow:0 6px 20px rgba(16,185,129,0.4);
+    }
+    .feedback-button:hover{background:rgba(255,255,255,0.3)}
+    
+    /* Loading States */
+    .loading-skeleton{background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;animation:loading 1.5s infinite;border-radius:var(--radius-md)}
+    /* Button States */
+    .btn-loading{
+      position:relative;
+      color:transparent!important;
+      pointer-events:none;
+    }
+    
+    .btn-loading::after{
+      content:'';
+      position:absolute;
+      top:50%;
+      left:50%;
+      transform:translate(-50%,-50%);
+      width:20px;
+      height:20px;
+      border:2px solid rgba(255,255,255,0.3);
+      border-top:2px solid white;
+      border-radius:50%;
+      animation:spin 1s linear infinite;
+    }
+    
+    /* Disabled Button Styles */
+    button:disabled, .cta:disabled, .btn-primary:disabled{
+      background:linear-gradient(135deg,#e2e8f0 0%,#cbd5e1 100%);
+      color:#94a3b8;
+      cursor:not-allowed;
+      transform:none !important;
+      box-shadow:none !important;
+      pointer-events:none;
+    }
+    
+    button:disabled::before, .cta:disabled::before, .btn-primary:disabled::before{
+      display:none;
+    }
+    
+    /* Cart Animations */
+    .cart-added{animation:cartBounce 0.3s ease-out}
+    .cart-updated{animation:cartPulse 0.3s ease-out}
+    
+    @keyframes slideInRight{from{opacity:0;transform:translateX(100px)}to{opacity:1;transform:translateX(0)}}
+    @keyframes slideUp{from{opacity:0;transform:translateY(100px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes loading{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    /* Button Animations */
+    @keyframes spin{
+      0%{transform:translate(-50%,-50%) rotate(0deg)}
+      100%{transform:translate(-50%,-50%) rotate(360deg)}
+    }
+    
+    @keyframes pulse{
+      0%, 100%{box-shadow:0 4px 15px rgba(11,94,215,0.25)}
+      50%{box-shadow:0 6px 25px rgba(11,94,215,0.4), 0 0 0 4px rgba(11,94,215,0.1)}
+    }
+    
+    @keyframes bounce{
+      0%, 20%, 50%, 80%, 100%{transform:translateY(0)}
+      40%{transform:translateY(-10px)}
+      60%{transform:translateY(-5px)}
+    }
+    
+    /* Add pulse animation to main CTA buttons */
+    .cta.pulse{
+      animation:pulse 2s infinite;
+    }
+    
+    .btn-primary.bounce{
+      animation:bounce 1s ease-in-out;
+    }
+    
+    /* Glow effect for important buttons */
+    .btn-glow{
+      position:relative;
+    }
+    
+    .btn-glow::after{
+      content:'';
+      position:absolute;
+      top:-2px;
+      left:-2px;
+      right:-2px;
+      bottom:-2px;
+      background:linear-gradient(45deg,var(--accent1),var(--accent2),var(--accent1));
+      border-radius:inherit;
+      z-index:-1;
+      opacity:0;
+      transition:opacity 0.3s ease;
+    }
+    
+    .btn-glow:hover::after{
+      opacity:0.7;
+      animation:spin 3s linear infinite;
+    }
+    @keyframes cartBounce{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+    @keyframes cartPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+    
+    /* Status Indicators with Icons */
+    .status-indicator{display:inline-flex;align-items:center;gap:var(--space-xs);font-size:0.875rem;font-weight:500}
+    .status-icon{width:8px;height:8px;border-radius:50%;animation:pulse 2s infinite}
+    .status-icon.pending{background:var(--warning-500)}
+    .status-icon.in-transit{background:var(--primary-500)}
+    .status-icon.delivered{background:var(--success-500)}
+    
+    /* Authentication Styles */
+    /* Enhanced Auth Tabs */
+    .auth-tabs{
+      display:flex;
+      justify-content:center;
+      gap:8px;
+      background:rgba(248,250,252,0.8);
+      padding:8px;
+      border-radius:16px;
+      margin-bottom:var(--space-xl);
+      backdrop-filter:blur(10px);
+      border:1px solid rgba(226,232,240,0.5);
+    }
+    
+    .auth-tab{
+      background:transparent;
+      border:none;
+      padding:14px 28px;
+      border-radius:12px;
+      font-weight:600;
+      font-size:1rem;
+      color:var(--muted);
+      cursor:pointer;
+      transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position:relative;
+      min-height:48px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    
+    .auth-tab.active{
+      background:linear-gradient(135deg,var(--accent1) 0%,var(--accent2) 100%);
+      color:#ffffff;
+      transform:scale(1.05);
+      box-shadow:0 4px 12px rgba(20,184,166,0.3);
+    }
+    
+    .auth-tab:hover:not(.active){
+      background:rgba(255,255,255,0.8);
+      color:var(--accent1);
+      transform:scale(1.02);
+      box-shadow:0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .auth-form-container{max-width:480px;margin:0 auto;padding:var(--space-xl)}
+    .form-container{background:var(--card);border-radius:var(--radius-xl);padding:var(--space-xl);box-shadow:var(--shadow-lg);border:1px solid #e5e7eb}
+    .form-container h3{margin:0 0 var(--space-sm) 0;font-size:1.5rem;font-weight:800;color:#1f2937}
+    .form-container p{margin:0 0 var(--space-xl) 0;color:var(--muted)}
+    
+    .form-group{margin-bottom:var(--space-lg)}
+    .form-group label{display:block;margin-bottom:var(--space-sm);font-weight:600;color:#374151;font-size:0.875rem}
+    .form-group input,.form-group textarea{width:100%;padding:var(--space-md);border:1px solid #d1d5db;border-radius:var(--radius-md);font-size:1rem;transition:all 0.2s ease;box-sizing:border-box}
+    .form-group input:focus,.form-group textarea:focus{outline:none;border-color:var(--accent1);box-shadow:0 0 0 3px rgba(14,165,164,0.1)}
+    .form-group small{display:block;margin-top:var(--space-xs);color:var(--muted);font-size:0.75rem}
+    
+    .auth-feedback{margin-top:var(--space-md);padding:var(--space-md);border-radius:var(--radius-md);font-size:0.875rem;font-weight:500}
+    .auth-feedback.success{background:var(--success-50);color:var(--success-600);border:1px solid rgba(34,197,94,0.2)}
+    .auth-feedback.error{background:var(--error-50);color:var(--error-500);border:1px solid rgba(239,68,68,0.2)}
+    .auth-feedback.loading{background:var(--primary-50);color:var(--primary-600);border:1px solid rgba(59,130,246,0.2)}
+    
+    .profile-info{background:#f9fafb;border-radius:var(--radius-lg);padding:var(--space-lg);margin:var(--space-lg) 0}
+    .profile-field{display:flex;justify-content:space-between;align-items:center;padding:var(--space-sm) 0;border-bottom:1px solid #e5e7eb}
+    .profile-field:last-child{border-bottom:none}
+    .profile-field strong{color:#374151;font-weight:600}
+    .profile-field span{color:var(--muted)}
+    
+    .profile-actions{display:flex;gap:var(--space-md);flex-wrap:wrap;justify-content:center}
+    .profile-actions button{padding:var(--space-md) var(--space-lg);border-radius:var(--radius-md);border:none;font-weight:600;cursor:pointer;transition:all 0.2s ease;color:white}
+    .profile-actions button:hover{transform:translateY(-1px);box-shadow:var(--shadow-md)}
   </style>
 </head>
 <body>
   <div class="app">
     <header>
       <div class="brand">
-        <div class="logo">GF</div>
+        <div class="logo" aria-label="GasFill logo">GF</div>
         <div>
           <h1>GasFill</h1>
           <div class="small">Fast • Safe • Premium</div>
         </div>
       </div>
 
+      <button class="hamburger" id="hamburgerBtn" aria-label="Toggle navigation menu" aria-expanded="false">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+
       <nav id="mainNav" aria-label="Main navigation">
-        <a href="#" data-target="products" class="nav-link active">Products</a>
-        <a href="#" data-target="order" class="nav-link">Order</a>
-        <a href="#" data-target="bulk" class="nav-link">Bulk</a>
-        <a href="#" data-target="safety" class="nav-link">Safety</a>
-        <a href="#" data-target="contact" class="nav-link">Contact</a>
-        <a href="#" data-target="orderNow" class="nav-link">Order Now</a>
-        <a href="#" data-target="dashboard" class="nav-link">Dashboard</a>
-        <button class="cta" id="orderNowBtn" style="margin-left:10px">Order Now</button>
+        <a href="#" data-target="products" class="nav-link active" aria-label="View products">Products</a>
+        <a href="#" data-target="order" class="nav-link" aria-label="Place an order">Order</a>
+        <a href="#" data-target="bulk" class="nav-link" aria-label="Bulk orders">Bulk</a>
+        <a href="#" data-target="safety" class="nav-link" aria-label="Safety information">Safety</a>
+        <a href="#" data-target="contact" class="nav-link" aria-label="Contact us">Contact</a>
+        <a href="#" data-target="orderNow" class="nav-link" aria-label="Quick order">Order Now</a>
+        <a href="#" data-target="dashboard" class="nav-link" aria-label="View dashboard">Dashboard</a>
+        <a href="#" data-target="auth" class="nav-link" aria-label="Sign in or register">Account</a>
+        <button class="cta" id="orderNowBtn" style="margin-left:10px" aria-label="Order now">Order Now</button>
       </nav>
     </header>
 
@@ -127,9 +702,9 @@
           <div style="flex:1" class="text">
             <h2>GasFill — Fast, safe cylinder delivery</h2>
             <p class="small">Order premium cylinders, exchange empties, or set up bulk deliveries for your business.</p>
-            <div style="margin-top:12px;display:flex;gap:8px">
-              <button onclick="navigateTo('order')" class="cta">Order Cylinder</button>
-              <button onclick="navigateTo('bulk')" style="background:#fff;border:1px solid #eef6ff;padding:10px 12px;border-radius:10px">Bulk & Business</button>
+            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+              <button onclick="navigateTo('order')" class="cta" aria-label="Order a cylinder">Order Cylinder</button>
+              <button onclick="navigateTo('bulk')" style="background:#fff;border:1px solid #eef6ff;padding:10px 12px;border-radius:10px" aria-label="Bulk and business orders">Bulk & Business</button>
             </div>
           </div>
           <div style="width:360px;display:flex;align-items:center;justify-content:center">
@@ -157,52 +732,58 @@
 
         <div class="grid" style="margin-top:12px">
           <!-- product objects -->
-          <div class="card product-card" data-id="6kg" data-name="6kg Cylinder" data-price="30">
-            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><rect x="12" y="8" width="40" height="48" rx="6" fill="#f6f9ff"/><rect x="22" y="4" width="20" height="6" rx="2" fill="#0b5ed7"/></svg>
+          <div class="card product-card" data-id="6kg" data-name="6kg Cylinder" data-price="120">
+            <div class="product-status available">✅ In Stock</div>
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><rect x="12" y="8" width="40" height="48" rx="6" fill="#f6f9ff"/><rect x="22" y="4" width="20" height="6" rx="2" fill="#0b5ed7"/></svg>
             <div style="font-weight:700">6kg Cylinder</div>
-            <div class="small">Portable & safe</div>
+            <div class="small">Portable & safe • Perfect for small households</div>
             <div class="price">₵120</div>
-            <button onclick="addToCart('6kg','6kg Cylinder',120)">Add to cart</button>
+            <button onclick="addToCartEnhanced('6kg','6kg Cylinder',120)" aria-label="Add 6kg cylinder to cart">Add to cart</button>
           </div>
 
-          <div class="card product-card" data-id="12kg" data-name="12.5kg Cylinder" data-price="55">
-            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><rect x="10" y="6" width="44" height="52" rx="8" fill="#fdfaf6"/><rect x="22" y="4" width="20" height="6" rx="2" fill="#0ea5a4"/></svg>
+          <div class="card product-card" data-id="12kg" data-name="12.5kg Cylinder" data-price="220">
+            <div class="product-status available">✅ In Stock</div>
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><rect x="10" y="6" width="44" height="52" rx="8" fill="#fdfaf6"/><rect x="22" y="4" width="20" height="6" rx="2" fill="#0ea5a4"/></svg>
             <div style="font-weight:700">12.5kg Cylinder</div>
-            <div class="small">Household standard</div>
+            <div class="small">Household standard • Most popular choice</div>
             <div class="price">₵220</div>
-            <button onclick="addToCart('12kg','12.5kg Cylinder',220)">Add to cart</button>
+            <button onclick="addToCartEnhanced('12kg','12.5kg Cylinder',220)" aria-label="Add 12.5kg cylinder to cart">Add to cart</button>
           </div>
 
-          <div class="card product-card" data-id="37kg" data-name="37kg Cylinder" data-price="180">
-            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><rect x="8" y="4" width="48" height="56" rx="10" fill="#fff7f0"/><rect x="22" y="6" width="20" height="8" rx="3" fill="#f97316"/></svg>
+          <div class="card product-card" data-id="37kg" data-name="37kg Cylinder" data-price="680">
+            <div class="product-status low-stock">⚠️ Low Stock</div>
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><rect x="8" y="4" width="48" height="56" rx="10" fill="#fff7f0"/><rect x="22" y="6" width="20" height="8" rx="3" fill="#f97316"/></svg>
             <div style="font-weight:700">37kg Cylinder</div>
-            <div class="small">Commercial / restaurant</div>
+            <div class="small">Commercial grade • Restaurant & business use</div>
             <div class="price">₵680</div>
-            <button onclick="addToCart('37kg','37kg Cylinder',680)">Add to cart</button>
+            <button onclick="addToCartEnhanced('37kg','37kg Cylinder',680)" aria-label="Add 37kg cylinder to cart">Add to cart</button>
           </div>
 
-          <div class="card product-card" data-id="reg" data-name="Regulator" data-price="25">
-            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><circle cx="32" cy="32" r="24" fill="#f0f9ff"/><rect x="28" y="26" width="8" height="12" rx="2" fill="#0b5ed7"/></svg>
-            <div style="font-weight:700">Regulator</div>
-            <div class="small">Safety certified</div>
+          <div class="card product-card" data-id="reg" data-name="Regulator" data-price="80">
+            <div class="product-status available">✅ In Stock</div>
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><circle cx="32" cy="32" r="24" fill="#f0f9ff"/><rect x="28" y="26" width="8" height="12" rx="2" fill="#0b5ed7"/></svg>
+            <div style="font-weight:700">Gas Regulator</div>
+            <div class="small">Safety certified • High-quality brass</div>
             <div class="price">₵80</div>
-            <button onclick="addToCart('reg','Regulator',80)">Add to cart</button>
+            <button onclick="addToCartEnhanced('reg','Regulator',80)" aria-label="Add regulator to cart">Add to cart</button>
           </div>
 
-          <div class="card product-card" data-id="hose" data-name="Hose" data-price="15">
-            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><path d="M10 32c8-10 40-12 44 0" stroke="#0ea5a4" stroke-width="4" fill="none"/></svg>
-            <div style="font-weight:700">Hose</div>
-            <div class="small">High-pressure rubber</div>
+          <div class="card product-card" data-id="hose" data-name="Gas Hose" data-price="45">
+            <div class="product-status available">✅ In Stock</div>
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><path d="M10 32c8-10 40-12 44 0" stroke="#0ea5a4" stroke-width="4" fill="none"/></svg>
+            <div style="font-weight:700">Gas Hose</div>
+            <div class="small">High-pressure rated • 1.5m length</div>
             <div class="price">₵45</div>
-            <button onclick="addToCart('hose','Hose',45)">Add to cart</button>
+            <button onclick="addToCartEnhanced('hose','Gas Hose',45)" aria-label="Add hose to cart">Add to cart</button>
           </div>
 
-          <div class="card product-card" data-id="burner" data-name="Gas Burner" data-price="40">
-            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden><rect x="14" y="18" width="36" height="28" rx="6" fill="#fff8f0"/><circle cx="32" cy="32" r="6" fill="#f97316"/></svg>
+          <div class="card product-card" data-id="burner" data-name="Gas Burner" data-price="150">
+            <div class="product-status available">✅ In Stock</div>
+            <svg width="120" height="120" viewBox="0 0 64 64" aria-hidden="true" loading="lazy"><rect x="14" y="18" width="36" height="28" rx="6" fill="#fff8f0"/><circle cx="32" cy="32" r="6" fill="#f97316"/></svg>
             <div style="font-weight:700">Gas Burner</div>
-            <div class="small">Sturdy stainless</div>
+            <div class="small">Stainless steel • Double ring burner</div>
             <div class="price">₵150</div>
-            <button onclick="addToCart('burner','Gas Burner',150)">Add to cart</button>
+            <button onclick="addToCartEnhanced('burner','Gas Burner',150)" aria-label="Add gas burner to cart">Add to cart</button>
           </div>
         </div>
       </section>
@@ -230,9 +811,9 @@
             <label style="margin-top:8px">Delivery address</label>
             <textarea id="o_address" rows="3" required></textarea>
 
-            <div style="display:flex;gap:10px;margin-top:12px;align-items:center">
-              <button type="button" id="placeOrderBtn" class="cta">Submit Order</button>
-              <div class="small muted-2">Or <button type="button" class="small" onclick="openWhatsAppOrder()">send via WhatsApp</button></div>
+            <div style="display:flex;gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap">
+              <button type="button" id="placeOrderBtn" class="cta" aria-label="Submit order">Submit Order</button>
+              <div class="small muted-2">Or <button type="button" class="small" onclick="openWhatsAppOrder()" aria-label="Send order via WhatsApp">send via WhatsApp</button></div>
             </div>
             <div id="orderFeedback" class="small" style="margin-top:8px;color:green"></div>
           </form>
@@ -250,19 +831,19 @@
               <h3>Standard Bulk Pack</h3>
               <p class="small">10 × 12.5kg cylinders, priority delivery</p>
               <p class="price">From ₵1,900</p>
-              <button onclick="fillBulk('Standard')">Request Quote</button>
+              <button onclick="fillBulk('Standard')" aria-label="Request quote for standard bulk pack">Request Quote</button>
             </div>
             <div class="card">
               <h3>Restaurant Pack</h3>
               <p class="small">20 × 37kg cylinders, weekly delivery</p>
               <p class="price">From ₵12,800</p>
-              <button onclick="fillBulk('Restaurant')">Request Quote</button>
+              <button onclick="fillBulk('Restaurant')" aria-label="Request quote for restaurant pack">Request Quote</button>
             </div>
             <div class="card">
               <h3>Retailer Pack</h3>
               <p class="small">Mixed cylinders + accessories</p>
               <p class="price">Custom pricing</p>
-              <button onclick="fillBulk('Retailer')">Request Quote</button>
+              <button onclick="fillBulk('Retailer')" aria-label="Request quote for retailer pack">Request Quote</button>
             </div>
           </div>
 
@@ -272,7 +853,7 @@
               <input id="b_company" placeholder="Company / Business name" />
               <input id="b_contact" placeholder="Contact phone / email" />
               <textarea id="b_details" placeholder="Tell us your monthly usage & preferred schedule"></textarea>
-              <div style="display:flex;gap:8px;margin-top:8px"><button type="button" onclick="submitBulk()">Send Request</button></div>
+              <div style="display:flex;gap:8px;margin-top:8px"><button type="button" onclick="submitBulk()" aria-label="Send bulk quote request">Send Request</button></div>
               <div id="bulkFeedback" class="small" style="margin-top:8px;color:green"></div>
             </form>
           </div>
@@ -310,17 +891,17 @@
             <div class="card">
               <h3>Hotline</h3>
               <p class="small">+233 201 022 153</p>
-              <button onclick="callHotline()">Call</button>
+              <button onclick="callHotline()" aria-label="Call hotline">Call</button>
             </div>
             <div class="card">
               <h3>WhatsApp</h3>
               <p class="small">+233 201 022 153 (fastest)</p>
-              <button onclick="openWhatsApp()">Open WhatsApp</button>
+              <button onclick="openWhatsApp()" aria-label="Open WhatsApp">Open WhatsApp</button>
             </div>
             <div class="card">
               <h3>Email</h3>
               <p class="small">support@gasfill.example</p>
-              <button onclick="composeEmail()">Email Us</button>
+              <button onclick="composeEmail()" aria-label="Email us">Email Us</button>
             </div>
           </div>
 
@@ -330,7 +911,7 @@
               <input id="c_name" placeholder="Your name" />
               <input id="c_email" placeholder="Your email" />
               <textarea id="c_msg" placeholder="Message"></textarea>
-              <div style="margin-top:8px"><button type="button" onclick="submitContact()">Send Message</button></div>
+              <div style="margin-top:8px"><button type="button" onclick="submitContact()" aria-label="Send message">Send Message</button></div>
               <div id="contactFeedback" class="small" style="margin-top:8px;color:green"></div>
             </form>
           </div>
@@ -343,9 +924,9 @@
           <h2>Quick Order</h2>
           <p class="small">Select a product and place a one-click order.</p>
           <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
-            <button onclick="oneClickOrder('12.5kg Cylinder',220)">12.5kg — ₵220</button>
-            <button onclick="oneClickOrder('6kg Cylinder',120)">6kg — ₵120</button>
-            <button onclick="oneClickOrder('37kg Cylinder',680)">37kg — ₵680</button>
+            <button onclick="oneClickOrder('12.5kg Cylinder',220)" aria-label="Quick order 12.5kg cylinder for 220">12.5kg — ₵220</button>
+            <button onclick="oneClickOrder('6kg Cylinder',120)" aria-label="Quick order 6kg cylinder for 120">6kg — ₵120</button>
+            <button onclick="oneClickOrder('37kg Cylinder',680)" aria-label="Quick order 37kg cylinder for 680">37kg — ₵680</button>
           </div>
           <div id="quickFeedback" class="small" style="margin-top:10px;color:green"></div>
         </div>
@@ -379,24 +960,216 @@
         </div>
       </section>
 
+      <!-- Authentication Section -->
+      <section id="auth">
+        <div class="hero">
+          <div class="hero-content">
+            <h1>Sign In to GasFill</h1>
+            <p class="large">Access your account to track orders and manage deliveries</p>
+          </div>
+        </div>
+
+        <!-- Auth Toggle Tabs -->
+        <div class="auth-tabs" style="text-align: center; margin: 2rem 0;">
+          <button id="loginTab" class="auth-tab active" onclick="showLoginForm()">Sign In</button>
+          <button id="registerTab" class="auth-tab" onclick="showRegisterForm()">Sign Up</button>
+        </div>
+
+        <!-- Login Form -->
+        <div id="loginForm" class="auth-form-container">
+          <div class="form-container">
+            <h3>Welcome Back!</h3>
+            <p class="muted-2">Sign in to your GasFill account</p>
+            
+            <form id="loginFormElement" onsubmit="handleLogin(event)">
+              <div class="form-group">
+                <label for="loginEmail">Email Address</label>
+                <input type="email" id="loginEmail" name="email" required 
+                       placeholder="Enter your email" autocomplete="email">
+              </div>
+              
+              <div class="form-group">
+                <label for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" name="password" required 
+                       placeholder="Enter your password" autocomplete="current-password">
+              </div>
+              
+              <div class="form-group" style="display: flex; align-items: center; justify-content: space-between;">
+                <label style="display: flex; align-items: center; gap: 8px;">
+                  <input type="checkbox" id="rememberMe"> Remember me
+                </label>
+                <a href="#" onclick="showForgotPassword()" style="color: var(--accent1); text-decoration: none;">
+                  Forgot password?
+                </a>
+              </div>
+              
+              <button type="submit" class="cta" id="loginBtn" style="width: 100%;">
+                Sign In
+              </button>
+              
+              <div id="loginFeedback" class="auth-feedback"></div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Register Form -->
+        <div id="registerForm" class="auth-form-container" style="display: none;">
+          <div class="form-container">
+            <h3>Create Account</h3>
+            <p class="muted-2">Join GasFill for fast and reliable gas delivery</p>
+            
+            <form id="registerFormElement" onsubmit="handleRegister(event)">
+              <div class="form-group">
+                <label for="registerName">Full Name</label>
+                <input type="text" id="registerName" name="name" required 
+                       placeholder="Enter your full name" autocomplete="name">
+              </div>
+              
+              <div class="form-group">
+                <label for="registerEmail">Email Address</label>
+                <input type="email" id="registerEmail" name="email" required 
+                       placeholder="Enter your email" autocomplete="email">
+              </div>
+              
+              <div class="form-group">
+                <label for="registerPhone">Phone Number</label>
+                <input type="tel" id="registerPhone" name="phone" required 
+                       placeholder="+233 XX XXX XXXX" autocomplete="tel">
+              </div>
+              
+              <div class="form-group">
+                <label for="registerAddress">Address (Optional)</label>
+                <textarea id="registerAddress" name="address" 
+                          placeholder="Enter your delivery address" 
+                          autocomplete="street-address" rows="2"></textarea>
+              </div>
+              
+              <div class="form-group">
+                <label for="registerPassword">Password</label>
+                <input type="password" id="registerPassword" name="password" required 
+                       placeholder="Create a strong password" autocomplete="new-password">
+                <small class="muted-2">Password must be at least 6 characters long</small>
+              </div>
+              
+              <div class="form-group">
+                <label for="confirmPassword">Confirm Password</label>
+                <input type="password" id="confirmPassword" name="confirmPassword" required 
+                       placeholder="Confirm your password" autocomplete="new-password">
+              </div>
+              
+              <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 8px;">
+                  <input type="checkbox" id="agreeTerms" required>
+                  I agree to the <a href="#" style="color: var(--accent1);">Terms of Service</a> 
+                  and <a href="#" style="color: var(--accent1);">Privacy Policy</a>
+                </label>
+              </div>
+              
+              <button type="submit" class="cta" id="registerBtn" style="width: 100%;">
+                Create Account
+              </button>
+              
+              <div id="registerFeedback" class="auth-feedback"></div>
+            </form>
+          </div>
+        </div>
+
+        <!-- User Profile Section (shown when authenticated) -->
+        <div id="userProfile" class="auth-form-container" style="display: none;">
+          <div class="form-container">
+            <h3>My Profile</h3>
+            <p class="muted-2">Manage your account information</p>
+            
+            <div class="profile-info">
+              <div class="profile-field">
+                <strong>Name:</strong> <span id="profileName">-</span>
+              </div>
+              <div class="profile-field">
+                <strong>Email:</strong> <span id="profileEmail">-</span>
+              </div>
+              <div class="profile-field">
+                <strong>Phone:</strong> <span id="profilePhone">-</span>
+              </div>
+              <div class="profile-field">
+                <strong>Address:</strong> <span id="profileAddress">-</span>
+              </div>
+            </div>
+            
+            <div class="profile-actions" style="margin-top: 2rem; display: flex; gap: 1rem; flex-wrap: wrap;">
+              <button onclick="editProfile()" class="cta">Edit Profile</button>
+              <button onclick="changePassword()" style="background: var(--accent2);">Change Password</button>
+              <button onclick="logout()" style="background: var(--error-500);">Sign Out</button>
+            </div>
+            
+            <div id="profileFeedback" class="auth-feedback"></div>
+          </div>
+        </div>
+      </section>
+
     </main>
 
     <!-- Floating cart -->
-    <button class="cart-btn" id="openCartBtn" title="Open cart">Cart (<span id="cartCount">0</span>)</button>
+    <button class="cart-btn" id="openCartBtn" title="Open cart" aria-label="Open shopping cart">Cart (<span id="cartCount">0</span>)</button>
 
-    <!-- Cart Modal (simple) -->
-    <div id="cartModal" style="display:none;position:fixed;inset:0;background:rgba(4,8,15,0.45);align-items:center;justify-content:center;z-index:80">
-      <div style="width:100%;max-width:520px;background:#fff;border-radius:12px;padding:18px;box-shadow:0 16px 40px rgba(2,6,23,0.2)">
-        <div style="display:flex;align-items:center;justify-content:space-between"><h3 style="margin:0">Your Cart</h3><button onclick="closeCart()" class="small">Close</button></div>
-        <div id="cartItems" style="margin-top:12px;display:flex;flex-direction:column;gap:10px"></div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
-          <div class="small muted-2">Total</div><div id="cartTotal" style="font-weight:800">₵0</div>
+    <!-- Cart Modal (Enhanced with Payment) -->
+    <div id="cartModal" style="display:none;position:fixed;inset:0;background:rgba(4,8,15,0.45);align-items:center;justify-content:center;z-index:80" role="dialog" aria-labelledby="cartTitle" aria-modal="true">
+      <div style="width:100%;max-width:580px;background:#fff;border-radius:12px;padding:24px;box-shadow:0 16px 40px rgba(2,6,23,0.2);margin:20px;max-height:90vh;overflow-y:auto">
+        
+        <!-- Cart Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <h3 id="cartTitle" style="margin:0;color:var(--accent2)">Your Cart</h3>
+          <button onclick="closeCart()" class="small" aria-label="Close cart" style="background:var(--bg);border:1px solid #e2e8f0;padding:8px 12px;border-radius:8px">✕ Close</button>
         </div>
-        <div style="margin-top:12px;display:flex;gap:8px">
-          <button onclick="checkoutCart()" class="cta">Checkout</button>
-          <button onclick="clearCart()" style="background:#fff;border:1px solid #eef6ff;padding:8px;border-radius:8px">Clear</button>
+        
+        <!-- Cart Items -->
+        <div id="cartItems" style="margin-bottom:20px;display:flex;flex-direction:column;gap:12px;max-height:200px;overflow-y:auto"></div>
+        
+        <!-- Cart Total -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding:12px;background:var(--bg);border-radius:8px">
+          <div style="font-weight:600;color:var(--accent2)">Total</div>
+          <div id="cartTotal" style="font-weight:800;font-size:1.2rem;color:var(--accent1)">₵0</div>
         </div>
-        <div id="cartFeedback" class="small" style="margin-top:8px;color:green"></div>
+
+        <!-- Customer Details Form -->
+        <div id="checkoutForm" style="display:none;border-top:1px solid #e2e8f0;padding-top:20px">
+          <h4 style="margin:0 0 16px 0;color:var(--accent2)">Delivery Details</h4>
+          
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <label style="display:block;margin-bottom:4px;font-weight:500;color:var(--muted)">Full Name</label>
+              <input type="text" id="customerName" required style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px" placeholder="Enter your name">
+            </div>
+            <div>
+              <label style="display:block;margin-bottom:4px;font-weight:500;color:var(--muted)">Phone Number</label>
+              <input type="tel" id="customerPhone" required style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px" placeholder="+233 20 123 4567">
+            </div>
+          </div>
+          
+          <div style="margin-bottom:12px">
+            <label style="display:block;margin-bottom:4px;font-weight:500;color:var(--muted)">Email Address</label>
+            <input type="email" id="customerEmail" required style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px" placeholder="your@email.com">
+          </div>
+          
+          <div style="margin-bottom:16px">
+            <label style="display:block;margin-bottom:4px;font-weight:500;color:var(--muted)">Delivery Address</label>
+            <textarea id="deliveryAddress" required style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;min-height:60px;resize:vertical" placeholder="Enter your delivery address"></textarea>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <button id="proceedToCheckout" onclick="showCheckoutForm()" class="checkout-button cta" aria-label="Proceed to checkout" style="flex:1">
+            🛒 Proceed to Checkout
+          </button>
+          <button id="payWithPaystack" onclick="initiatePaystackPayment()" class="checkout-button cta" aria-label="Pay with Paystack" style="display:none;flex:1;background:var(--accent1)">
+            💳 Pay Now - ₵<span id="paymentAmount">0</span>
+          </button>
+          <button onclick="clearCart()" style="background:#fff;border:1px solid #e2e8f0;padding:12px 16px;border-radius:8px;font-weight:500" aria-label="Clear cart">
+            🗑️ Clear Cart
+          </button>
+        </div>
+        
+        <div id="cartFeedback" class="small" style="margin-top:12px;padding:8px;border-radius:6px;display:none"></div>
       </div>
     </div>
 
@@ -415,9 +1188,518 @@
 
   <script>
     // -------------------------
+    // Paystack Configuration
+    // -------------------------
+    const PAYSTACK_CONFIG = {
+      publicKey: 'pk_test_your_paystack_public_key_here', // Replace with your actual Paystack public key
+      currency: 'GHS', // Ghana Cedis
+      country: 'GH' // Ghana
+    };
+
+    // -------------------------
+    // API Configuration & Service Layer
+    // -------------------------
+    class APIService {
+      static BASE_URL = 'http://localhost:5002/api';
+      static authToken = localStorage.getItem('authToken');
+      
+      // Set authentication token
+      static setAuthToken(token) {
+        this.authToken = token;
+        localStorage.setItem('authToken', token);
+      }
+      
+      // Remove authentication token
+      static clearAuthToken() {
+        this.authToken = null;
+        localStorage.removeItem('authToken');
+      }
+      
+      // Get auth headers
+      static getAuthHeaders() {
+        const headers = {
+          'Content-Type': 'application/json',
+        };
+        
+        if (this.authToken) {
+          headers['Authorization'] = `Bearer ${this.authToken}`;
+        }
+        
+        return headers;
+      }
+      
+      // Generic HTTP request method
+      static async request(endpoint, options = {}) {
+        const url = `${this.BASE_URL}${endpoint}`;
+        const config = {
+          headers: this.getAuthHeaders(),
+          ...options
+        };
+        
+        try {
+          const response = await fetch(url, config);
+          const data = await response.json();
+          
+          if (!response.ok) {
+            throw new Error(data.message || `HTTP error! status: ${response.status}`);
+          }
+          
+          return data;
+        } catch (error) {
+          console.error('API Request failed:', error);
+          this.handleAPIError(error);
+          throw error;
+        }
+      }
+      
+      // Handle API errors
+      static handleAPIError(error) {
+        if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+          this.clearAuthToken();
+          this.showNotification('Session expired. Please log in again.', 'error');
+          setTimeout(() => {
+            this.showAuthModal();
+          }, 1000);
+        } else {
+          this.showNotification(error.message || 'Something went wrong. Please try again.', 'error');
+        }
+      }
+      
+      // Authentication API calls
+      static async register(userData) {
+        return await this.request('/auth/register', {
+          method: 'POST',
+          body: JSON.stringify(userData)
+        });
+      }
+      
+      static async login(credentials) {
+        return await this.request('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify(credentials)
+        });
+      }
+      
+      static async getProfile() {
+        return await this.request('/auth/profile');
+      }
+      
+      static async updateProfile(userData) {
+        return await this.request('/auth/profile', {
+          method: 'PUT',
+          body: JSON.stringify(userData)
+        });
+      }
+      
+      // Orders API calls
+      static async createOrder(orderData) {
+        return await this.request('/orders', {
+          method: 'POST',
+          body: JSON.stringify(orderData)
+        });
+      }
+      
+      static async getOrders() {
+        return await this.request('/orders');
+      }
+      
+      static async getOrder(orderId) {
+        return await this.request(`/orders/${orderId}`);
+      }
+      
+      static async updateOrderStatus(orderId, status, additionalData = {}) {
+        return await this.request(`/orders/${orderId}/status`, {
+          method: 'PUT',
+          body: JSON.stringify({ status, ...additionalData })
+        });
+      }
+      
+      static async cancelOrder(orderId) {
+        return await this.request(`/orders/${orderId}`, {
+          method: 'DELETE'
+        });
+      }
+      
+      // Utility methods
+      static showNotification(message, type = 'info') {
+        // Use existing notification system
+        if (typeof showNotification === 'function') {
+          showNotification(message, type);
+        } else {
+          // Fallback notification
+          const notification = document.createElement('div');
+          notification.className = `notification notification-${type}`;
+          notification.textContent = message;
+          notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 10000;
+            animation: slideIn 0.3s ease-out;
+            background: ${type === 'error' ? 'var(--error-500)' : 
+                        type === 'success' ? 'var(--success-500)' : 
+                        'var(--primary-500)'};
+          `;
+          
+          document.body.appendChild(notification);
+          setTimeout(() => {
+            notification.remove();
+          }, 3000);
+        }
+      }
+      
+      static showAuthModal() {
+        // Show authentication modal
+        if (typeof activateSection === 'function') {
+          activateSection('auth');
+        }
+      }
+      
+      // Health check
+      static async healthCheck() {
+        try {
+          const response = await fetch(`${this.BASE_URL.replace('/api', '')}/health`);
+          const data = await response.json();
+          console.log('Backend health check:', data);
+          return data.success;
+        } catch (error) {
+          console.error('Backend health check failed:', error);
+          return false;
+        }
+      }
+    }
+    
+    // -------------------------
+    // Socket.IO Real-Time Connection
+    // -------------------------
+    class RealTimeService {
+      static socket = null;
+      static isConnected = false;
+      
+      static async connect() {
+        if (typeof io === 'undefined') {
+          console.warn('Socket.IO not loaded. Loading from CDN...');
+          await this.loadSocketIO();
+        }
+        
+        try {
+          this.socket = io('http://localhost:5002', {
+            transports: ['websocket', 'polling'],
+            timeout: 10000
+          });
+          
+          this.socket.on('connect', () => {
+            console.log('Connected to real-time server');
+            this.isConnected = true;
+            APIService.showNotification('Connected to real-time updates', 'success');
+          });
+          
+          this.socket.on('disconnect', () => {
+            console.log('Disconnected from real-time server');
+            this.isConnected = false;
+          });
+          
+          this.socket.on('order_status_update', (data) => {
+            this.handleOrderUpdate(data);
+          });
+          
+          this.socket.on('rider_location_update', (data) => {
+            this.handleRiderLocationUpdate(data);
+          });
+          
+          return this.socket;
+        } catch (error) {
+          console.error('Failed to connect to real-time server:', error);
+          return null;
+        }
+      }
+      
+      static async loadSocketIO() {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdn.socket.io/4.7.4/socket.io.min.js';
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
+      
+      static joinOrderRoom(orderId) {
+        if (this.socket && this.isConnected) {
+          this.socket.emit('join_room', `order_${orderId}`);
+        }
+      }
+      
+      static handleOrderUpdate(data) {
+        console.log('Order status update received:', data);
+        // Update UI with new order status
+        if (typeof OrderStatusManager !== 'undefined') {
+          OrderStatusManager.handleRealTimeUpdate(data);
+        }
+      }
+      
+      static handleRiderLocationUpdate(data) {
+        console.log('Rider location update received:', data);
+        // Update rider location on map or UI
+        if (typeof updateRiderLocation === 'function') {
+          updateRiderLocation(data);
+        }
+      }
+    }
+    
+    // -------------------------
+    // Enhanced Utility Functions
+    // -------------------------
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
+
+    // -------------------------
+    // Enhanced Cart Management System
+    // -------------------------
+    class EnhancedCartManager {
+      static addToCart(id, name, price) {
+        const cart = loadCart();
+        const existingItem = cart.find(item => item.id === id);
+        
+        if (existingItem) {
+          existingItem.qty++;
+          this.showCartAnimation('updated');
+        } else {
+          cart.push({ 
+            id, 
+            name, 
+            price, 
+            qty: 1, 
+            addedAt: new Date().toISOString(),
+            category: this.getProductCategory(id)
+          });
+          this.showCartAnimation('added');
+        }
+        
+        saveCart(cart);
+        this.updateCartUI();
+        this.showAddToCartFeedback(name);
+        
+        // Analytics tracking
+        this.trackAddToCart(id, name, price);
+      }
+      
+      static getProductCategory(id) {
+        const categories = {
+          '6kg': 'cylinders',
+          '12kg': 'cylinders', 
+          '37kg': 'cylinders',
+          'reg': 'accessories',
+          'hose': 'accessories',
+          'burner': 'accessories'
+        };
+        return categories[id] || 'other';
+      }
+      
+      static showAddToCartFeedback(productName) {
+        const feedback = document.createElement('div');
+        feedback.className = 'cart-feedback-toast';
+        feedback.innerHTML = `
+          <div class="feedback-content">
+            <span class="feedback-icon">✅</span>
+            <span class="feedback-text">${productName} added to cart!</span>
+            <button onclick="openCart()" class="feedback-button">View Cart</button>
+          </div>
+        `;
+        
+        document.body.appendChild(feedback);
+        setTimeout(() => feedback.remove(), 4000);
+      }
+      
+      static showCartAnimation(action) {
+        const cartBtn = document.getElementById('openCartBtn');
+        cartBtn.classList.add(`cart-${action}`);
+        setTimeout(() => cartBtn.classList.remove(`cart-${action}`), 300);
+      }
+      
+      static trackAddToCart(id, name, price) {
+        // Analytics tracking for business intelligence
+        const analytics = JSON.parse(localStorage.getItem('gasfill_analytics_v1') || '[]');
+        analytics.push({
+          event: 'add_to_cart',
+          productId: id,
+          productName: name,
+          price: price,
+          timestamp: new Date().toISOString(),
+          sessionId: this.getSessionId()
+        });
+        
+        // Keep only last 100 events
+        if (analytics.length > 100) {
+          analytics.splice(0, analytics.length - 100);
+        }
+        
+        localStorage.setItem('gasfill_analytics_v1', JSON.stringify(analytics));
+      }
+      
+      static getSessionId() {
+        let sessionId = sessionStorage.getItem('gasfill_session');
+        if (!sessionId) {
+          sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+          sessionStorage.setItem('gasfill_session', sessionId);
+        }
+        return sessionId;
+      }
+    }
+
+    // -------------------------
+    // Real-time Order Status Management
+    // -------------------------
+    class OrderStatusManager {
+      static riders = [
+        { id: 'rider_1', name: 'Kwame Asante', phone: '+233241234567', rating: 4.8, vehicle: 'Motorcycle' },
+        { id: 'rider_2', name: 'Ama Osei', phone: '+233267890123', rating: 4.9, vehicle: 'Van' },
+        { id: 'rider_3', name: 'Kofi Mensah', phone: '+233208765432', rating: 4.7, vehicle: 'Motorcycle' },
+        { id: 'rider_4', name: 'Akosua Nimako', phone: '+233245678901', rating: 4.8, vehicle: 'Truck' }
+      ];
+      
+      static initializeRealTimeUpdates() {
+        // Simulate real-time updates every 30 seconds
+        setInterval(() => {
+          this.processOrderUpdates();
+        }, 30000);
+        
+        // Initialize immediately
+        this.processOrderUpdates();
+      }
+      
+      static processOrderUpdates() {
+        const orders = loadOrders();
+        let hasUpdates = false;
+        
+        orders.forEach(order => {
+          const timeSinceCreated = Date.now() - new Date(order.createdAt).getTime();
+          const minutesElapsed = Math.floor(timeSinceCreated / 60000);
+          
+          // Simulate realistic order progression
+          if (order.status === 'pending' && minutesElapsed > 2 && Math.random() > 0.6) {
+            order.status = 'assigned';
+            order.rider = this.assignBestRider(order);
+            order.estimatedArrival = new Date(Date.now() + (25 + Math.random() * 10) * 60000).toISOString();
+            hasUpdates = true;
+            this.showStatusNotification(`Order ${order.id.slice(-6)} assigned to ${order.rider.name}!`);
+          } else if (order.status === 'assigned' && minutesElapsed > 5 && Math.random() > 0.7) {
+            order.status = 'picked_up';
+            order.pickedUpAt = new Date().toISOString();
+            hasUpdates = true;
+            this.showStatusNotification(`Your order is on the way!`);
+          } else if (order.status === 'picked_up' && minutesElapsed > 8 && Math.random() > 0.8) {
+            order.status = 'in_transit';
+            order.estimatedArrival = new Date(Date.now() + 10 * 60000).toISOString();
+            hasUpdates = true;
+          } else if (order.status === 'in_transit' && minutesElapsed > 12 && Math.random() > 0.9) {
+            order.status = 'nearby';
+            order.estimatedArrival = new Date(Date.now() + 3 * 60000).toISOString();
+            hasUpdates = true;
+            this.showStatusNotification(`Your rider is nearby! Please be available.`);
+          }
+        });
+        
+        if (hasUpdates) {
+          saveOrders(orders);
+          if (document.getElementById('dashboard').classList.contains('active')) {
+            renderDashboard();
+          }
+        }
+      }
+      
+      static assignBestRider(order) {
+        // Simulate intelligent rider assignment
+        const availableRiders = this.riders.filter(rider => Math.random() > 0.3);
+        if (availableRiders.length === 0) return this.riders[0];
+        
+        // Select rider based on rating and vehicle suitability
+        const bestRider = availableRiders.reduce((best, current) => {
+          const currentScore = current.rating + (this.isVehicleSuitable(current.vehicle, order) ? 0.5 : 0);
+          const bestScore = best.rating + (this.isVehicleSuitable(best.vehicle, order) ? 0.5 : 0);
+          return currentScore > bestScore ? current : best;
+        });
+        
+        return bestRider;
+      }
+      
+      static isVehicleSuitable(vehicle, order) {
+        const heavyItems = ['37kg'];
+        const hasHeavyItems = order.items?.some(item => heavyItems.includes(item.id)) || 
+                             order.product?.includes('37kg');
+        
+        return hasHeavyItems ? vehicle === 'Van' || vehicle === 'Truck' : true;
+      }
+      
+      static showStatusNotification(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast-notification';
+        toast.innerHTML = `
+          <div class="toast-content">
+            <span class="toast-icon">🚚</span>
+            <span class="toast-message">${message}</span>
+          </div>
+        `;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => toast.remove(), 5000);
+      }
+      
+      static getStatusDisplay(status) {
+        const statusMap = {
+          'pending': { text: 'Order Received', icon: '📋', class: 'badge-pending' },
+          'assigned': { text: 'Rider Assigned', icon: '👤', class: 'badge-assigned' },
+          'picked_up': { text: 'Picked Up', icon: '📦', class: 'badge-in-transit' },
+          'in_transit': { text: 'On the Way', icon: '🚗', class: 'badge-in-transit' },
+          'nearby': { text: 'Nearby (5 min)', icon: '📍', class: 'badge-nearby' },
+          'delivered': { text: 'Delivered', icon: '✅', class: 'badge-delivered' },
+          'cancelled': { text: 'Cancelled', icon: '❌', class: 'badge-cancelled' }
+        };
+        
+        return statusMap[status] || statusMap['pending'];
+      }
+    }
+
+    // -------------------------
+    // Hamburger menu for mobile
+    // -------------------------
+    const hamburgerBtn = document.getElementById('hamburgerBtn');
+    const mainNav = document.getElementById('mainNav');
+    
+    hamburgerBtn.addEventListener('click', () => {
+      const isOpen = mainNav.classList.toggle('mobile-open');
+      hamburgerBtn.classList.toggle('active');
+      hamburgerBtn.setAttribute('aria-expanded', isOpen);
+    });
+
+    // Close menu when clicking nav link on mobile
+    const navLinks = document.querySelectorAll('.nav-link');
+    navLinks.forEach(link => {
+      link.addEventListener('click', () => {
+        if (window.innerWidth <= 768) {
+          mainNav.classList.remove('mobile-open');
+          hamburgerBtn.classList.remove('active');
+          hamburgerBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+    });
+
+    // -------------------------
     // Simple SPA routing (no framework)
     // -------------------------
-    const navLinks = document.querySelectorAll('.nav-link');
     navLinks.forEach(a=> a.addEventListener('click', e=>{
       e.preventDefault();
       const tgt = a.getAttribute('data-target');
@@ -439,7 +1721,7 @@
     function navigateTo(id){ activateSection(id); }
 
     // -------------------------
-    // CART (localStorage)
+    // CART (localStorage) - Enhanced Version
     // -------------------------
     const CART_KEY = 'gasfill_cart_v1';
     const ORDERS_KEY = 'gasfill_orders_v1';
@@ -447,19 +1729,44 @@
     function loadCart(){ try{ return JSON.parse(localStorage.getItem(CART_KEY) || '[]') }catch(e){ return [] } }
     function saveCart(items){ localStorage.setItem(CART_KEY, JSON.stringify(items)); updateCartUI() }
 
-    function addToCart(id,name,price){
-      const cart = loadCart();
-      const found = cart.find(i=>i.id===id);
-      if(found) found.qty++;
-      else cart.push({id,name,price,qty:1});
-      saveCart(cart);
-      showFeedback('Added to cart: '+name);
+    // Enhanced addToCart function
+    function addToCartEnhanced(id, name, price) {
+      // Show loading state on button
+      const button = event.target;
+      const originalText = button.textContent;
+      button.classList.add('btn-loading');
+      button.disabled = true;
+      
+      // Simulate network delay for better UX
+      setTimeout(() => {
+        EnhancedCartManager.addToCart(id, name, price);
+        
+        // Restore button state
+        button.classList.remove('btn-loading');
+        button.disabled = false;
+        button.textContent = originalText;
+      }, 500);
+    }
+
+    // Keep backward compatibility
+    function addToCart(id, name, price) {
+      return addToCartEnhanced(id, name, price);
     }
 
     function updateCartUI(){
       const cart = loadCart();
       const count = cart.reduce((s,i)=>s+i.qty,0);
-      document.getElementById('cartCount').textContent = count;
+      const countEl = document.getElementById('cartCount');
+      if (countEl) {
+        countEl.textContent = count;
+        
+        // Add animation when count changes
+        if (count > 0) {
+          countEl.parentElement.classList.add('cart-has-items');
+        } else {
+          countEl.parentElement.classList.remove('cart-has-items');
+        }
+      }
     }
 
     document.getElementById('openCartBtn').addEventListener('click', openCart);
@@ -471,17 +1778,25 @@
 
     function renderCartItems(){
       const ct = document.getElementById('cartItems');
+      const totalEl = document.getElementById('cartTotal');
       const cart = loadCart();
       ct.innerHTML = '';
       let total = 0;
-      if(!cart.length){ ct.innerHTML = '<div class="small muted-2">Cart is empty</div>'; document.getElementById('cartTotal').textContent = '₵0'; return; }
+      if(!cart.length){ 
+        ct.innerHTML = '<div class="small muted-2">Cart is empty</div>'; 
+        totalEl.textContent = '₵0'; 
+        return; 
+      }
+      const fragment = document.createDocumentFragment();
       cart.forEach(item=>{
-        const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center';
-        row.innerHTML = `<div style="min-width:0"><div style="font-weight:800">${escapeHtml(item.name)} <span class="small" style="color:#94a3b8">x${item.qty}</span></div><div class="small muted-2">₵${item.price} each</div></div><div style="display:flex;gap:8px;align-items:center"><button onclick="changeQty('${item.id}',-1)" style="padding:6px;border-radius:8px">-</button><button onclick="changeQty('${item.id}',1)" style="padding:6px;border-radius:8px">+</button></div>`;
-        ct.appendChild(row);
+        const row = document.createElement('div'); 
+        row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap';
+        row.innerHTML = `<div style="min-width:0"><div style="font-weight:800">${escapeHtml(item.name)} <span class="small" style="color:#94a3b8">x${item.qty}</span></div><div class="small muted-2">₵${item.price} each</div></div><div style="display:flex;gap:8px;align-items:center"><button onclick="changeQty('${item.id}',-1)" style="padding:6px;border-radius:8px" aria-label="Decrease quantity">-</button><button onclick="changeQty('${item.id}',1)" style="padding:6px;border-radius:8px" aria-label="Increase quantity">+</button></div>`;
+        fragment.appendChild(row);
         total += item.price * item.qty;
       });
-      document.getElementById('cartTotal').textContent = '₵'+total;
+      ct.appendChild(fragment);
+      totalEl.textContent = '₵'+total;
     }
 
     function changeQty(id,delta){
@@ -496,20 +1811,371 @@
 
     function clearCart(){ localStorage.removeItem(CART_KEY); updateCartUI(); renderCartItems(); }
 
-    function checkoutCart(){
+    async function checkoutCart(){
       const cart = loadCart();
       if(!cart.length){ showFeedback('Cart is empty'); return; }
-      // create order object & store locally (demo)
+      
       const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
-      const orders = loadOrders();
-      const id = 'ORD-'+Date.now();
-      const order = { id, items: cart, total, status:'pending', createdAt: new Date().toISOString() };
-      orders.unshift(order);
-      saveOrders(orders);
-      clearCart();
-      closeCart();
-      showFeedback('Checkout successful — order recorded.');
+      
+      // Prepare order data for API
+      const orderData = {
+        items: cart.map(item => ({
+          name: item.name,
+          quantity: item.qty,
+          price: item.price
+        })),
+        total: total,
+        customer_email: AuthManager.currentUser?.email || 'guest',
+        customerName: AuthManager.currentUser?.name || 'Cart Order',
+        customerPhone: AuthManager.currentUser?.phone || '',
+        deliveryAddress: AuthManager.currentUser?.address || 'To be provided'
+      };
+      
+      try {
+        // Try to create order via API
+        const result = await APIService.createOrder(orderData);
+        
+        // Also save locally for offline access
+        const orders = loadOrders();
+        const localOrder = { id: result.id, items: cart, total, status:'pending', createdAt: new Date().toISOString() };
+        orders.unshift(localOrder);
+        saveOrders(orders);
+        
+        clearCart();
+        closeCart();
+        showFeedback('Checkout successful — Order ID: ' + result.id);
+      } catch (error) {
+        // Fallback to localStorage if API fails
+        console.log('API unavailable, saving locally:', error.message);
+        const orders = loadOrders();
+        const id = 'ORD-'+Date.now();
+        const order = { id, items: cart, total, status:'pending', createdAt: new Date().toISOString() };
+        orders.unshift(order);
+        saveOrders(orders);
+        clearCart();
+        closeCart();
+        showFeedback('Checkout successful — order recorded locally.');
+      }
       renderDashboard();
+    }
+
+    // -------------------------
+    // Paystack Payment Integration
+    // -------------------------
+    
+    function showCheckoutForm() {
+      const cart = loadCart();
+      if (!cart.length) {
+        showCartFeedback('Cart is empty', 'error');
+        return;
+      }
+      
+      // Show checkout form and update UI
+      document.getElementById('checkoutForm').style.display = 'block';
+      document.getElementById('proceedToCheckout').style.display = 'none';
+      document.getElementById('payWithPaystack').style.display = 'block';
+      
+      // Update payment amount
+      const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      document.getElementById('paymentAmount').textContent = total.toFixed(2);
+      
+      // Scroll to form
+      document.getElementById('checkoutForm').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    
+    function hideCheckoutForm() {
+      document.getElementById('checkoutForm').style.display = 'none';
+      document.getElementById('proceedToCheckout').style.display = 'block';
+      document.getElementById('payWithPaystack').style.display = 'none';
+    }
+    
+    function validateCheckoutForm() {
+      const name = document.getElementById('customerName').value.trim();
+      const phone = document.getElementById('customerPhone').value.trim();
+      const email = document.getElementById('customerEmail').value.trim();
+      const address = document.getElementById('deliveryAddress').value.trim();
+      
+      if (!name) {
+        showCartFeedback('Please enter your full name', 'error');
+        document.getElementById('customerName').focus();
+        return false;
+      }
+      
+      if (!phone) {
+        showCartFeedback('Please enter your phone number', 'error');
+        document.getElementById('customerPhone').focus();
+        return false;
+      }
+      
+      if (!email || !email.includes('@')) {
+        showCartFeedback('Please enter a valid email address', 'error');
+        document.getElementById('customerEmail').focus();
+        return false;
+      }
+      
+      if (!address) {
+        showCartFeedback('Please enter your delivery address', 'error');
+        document.getElementById('deliveryAddress').focus();
+        return false;
+      }
+      
+      return { name, phone, email, address };
+    }
+    
+    function initiatePaystackPayment() {
+      const cart = loadCart();
+      const customerData = validateCheckoutForm();
+      
+      if (!customerData) return;
+      
+      const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      const amountInPesewas = Math.round(total * 100); // Convert cedis to pesewas
+      
+      showCartFeedback('Initializing payment...', 'info');
+      
+      const paymentData = {
+        key: PAYSTACK_CONFIG.publicKey,
+        email: customerData.email,
+        amount: amountInPesewas, // Amount in pesewas (smallest currency unit)
+        currency: PAYSTACK_CONFIG.currency,
+        ref: 'gasfill_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+        channels: ['card', 'bank', 'ussd', 'mobile_money'],
+        metadata: {
+          custom_fields: [
+            {
+              display_name: "Customer Name",
+              variable_name: "customer_name",
+              value: customerData.name
+            },
+            {
+              display_name: "Phone Number", 
+              variable_name: "phone_number",
+              value: customerData.phone
+            },
+            {
+              display_name: "Delivery Address",
+              variable_name: "delivery_address", 
+              value: customerData.address
+            },
+            {
+              display_name: "Cart Items",
+              variable_name: "cart_items",
+              value: JSON.stringify(cart)
+            }
+          ]
+        },
+        callback: function(response) {
+          handlePaymentSuccess(response, customerData, cart, total);
+        },
+        onClose: function() {
+          showCartFeedback('Payment cancelled', 'error');
+        }
+      };
+      
+      try {
+        PaystackPop.setup(paymentData).openIframe();
+      } catch (error) {
+        console.error('Paystack initialization error:', error);
+        showCartFeedback('Payment system unavailable. Please try again.', 'error');
+        
+        // Fallback to regular checkout
+        checkoutWithoutPayment(customerData, cart, total);
+      }
+    }
+    
+    async function handlePaymentSuccess(response, customerData, cart, total) {
+      showCartFeedback('Payment successful! Creating your order...', 'success');
+      
+      try {
+        // Create order with payment information
+        await createPaidOrder(response, customerData, cart, total);
+      } catch (error) {
+        console.error('Order creation error:', error);
+        // Still create order but mark payment as pending verification
+        await createPaidOrder(response, customerData, cart, total, 'pending_verification');
+      }
+    }
+    
+    async function createPaidOrder(paymentResponse, customerData, cart, total, paymentStatus = 'paid') {
+      const orderData = {
+        items: cart.map(item => ({
+          name: item.name,
+          quantity: item.qty,
+          price: item.price
+        })),
+        total: total,
+        customerName: customerData.name,
+        customerPhone: customerData.phone,
+        customerEmail: customerData.email,
+        deliveryAddress: customerData.address,
+        paymentStatus: paymentStatus,
+        paymentMethod: 'paystack',
+        paymentReference: paymentResponse.reference,
+        paymentData: {
+          reference: paymentResponse.reference,
+          status: paymentResponse.status,
+          gateway_response: paymentResponse.gateway_response,
+          paid_at: new Date().toISOString()
+        }
+      };
+      
+      try {
+        // Try to create order via API
+        const result = await APIService.createOrder(orderData);
+        
+        // Save locally for offline access
+        const orders = loadOrders();
+        const localOrder = {
+          id: result.id,
+          items: cart,
+          total,
+          status: 'paid',
+          paymentStatus: paymentStatus,
+          paymentReference: paymentResponse.reference,
+          customerName: customerData.name,
+          customerPhone: customerData.phone,
+          customerEmail: customerData.email,
+          deliveryAddress: customerData.address,
+          createdAt: new Date().toISOString()
+        };
+        orders.unshift(localOrder);
+        saveOrders(orders);
+        
+        clearCart();
+        hideCheckoutForm();
+        closeCart();
+        showFeedback(`Payment successful! Order #${result.id} created. You will receive a confirmation SMS.`);
+        
+      } catch (error) {
+        console.log('API unavailable, saving locally:', error.message);
+        
+        // Fallback to localStorage
+        const orders = loadOrders();
+        const id = 'ORD-' + Date.now();
+        const order = {
+          id,
+          items: cart,
+          total,
+          status: 'paid',
+          paymentStatus: paymentStatus,
+          paymentReference: paymentResponse.reference,
+          customerName: customerData.name,
+          customerPhone: customerData.phone,
+          customerEmail: customerData.email,
+          deliveryAddress: customerData.address,
+          createdAt: new Date().toISOString()
+        };
+        orders.unshift(order);
+        saveOrders(orders);
+        
+        clearCart();
+        hideCheckoutForm();
+        closeCart();
+        showFeedback(`Payment successful! Order ${id} saved locally. You will receive a confirmation SMS.`);
+      }
+      
+      renderDashboard();
+    }
+    
+    async function checkoutWithoutPayment(customerData, cart, total) {
+      // Fallback for when Paystack is unavailable
+      const orderData = {
+        items: cart.map(item => ({
+          name: item.name,
+          quantity: item.qty,
+          price: item.price
+        })),
+        total: total,
+        customerName: customerData.name,
+        customerPhone: customerData.phone,
+        customerEmail: customerData.email,
+        deliveryAddress: customerData.address,
+        paymentStatus: 'pending',
+        paymentMethod: 'cash_on_delivery'
+      };
+      
+      try {
+        const result = await APIService.createOrder(orderData);
+        
+        const orders = loadOrders();
+        const localOrder = {
+          id: result.id,
+          items: cart,
+          total,
+          status: 'pending',
+          paymentStatus: 'pending',
+          customerName: customerData.name,
+          customerPhone: customerData.phone,
+          customerEmail: customerData.email,
+          deliveryAddress: customerData.address,
+          createdAt: new Date().toISOString()
+        };
+        orders.unshift(localOrder);
+        saveOrders(orders);
+        
+        clearCart();
+        hideCheckoutForm();
+        closeCart();
+        showFeedback(`Order #${result.id} created successfully! Payment on delivery.`);
+        
+      } catch (error) {
+        console.log('API unavailable, saving locally:', error.message);
+        
+        const orders = loadOrders();
+        const id = 'ORD-' + Date.now();
+        const order = {
+          id,
+          items: cart,
+          total,
+          status: 'pending',
+          paymentStatus: 'pending',
+          customerName: customerData.name,
+          customerPhone: customerData.phone,
+          customerEmail: customerData.email,
+          deliveryAddress: customerData.address,
+          createdAt: new Date().toISOString()
+        };
+        orders.unshift(order);
+        saveOrders(orders);
+        
+        clearCart();
+        hideCheckoutForm();
+        closeCart();
+        showFeedback(`Order ${id} created successfully! Payment on delivery.`);
+      }
+      
+      renderDashboard();
+    }
+    
+    function showCartFeedback(message, type = 'info') {
+      const feedback = document.getElementById('cartFeedback');
+      feedback.textContent = message;
+      feedback.style.display = 'block';
+      
+      // Set colors based on type
+      switch (type) {
+        case 'success':
+          feedback.style.background = '#d1fae5';
+          feedback.style.color = '#065f46';
+          feedback.style.border = '1px solid #a7f3d0';
+          break;
+        case 'error':
+          feedback.style.background = '#fee2e2';
+          feedback.style.color = '#991b1b';
+          feedback.style.border = '1px solid #fca5a5';
+          break;
+        case 'info':
+        default:
+          feedback.style.background = '#dbeafe';
+          feedback.style.color = '#1e40af';
+          feedback.style.border = '1px solid #93c5fd';
+          break;
+      }
+      
+      // Auto-hide after 5 seconds
+      setTimeout(() => {
+        feedback.style.display = 'none';
+      }, 5000);
     }
 
     // -------------------------
@@ -519,20 +2185,50 @@
     function saveOrders(arr){ localStorage.setItem(ORDERS_KEY, JSON.stringify(arr)); }
 
     // single order form
-    document.getElementById('placeOrderBtn').addEventListener('click', ()=>{
+    document.getElementById('placeOrderBtn').addEventListener('click', async ()=>{
       const product = document.getElementById('o_product').value;
       const name = document.getElementById('o_name').value.trim();
       const phone = document.getElementById('o_phone').value.trim();
       const qty = Number(document.getElementById('o_qty').value) || 1;
       const addr = document.getElementById('o_address').value.trim();
       if(!name || !phone || !addr){ alert('Please fill name, phone and address.'); return; }
-      const orders = loadOrders();
-      const id = 'ORD-'+Date.now();
+      
       const priceMap = { '12.5kg Cylinder — Refill':220, '5kg Cylinder — Refill':120, '37kg Cylinder — Commercial':680, 'Empty Exchange': 0 };
       const total = (priceMap[product]||100)*qty;
-      orders.unshift({id, product, name, phone, qty, address:addr, total, status:'pending', createdAt:new Date().toISOString()});
-      saveOrders(orders);
-      document.getElementById('orderFeedback').textContent = 'Order recorded. We will contact you shortly.';
+      
+      const orderData = {
+        items: [{
+          name: product,
+          quantity: qty,
+          price: priceMap[product] || 100
+        }],
+        customerName: name,
+        customerPhone: phone,
+        customer_email: AuthManager.currentUser?.email || 'guest',
+        deliveryAddress: addr,
+        total: total
+      };
+      
+      try {
+        // Try to create order via API
+        const result = await APIService.createOrder(orderData);
+        document.getElementById('orderFeedback').textContent = 'Order submitted successfully! Order ID: ' + result.id;
+        
+        // Also save locally for offline access
+        const orders = loadOrders();
+        const localOrder = {id: result.id, product, name, phone, qty, address:addr, total, status:'pending', createdAt:new Date().toISOString()};
+        orders.unshift(localOrder);
+        saveOrders(orders);
+      } catch (error) {
+        // Fallback to localStorage if API fails
+        console.log('API unavailable, saving locally:', error.message);
+        const orders = loadOrders();
+        const id = 'ORD-'+Date.now();
+        orders.unshift({id, product, name, phone, qty, address:addr, total, status:'pending', createdAt:new Date().toISOString()});
+        saveOrders(orders);
+        document.getElementById('orderFeedback').textContent = 'Order recorded locally. We will contact you shortly.';
+      }
+      
       setTimeout(()=>{ document.getElementById('orderFeedback').textContent = ''; },5000);
       renderDashboard();
     });
@@ -545,12 +2241,41 @@
     function submitContact(){ const n=document.getElementById('c_name').value.trim(); const em=document.getElementById('c_email').value.trim(); const msg=document.getElementById('c_msg').value.trim(); if(!n||!em||!msg){ alert('Please fill the form'); return; } document.getElementById('contactFeedback').textContent = 'Message sent. We will respond soon.'; setTimeout(()=>document.getElementById('contactFeedback').textContent='',4000); }
 
     // one-click order
-    function oneClickOrder(product,price){
-      const orders = loadOrders();
-      const id = 'ORD-'+Date.now();
-      orders.unshift({id, product, qty:1, total:price, status:'pending', createdAt:new Date().toISOString()});
-      saveOrders(orders);
-      document.getElementById('quickFeedback').textContent = 'Order placed: '+product;
+    async function oneClickOrder(product,price){
+      const orderData = {
+        items: [{
+          name: product,
+          quantity: 1,
+          price: price
+        }],
+        total: price,
+        customer_email: AuthManager.currentUser?.email || 'guest',
+        customerName: AuthManager.currentUser?.name || 'Quick Order',
+        customerPhone: AuthManager.currentUser?.phone || '',
+        deliveryAddress: AuthManager.currentUser?.address || 'To be provided'
+      };
+      
+      try {
+        // Try to create order via API
+        const result = await APIService.createOrder(orderData);
+        
+        // Also save locally for offline access
+        const orders = loadOrders();
+        const localOrder = {id: result.id, product, qty:1, total:price, status:'pending', createdAt:new Date().toISOString()};
+        orders.unshift(localOrder);
+        saveOrders(orders);
+        
+        document.getElementById('quickFeedback').textContent = 'Order placed: '+product+' (ID: '+result.id+')';
+      } catch (error) {
+        // Fallback to localStorage if API fails
+        console.log('API unavailable, saving locally:', error.message);
+        const orders = loadOrders();
+        const id = 'ORD-'+Date.now();
+        orders.unshift({id, product, qty:1, total:price, status:'pending', createdAt:new Date().toISOString()});
+        saveOrders(orders);
+        document.getElementById('quickFeedback').textContent = 'Order placed: '+product;
+      }
+      
       setTimeout(()=>document.getElementById('quickFeedback').textContent='',4000);
       renderDashboard();
     }
@@ -571,69 +2296,261 @@
     function composeEmail(){ window.location.href = 'mailto:support@gasfill.example'; }
 
     // -------------------------
-    // DASHBOARD render
+    // ENHANCED DASHBOARD render - with rider info and tracking
     // -------------------------
-    function renderDashboard(){
-      const orders = loadOrders();
-      document.getElementById('statOrders').textContent = orders.length;
-      const pending = orders.filter(o => o.status === 'pending').length;
-      document.getElementById('statPending').textContent = pending;
+    async function renderDashboard(){
+      let orders = [];
+      
+      // If authenticated, fetch from API with customer email filtering
+      if (APIService.authToken && AuthManager.currentUser) {
+        try {
+          // Fetch customer's orders from backend
+          const apiOrders = await APIService.request('/customer/orders');
+          orders = apiOrders || [];
+          // Sort by creation date, newest first
+          orders.sort((a, b) => new Date(b.created_at || b.createdAt) - new Date(a.created_at || a.createdAt));
+        } catch (error) {
+          console.log('API fetch failed, using local orders:', error.message);
+          orders = loadOrders();
+        }
+      } else {
+        // Fallback to local orders if not authenticated
+        orders = loadOrders();
+      }
+      
+      const statOrdersEl = document.getElementById('statOrders');
+      const statPendingEl = document.getElementById('statPending');
+      const statRevenueEl = document.getElementById('statRevenue');
+      const recentOrdersEl = document.getElementById('recentOrders');
+      
+      statOrdersEl.textContent = orders.length;
+      const pending = orders.filter(o => ['pending', 'assigned', 'picked_up', 'in_transit', 'nearby'].includes(o.status)).length;
+      statPendingEl.textContent = pending;
       const revenue = orders.reduce((s,o)=> s + (Number(o.total)||0), 0);
-      document.getElementById('statRevenue').textContent = '₵' + revenue;
-      const recent = document.getElementById('recentOrders');
-      recent.innerHTML = '';
-      orders.slice(0,8).forEach(o=>{
-        const div = document.createElement('div'); div.className='order-row';
-        const left = document.createElement('div'); left.innerHTML = `<div style="font-weight:800">${escapeHtml(o.product||'Cart order')} <span class="small" style="color:#94a3b8">(${o.qty||1})</span></div><div class="small muted-2">${new Date(o.createdAt).toLocaleString()}</div>`;
-        const right = document.createElement('div'); const badge = document.createElement('div');
-        badge.className = 'badge ' + (o.status==='pending' ? 'badge-pending' : o.status==='accepted' ? 'badge-ontheway' : 'badge-delivered');
-        badge.textContent = o.status==='pending' ? 'Pending' : o.status==='accepted' ? 'On the way' : 'Delivered';
+      statRevenueEl.textContent = '₵' + revenue.toLocaleString();
+      
+      recentOrdersEl.innerHTML = '';
+      const fragment = document.createDocumentFragment();
+      
+      orders.slice(0,12).forEach(o=>{
+        const div = document.createElement('div'); 
+        div.className='order-row';
+        
+        const statusInfo = OrderStatusManager.getStatusDisplay(o.status);
+        const createdDate = o.created_at || o.createdAt;
+        const timeAgo = getTimeAgo(new Date(createdDate));
+        
+        const left = document.createElement('div'); 
+        left.innerHTML = `
+          <div style="font-weight:800;display:flex;align-items:center;gap:8px">
+            ${escapeHtml(o.product || o.customer_name || 'Cart order')} 
+            <span class="small" style="color:#94a3b8">(Order: ${o.id})</span>
+            ${o.rider_id ? `<div class="rider-info">👤 Assigned to rider</div>` : ''}
+          </div>
+          <div class="small muted-2">${timeAgo} • ${o.total ? '₵' + o.total : 'Total pending'}</div>
+          ${o.tracking_info && o.tracking_info.estimated_arrival ? `<div class="eta-badge">ETA: ${getTimeFromNow(new Date(o.tracking_info.estimated_arrival))}</div>` : ''}
+        `;
+        
+        const right = document.createElement('div'); 
+        right.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:center';
+        
+        const badge = document.createElement('div');
+        badge.className = `badge ${statusInfo.class}`;
+        badge.innerHTML = `<span class="status-icon ${o.status}"></span> ${statusInfo.icon} ${statusInfo.text}`;
         right.appendChild(badge);
-        // track & mark actions
-        const trackBtn = document.createElement('button'); trackBtn.textContent='Track'; trackBtn.style.marginLeft='8px'; trackBtn.onclick = ()=> alert('Tracker demo — not connected');
-        const markBtn = document.createElement('button'); markBtn.textContent='Mark Delivered'; markBtn.style.marginLeft='8px'; markBtn.onclick = ()=>{ updateOrderStatus(o.id,'delivered'); renderDashboard(); };
-        right.appendChild(trackBtn); right.appendChild(markBtn);
-        div.appendChild(left); div.appendChild(right);
-        recent.appendChild(div);
+        
+        // Action buttons based on status
+        if (o.status === 'nearby') {
+          const callBtn = document.createElement('button'); 
+          callBtn.textContent='Call Rider'; 
+          callBtn.onclick = ()=> window.location.href = `tel:+233201022153`;
+          callBtn.setAttribute('aria-label', 'Call rider');
+          right.appendChild(callBtn);
+        } else if (o.status === 'delivered') {
+          const rateBtn = document.createElement('button'); 
+          rateBtn.textContent='Rate Order'; 
+          rateBtn.onclick = ()=> openRatingModal(o.id);
+          rateBtn.setAttribute('aria-label', 'Rate this order');
+          right.appendChild(rateBtn);
+        } else {
+          const trackBtn = document.createElement('button'); 
+          trackBtn.textContent='Track'; 
+          trackBtn.onclick = ()=> openTrackingModal(o.id);
+          trackBtn.setAttribute('aria-label', 'Track order');
+          right.appendChild(trackBtn);
+        }
+        
+        div.appendChild(left); 
+        div.appendChild(right);
+        fragment.appendChild(div);
       });
+      
+      recentOrdersEl.appendChild(fragment);
+    }
+    
+    function getTimeAgo(date) {
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMins / 60);
+      const diffDays = Math.floor(diffHours / 24);
+      
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      return `${diffDays}d ago`;
+    }
+    
+    function getTimeFromNow(date) {
+      const now = new Date();
+      const diffMs = date - now;
+      const diffMins = Math.floor(diffMs / 60000);
+      
+      if (diffMins < 1) return 'Now';
+      if (diffMins < 60) return `${diffMins} min`;
+      const diffHours = Math.floor(diffMins / 60);
+      return `${diffHours}h ${diffMins % 60}m`;
+    }
+    
+    function openTrackingModal(orderId) {
+      const order = loadOrders().find(o => o.id === orderId);
+      if (!order) return;
+      
+      alert(`Order Tracking:\n\nOrder: ${order.product || 'Multiple items'}\nStatus: ${OrderStatusManager.getStatusDisplay(order.status).text}\nRider: ${order.rider?.name || 'Not assigned'}\nETA: ${order.estimatedArrival ? getTimeFromNow(new Date(order.estimatedArrival)) : 'Calculating...'}`);
+    }
+    
+    function openRatingModal(orderId) {
+      const rating = prompt('Rate your order (1-5 stars):');
+      if (rating && rating >= 1 && rating <= 5) {
+        alert(`Thank you for your ${rating}-star rating! Your feedback helps us improve.`);
+        // In real implementation, save rating to order
+      }
     }
 
-    function updateOrderStatus(id,status){
+    async function updateOrderStatus(id,status){
+      // Update locally first
       const orders = loadOrders();
       const idx = orders.findIndex(o=>o.id===id);
       if(idx===-1) return;
-      orders[idx].status = status; saveOrders(orders); renderDashboard();
+      orders[idx].status = status; 
+      saveOrders(orders); 
+      
+      // Try to sync with API
+      try {
+        await APIService.updateOrderStatus(id, status);
+        console.log('Order status synced with API:', id, status);
+      } catch (error) {
+        console.log('Failed to sync order status with API:', error.message);
+      }
+      
+      renderDashboard();
     }
 
-    // auto-rotate older orders statuses (demo)
-    setInterval(()=>{
+    // auto-rotate older orders statuses (demo) - optimized with debouncing
+    const updateOrderStatuses = debounce(() => {
       const orders = loadOrders();
       let changed=false;
       orders.forEach(o=>{
         if(o.status === 'pending'){ o.status = 'accepted'; changed=true; }
         else if(o.status === 'accepted'){ o.status = 'delivered'; changed=true; }
       });
-      if(changed){ saveOrders(orders); if(document.getElementById('dashboard').classList.contains('active')) renderDashboard(); }
-    }, 25000);
+      if(changed){ 
+        saveOrders(orders); 
+        if(document.getElementById('dashboard').classList.contains('active')) renderDashboard(); 
+      }
+    }, 300);
+    
+    setInterval(updateOrderStatuses, 25000);
 
     // -------------------------
-    // small utils & init
+    // small utils & init - Enhanced
     // -------------------------
     function escapeHtml(s){ return (s+'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c)); }
-    function showFeedback(text){ const el = document.getElementById('cartFeedback'); if(el){ el.textContent = text; setTimeout(()=>el.textContent='',3000) } }
+    function showFeedback(text){ 
+      const el = document.getElementById('cartFeedback'); 
+      if(el){ 
+        el.textContent = text; 
+        setTimeout(()=>el.textContent='',3000) 
+      } 
+    }
     function addOrderToLocal(order){ const arr = loadOrders(); arr.unshift(order); saveOrders(arr); renderDashboard(); }
 
-    // initial state & UI
-    if(!localStorage.getItem(ORDERS_KEY)) saveOrders([]);
-    if(!localStorage.getItem(CART_KEY)) saveCart([]);
-    updateCartUI();
-    renderDashboard();
+    // Enhanced initialization
+    async function initializeApp() {
+      console.log('🚀 Initializing GasFill Enhanced App...');
+      
+      // Initialize data stores
+      if(!localStorage.getItem(ORDERS_KEY)) saveOrders([]);
+      if(!localStorage.getItem(CART_KEY)) saveCart([]);
+      
+      // Check backend connection
+      const backendHealthy = await APIService.healthCheck();
+      console.log('Backend status:', backendHealthy ? '✅ Connected' : '❌ Disconnected');
+      
+      if (!backendHealthy) {
+        APIService.showNotification(
+          'Backend server is not available. Some features may be limited.', 
+          'warning'
+        );
+      }
+      
+      // Initialize authentication
+      AuthManager.init();
+      
+      // Initialize real-time connection
+      if (backendHealthy) {
+        try {
+          await RealTimeService.connect();
+        } catch (error) {
+          console.warn('Real-time connection failed:', error);
+        }
+      }
+      
+      // Initialize UI
+      updateCartUI();
+      renderDashboard();
+      
+      // Start real-time features
+      OrderStatusManager.initializeRealTimeUpdates();
+      
+      // Add cart indicator styles
+      addCartStyles();
+      
+      console.log('🎉 GasFill Enhanced App Initialized Successfully');
+    }
+    
+    function addCartStyles() {
+      const style = document.createElement('style');
+      style.textContent = `
+        .cart-has-items .cart-count {
+          background: var(--warning-500) !important;
+          color: white !important;
+          animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.7; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
 
-    // helper to show messages
-    function showMsg(msg){ const el = document.getElementById('cartFeedback'); if(!el) return; el.textContent = msg; setTimeout(()=>el.textContent='',3500); }
+    // helper to show messages - Enhanced
+    function showMsg(msg, type = 'info'){ 
+      const el = document.getElementById('cartFeedback'); 
+      if(!el) return; 
+      
+      el.textContent = msg;
+      el.className = `small cart-feedback-${type}`;
+      setTimeout(()=>{
+        el.textContent='';
+        el.className = 'small';
+      },3500); 
+    }
 
-    // small helpers called by HTML buttons
-    window.addToCart = addToCart;
+    // small helpers called by HTML buttons - Enhanced
+    window.addToCart = addToCartEnhanced;
+    window.addToCartEnhanced = addToCartEnhanced;
     window.openWhatsApp = openWhatsApp;
     window.openWhatsAppOrder = openWhatsAppOrder;
     window.callHotline = callHotline;
@@ -643,16 +2560,323 @@
     window.checkoutCart = checkoutCart;
     window.clearCart = clearCart;
     window.oneClickOrder = oneClickOrder;
+    // -------------------------
+    // Authentication Management
+    // -------------------------
+    class AuthManager {
+      static currentUser = null;
+      static isAuthenticated = false;
+      
+      static init() {
+        // Check if user is already authenticated
+        const token = APIService.authToken;
+        if (token) {
+          this.loadUserProfile();
+        }
+        this.updateAuthUI();
+      }
+      
+      static async loadUserProfile() {
+        try {
+          const response = await APIService.getProfile();
+          if (response.success) {
+            this.currentUser = response.data;
+            this.isAuthenticated = true;
+            this.updateAuthUI();
+            console.log('User profile loaded:', this.currentUser);
+          }
+        } catch (error) {
+          console.error('Failed to load user profile:', error);
+          this.logout();
+        }
+      }
+      
+      static updateAuthUI() {
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        const userProfile = document.getElementById('userProfile');
+        
+        if (this.isAuthenticated && this.currentUser) {
+          // Show user profile, hide auth forms
+          loginForm.style.display = 'none';
+          registerForm.style.display = 'none';
+          userProfile.style.display = 'block';
+          
+          // Update profile information
+          document.getElementById('profileName').textContent = this.currentUser.name;
+          document.getElementById('profileEmail').textContent = this.currentUser.email;
+          document.getElementById('profilePhone').textContent = this.currentUser.phone || '-';
+          document.getElementById('profileAddress').textContent = this.currentUser.address || '-';
+          
+          // Update nav to show user name
+          this.updateNavigation();
+        } else {
+          // Show auth forms, hide profile
+          userProfile.style.display = 'none';
+          // Show login form by default
+          this.showLoginForm();
+        }
+      }
+      
+      static updateNavigation() {
+        // Add user menu or indicator in the navigation
+        const nav = document.querySelector('nav');
+        let userMenuItem = document.getElementById('userMenuItem');
+        
+        if (this.isAuthenticated && !userMenuItem) {
+          userMenuItem = document.createElement('a');
+          userMenuItem.id = 'userMenuItem';
+          userMenuItem.href = '#';
+          userMenuItem.textContent = `Hi, ${this.currentUser.name.split(' ')[0]}`;
+          userMenuItem.onclick = () => activateSection('auth');
+          userMenuItem.style.cssText = 'color: var(--accent1); font-weight: 600;';
+          nav.appendChild(userMenuItem);
+        } else if (!this.isAuthenticated && userMenuItem) {
+          userMenuItem.remove();
+        }
+      }
+      
+      static logout() {
+        this.currentUser = null;
+        this.isAuthenticated = false;
+        APIService.clearAuthToken();
+        this.updateAuthUI();
+        APIService.showNotification('You have been logged out', 'info');
+        
+        // Redirect to products page
+        activateSection('products');
+      }
+    }
+    
+    // Auth form functions
+    function showLoginForm() {
+      document.getElementById('loginForm').style.display = 'block';
+      document.getElementById('registerForm').style.display = 'none';
+      document.getElementById('loginTab').classList.add('active');
+      document.getElementById('registerTab').classList.remove('active');
+    }
+    
+    function showRegisterForm() {
+      document.getElementById('loginForm').style.display = 'none';
+      document.getElementById('registerForm').style.display = 'block';
+      document.getElementById('loginTab').classList.remove('active');
+      document.getElementById('registerTab').classList.add('active');
+    }
+    
+    async function handleLogin(event) {
+      event.preventDefault();
+      
+      const form = event.target;
+      const formData = new FormData(form);
+      const loginBtn = document.getElementById('loginBtn');
+      const feedback = document.getElementById('loginFeedback');
+      
+      // Show loading state
+      loginBtn.classList.add('btn-loading');
+      loginBtn.disabled = true;
+      feedback.className = 'auth-feedback loading';
+      feedback.textContent = 'Signing in...';
+      
+      try {
+        const credentials = {
+          email: formData.get('email'),
+          password: formData.get('password')
+        };
+        
+        const response = await APIService.login(credentials);
+        
+        if (response.success) {
+          // Store auth token
+          APIService.setAuthToken(response.data.token);
+          AuthManager.currentUser = response.data;
+          AuthManager.isAuthenticated = true;
+          
+          // Show success feedback
+          feedback.className = 'auth-feedback success';
+          feedback.textContent = 'Login successful! Welcome back.';
+          
+          // Update UI
+          AuthManager.updateAuthUI();
+          
+          // Show success notification
+          APIService.showNotification(`Welcome back, ${response.data.name}!`, 'success');
+          
+          // Redirect to dashboard
+          setTimeout(() => {
+            activateSection('dashboard');
+          }, 1500);
+        }
+      } catch (error) {
+        feedback.className = 'auth-feedback error';
+        feedback.textContent = error.message || 'Login failed. Please try again.';
+      } finally {
+        // Reset button state
+        loginBtn.classList.remove('btn-loading');
+        loginBtn.disabled = false;
+      }
+    }
+    
+    async function handleRegister(event) {
+      event.preventDefault();
+      
+      const form = event.target;
+      const formData = new FormData(form);
+      const registerBtn = document.getElementById('registerBtn');
+      const feedback = document.getElementById('registerFeedback');
+      
+      // Validate password confirmation
+      const password = formData.get('password');
+      const confirmPassword = formData.get('confirmPassword');
+      
+      if (password !== confirmPassword) {
+        feedback.className = 'auth-feedback error';
+        feedback.textContent = 'Passwords do not match.';
+        return;
+      }
+      
+      // Show loading state
+      registerBtn.classList.add('btn-loading');
+      registerBtn.disabled = true;
+      feedback.className = 'auth-feedback loading';
+      feedback.textContent = 'Creating account...';
+      
+      try {
+        const userData = {
+          username: formData.get('name'),
+          email: formData.get('email'),
+          password: formData.get('password'),
+          phone: formData.get('phone'),
+          address: formData.get('address') || ''
+        };
+        
+        const response = await APIService.register(userData);
+        
+        if (response.success) {
+          // Store auth token
+          APIService.setAuthToken(response.data.token);
+          AuthManager.currentUser = response.data;
+          AuthManager.isAuthenticated = true;
+          
+          // Show success feedback
+          feedback.className = 'auth-feedback success';
+          feedback.textContent = 'Account created successfully! Welcome to GasFill.';
+          
+          // Update UI
+          AuthManager.updateAuthUI();
+          
+          // Show success notification
+          APIService.showNotification(`Welcome to GasFill, ${response.data.name}!`, 'success');
+          
+          // Redirect to dashboard
+          setTimeout(() => {
+            activateSection('dashboard');
+          }, 1500);
+        }
+      } catch (error) {
+        feedback.className = 'auth-feedback error';
+        feedback.textContent = error.message || 'Registration failed. Please try again.';
+      } finally {
+        // Reset button state
+        registerBtn.classList.remove('btn-loading');
+        registerBtn.disabled = false;
+      }
+    }
+    
+    function showForgotPassword() {
+      APIService.showNotification('Password reset feature coming soon!', 'info');
+    }
+    
+    function editProfile() {
+      APIService.showNotification('Profile editing feature coming soon!', 'info');
+    }
+    
+    function changePassword() {
+      APIService.showNotification('Password change feature coming soon!', 'info');
+    }
+    
+    function logout() {
+      AuthManager.logout();
+    }
+
     window.activateSection = activateSection;
     window.changeQty = changeQty;
     window.closeCart = closeCart;
+    window.showLoginForm = showLoginForm;
+    window.showRegisterForm = showRegisterForm;
+    window.handleLogin = handleLogin;
+    window.handleRegister = handleRegister;
+    window.showForgotPassword = showForgotPassword;
+    window.editProfile = editProfile;
+    window.changePassword = changePassword;
+    window.logout = logout;
 
     // preserve nav behavior if hash present
     if(location.hash){
       const h = location.hash.replace('#','');
-      const mapping = { products:'products', order:'order', bulk:'bulk', safety:'safety', contact:'contact', orderNow:'orderNow', dashboard:'dashboard' };
+      const mapping = { products:'products', order:'order', bulk:'bulk', safety:'safety', contact:'contact', orderNow:'orderNow', dashboard:'dashboard', auth:'auth' };
       if(mapping[h]) activateSection(mapping[h]);
     }
+
+    // -------------------------
+    // Service Worker Registration
+    // -------------------------
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => console.log('SW registered:', registration))
+          .catch(err => console.log('SW registration failed:', err));
+      });
+    }
+
+    // -------------------------
+    // Handle window resize - close mobile menu if resized to desktop
+    // -------------------------
+    const handleResize = debounce(() => {
+      if (window.innerWidth > 768) {
+        mainNav.classList.remove('mobile-open');
+        hamburgerBtn.classList.remove('active');
+        hamburgerBtn.setAttribute('aria-expanded', 'false');
+      }
+    }, 250);
+
+    window.addEventListener('resize', handleResize);
+    
+    // -------------------------
+    // Initialize Enhanced App
+    // -------------------------
+    document.addEventListener('DOMContentLoaded', initializeApp);
+    
+    // Fallback initialization if DOMContentLoaded already fired
+    if (document.readyState === 'loading') {
+      // Wait for DOMContentLoaded
+    } else {
+      // DOM is already ready
+      initializeApp();
+    }
+    
+    // Add navigation helper for accessing other parts of the system
+    function navigateToAuth() {
+        AppRouter.redirectTo('app.html');
+    }
+    
+    function navigateToLanding() {
+        AppRouter.redirectTo('gasfill_verion3.html');
+    }
+    
+    // Check if user should be redirected based on role
+    document.addEventListener('DOMContentLoaded', function() {
+        const user = AppRouter.getCurrentUser();
+        if (user && user.role === 'rider') {
+            // Riders should use their dashboard instead
+            if (confirm('Would you like to go to your rider dashboard?')) {
+                AppRouter.redirectTo('rider_dashboard.html');
+            }
+        } else if (user && user.role === 'admin') {
+            // Admins can stay but show they have admin access
+            console.log('Admin user detected - full system access available');
+        }
+    });
+    
   </script>
 </body>
 </html>
