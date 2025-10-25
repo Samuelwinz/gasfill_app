@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -295,11 +294,7 @@ function AppStack() {
   );
 }
 
-// Root Navigator
-export default function Navigation() {
-  return (
-    <NavigationContainer>
-      <AppStack />
-    </NavigationContainer>
-  );
+// Root Navigator - now just returns the AppStack
+export default function MainNavigation() {
+  return <AppStack />;
 }

@@ -1,13 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
 import React from 'react';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import Navigation from './src/components/Navigation';
+import AuthNavigation from './src/components/AuthNavigation';
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <Navigation />
+    <>
+      <AuthNavigation />
       <StatusBar style="auto" />
-    </SafeAreaProvider>
+    </>
   );
 }

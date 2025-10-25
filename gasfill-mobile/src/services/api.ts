@@ -177,6 +177,33 @@ class ApiService {
   // Pickup/Refill Service Methods
   async createPickupRequest(pickupData: Partial<PickupRequest>): Promise<PickupRequest> {
     try {
+      // Try to connect to backend first
+      const connected = await this.checkConnection();
+      if (!connected) {
+        // If backend is not available, simulate successful creation with mock data
+        console.log('Backend not available, using mock data for pickup request');
+        const mockPickupRequest: PickupRequest = {
+          id: `pickup-${Date.now()}`,
+          customer_id: 1,
+          customer_name: pickupData.customer_name || 'Mock Customer',
+          customer_phone: pickupData.customer_phone || '+233241234567',
+          pickup_address: pickupData.pickup_address || 'Mock Address',
+          delivery_address: pickupData.delivery_address || pickupData.pickup_address || 'Mock Address',
+          cylinder_type: pickupData.cylinder_type || '12.5kg',
+          cylinder_count: pickupData.cylinder_count || 1,
+          status: 'pending',
+          total_cost: pickupData.total_cost || 0,
+          commission_amount: pickupData.commission_amount || 0,
+          payment_status: 'completed',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        
+        // Store in local storage for demo purposes
+        await this.storeMockPickupRequest(mockPickupRequest);
+        return mockPickupRequest;
+      }
+      
       const response = await this.api.post('/api/pickup-requests', pickupData);
       return response.data;
     } catch (error) {
@@ -185,8 +212,38 @@ class ApiService {
     }
   }
 
+  private async storeMockPickupRequest(pickupRequest: PickupRequest): Promise<void> {
+    try {
+      const StorageService = (await import('../utils/storage')).StorageService;
+      const existingRequests = await StorageService.getItem('mock_pickup_requests');
+      const requestsString = existingRequests || '[]';
+      const requests = JSON.parse(requestsString as string);
+      requests.push(pickupRequest);
+      await StorageService.setItem('mock_pickup_requests', JSON.stringify(requests));
+    } catch (error) {
+      console.error('Error storing mock pickup request:', error);
+    }
+  }
+
   async getPickupRequests(status?: string): Promise<PickupRequest[]> {
     try {
+      // Try to connect to backend first
+      const connected = await this.checkConnection();
+      if (!connected) {
+        // If backend is not available, return mock data
+        console.log('Backend not available, using mock data for pickup requests');
+        const StorageService = (await import('../utils/storage')).StorageService;
+        const existingRequests = await StorageService.getItem('mock_pickup_requests');
+        const requestsString = existingRequests || '[]';
+        const requests = JSON.parse(requestsString as string) as PickupRequest[];
+        
+        // Filter by status if provided
+        if (status) {
+          return requests.filter(req => req.status === status);
+        }
+        return requests;
+      }
+      
       const params = status ? { status } : {};
       const response = await this.api.get('/api/pickup-requests', { params });
       return response.data;

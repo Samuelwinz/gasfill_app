@@ -6,11 +6,11 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  SafeAreaView,
   Modal,
   TextInput,
   Switch,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/api';
 import { Rider, RefillOutlet, Commission, AdminStats, Payout } from '../types';

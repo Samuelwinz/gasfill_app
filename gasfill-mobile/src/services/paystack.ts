@@ -3,7 +3,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 
 class PaystackService {
-  private static readonly PUBLIC_KEY = 'pk_test_your_paystack_public_key'; // Replace with actual key
+  private static readonly PUBLIC_KEY = 'pk_test_8f47d72c938927ad07587345c116684e3ce8266f'; // Replace with actual key
   private static readonly BASE_URL = 'https://api.paystack.co';
 
   static async initializePayment(payment: PaystackPayment): Promise<string> {
