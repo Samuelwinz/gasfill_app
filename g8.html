@@ -7,6 +7,10 @@
   <meta name="description" content="GasFill — premium cylinder delivery and refill. SPA demo with dashboard, orders and product catalog."/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <!-- Paystack Inline Script -->
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <!-- Centralized Routing System -->
+  <script src="routes.js"></script>
   <style>
     :root{
       --bg:#f6f8fb;
@@ -1107,19 +1111,65 @@
     <!-- Floating cart -->
     <button class="cart-btn" id="openCartBtn" title="Open cart" aria-label="Open shopping cart">Cart (<span id="cartCount">0</span>)</button>
 
-    <!-- Cart Modal (simple) -->
+    <!-- Cart Modal (Enhanced with Payment) -->
     <div id="cartModal" style="display:none;position:fixed;inset:0;background:rgba(4,8,15,0.45);align-items:center;justify-content:center;z-index:80" role="dialog" aria-labelledby="cartTitle" aria-modal="true">
-      <div style="width:100%;max-width:520px;background:#fff;border-radius:12px;padding:18px;box-shadow:0 16px 40px rgba(2,6,23,0.2);margin:20px">
-        <div style="display:flex;align-items:center;justify-content:space-between"><h3 id="cartTitle" style="margin:0">Your Cart</h3><button onclick="closeCart()" class="small" aria-label="Close cart">Close</button></div>
-        <div id="cartItems" style="margin-top:12px;display:flex;flex-direction:column;gap:10px"></div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
-          <div class="small muted-2">Total</div><div id="cartTotal" style="font-weight:800">₵0</div>
+      <div style="width:100%;max-width:580px;background:#fff;border-radius:12px;padding:24px;box-shadow:0 16px 40px rgba(2,6,23,0.2);margin:20px;max-height:90vh;overflow-y:auto">
+        
+        <!-- Cart Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <h3 id="cartTitle" style="margin:0;color:var(--accent2)">Your Cart</h3>
+          <button onclick="closeCart()" class="small" aria-label="Close cart" style="background:var(--bg);border:1px solid #e2e8f0;padding:8px 12px;border-radius:8px">✕ Close</button>
         </div>
-        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-          <button onclick="checkoutCart()" class="checkout-button cta" aria-label="Checkout cart">🛒 Checkout</button>
-          <button onclick="clearCart()" style="background:#fff;border:1px solid #eef6ff;padding:8px;border-radius:8px" aria-label="Clear cart">Clear</button>
+        
+        <!-- Cart Items -->
+        <div id="cartItems" style="margin-bottom:20px;display:flex;flex-direction:column;gap:12px;max-height:200px;overflow-y:auto"></div>
+        
+        <!-- Cart Total -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding:12px;background:var(--bg);border-radius:8px">
+          <div style="font-weight:600;color:var(--accent2)">Total</div>
+          <div id="cartTotal" style="font-weight:800;font-size:1.2rem;color:var(--accent1)">₵0</div>
         </div>
-        <div id="cartFeedback" class="small" style="margin-top:8px;color:green"></div>
+
+        <!-- Customer Details Form -->
+        <div id="checkoutForm" style="display:none;border-top:1px solid #e2e8f0;padding-top:20px">
+          <h4 style="margin:0 0 16px 0;color:var(--accent2)">Delivery Details</h4>
+          
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <label style="display:block;margin-bottom:4px;font-weight:500;color:var(--muted)">Full Name</label>
+              <input type="text" id="customerName" required style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px" placeholder="Enter your name">
+            </div>
+            <div>
+              <label style="display:block;margin-bottom:4px;font-weight:500;color:var(--muted)">Phone Number</label>
+              <input type="tel" id="customerPhone" required style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px" placeholder="+233 20 123 4567">
+            </div>
+          </div>
+          
+          <div style="margin-bottom:12px">
+            <label style="display:block;margin-bottom:4px;font-weight:500;color:var(--muted)">Email Address</label>
+            <input type="email" id="customerEmail" required style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px" placeholder="your@email.com">
+          </div>
+          
+          <div style="margin-bottom:16px">
+            <label style="display:block;margin-bottom:4px;font-weight:500;color:var(--muted)">Delivery Address</label>
+            <textarea id="deliveryAddress" required style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;min-height:60px;resize:vertical" placeholder="Enter your delivery address"></textarea>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <button id="proceedToCheckout" onclick="showCheckoutForm()" class="checkout-button cta" aria-label="Proceed to checkout" style="flex:1">
+            🛒 Proceed to Checkout
+          </button>
+          <button id="payWithPaystack" onclick="initiatePaystackPayment()" class="checkout-button cta" aria-label="Pay with Paystack" style="display:none;flex:1;background:var(--accent1)">
+            💳 Pay Now - ₵<span id="paymentAmount">0</span>
+          </button>
+          <button onclick="clearCart()" style="background:#fff;border:1px solid #e2e8f0;padding:12px 16px;border-radius:8px;font-weight:500" aria-label="Clear cart">
+            🗑️ Clear Cart
+          </button>
+        </div>
+        
+        <div id="cartFeedback" class="small" style="margin-top:12px;padding:8px;border-radius:6px;display:none"></div>
       </div>
     </div>
 
@@ -1137,6 +1187,15 @@
   </div>
 
   <script>
+    // -------------------------
+    // Paystack Configuration
+    // -------------------------
+    const PAYSTACK_CONFIG = {
+      publicKey: 'pk_test_your_paystack_public_key_here', // Replace with your actual Paystack public key
+      currency: 'GHS', // Ghana Cedis
+      country: 'GH' // Ghana
+    };
+
     // -------------------------
     // API Configuration & Service Layer
     // -------------------------
@@ -1766,9 +1825,10 @@
           price: item.price
         })),
         total: total,
-        customerName: 'Cart Order', // Will be updated when user management is added
-        customerPhone: '', // Will be updated when user management is added
-        deliveryAddress: 'To be provided' // Will be updated when user management is added
+        customer_email: AuthManager.currentUser?.email || 'guest',
+        customerName: AuthManager.currentUser?.name || 'Cart Order',
+        customerPhone: AuthManager.currentUser?.phone || '',
+        deliveryAddress: AuthManager.currentUser?.address || 'To be provided'
       };
       
       try {
@@ -1800,6 +1860,325 @@
     }
 
     // -------------------------
+    // Paystack Payment Integration
+    // -------------------------
+    
+    function showCheckoutForm() {
+      const cart = loadCart();
+      if (!cart.length) {
+        showCartFeedback('Cart is empty', 'error');
+        return;
+      }
+      
+      // Show checkout form and update UI
+      document.getElementById('checkoutForm').style.display = 'block';
+      document.getElementById('proceedToCheckout').style.display = 'none';
+      document.getElementById('payWithPaystack').style.display = 'block';
+      
+      // Update payment amount
+      const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      document.getElementById('paymentAmount').textContent = total.toFixed(2);
+      
+      // Scroll to form
+      document.getElementById('checkoutForm').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    
+    function hideCheckoutForm() {
+      document.getElementById('checkoutForm').style.display = 'none';
+      document.getElementById('proceedToCheckout').style.display = 'block';
+      document.getElementById('payWithPaystack').style.display = 'none';
+    }
+    
+    function validateCheckoutForm() {
+      const name = document.getElementById('customerName').value.trim();
+      const phone = document.getElementById('customerPhone').value.trim();
+      const email = document.getElementById('customerEmail').value.trim();
+      const address = document.getElementById('deliveryAddress').value.trim();
+      
+      if (!name) {
+        showCartFeedback('Please enter your full name', 'error');
+        document.getElementById('customerName').focus();
+        return false;
+      }
+      
+      if (!phone) {
+        showCartFeedback('Please enter your phone number', 'error');
+        document.getElementById('customerPhone').focus();
+        return false;
+      }
+      
+      if (!email || !email.includes('@')) {
+        showCartFeedback('Please enter a valid email address', 'error');
+        document.getElementById('customerEmail').focus();
+        return false;
+      }
+      
+      if (!address) {
+        showCartFeedback('Please enter your delivery address', 'error');
+        document.getElementById('deliveryAddress').focus();
+        return false;
+      }
+      
+      return { name, phone, email, address };
+    }
+    
+    function initiatePaystackPayment() {
+      const cart = loadCart();
+      const customerData = validateCheckoutForm();
+      
+      if (!customerData) return;
+      
+      const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      const amountInPesewas = Math.round(total * 100); // Convert cedis to pesewas
+      
+      showCartFeedback('Initializing payment...', 'info');
+      
+      const paymentData = {
+        key: PAYSTACK_CONFIG.publicKey,
+        email: customerData.email,
+        amount: amountInPesewas, // Amount in pesewas (smallest currency unit)
+        currency: PAYSTACK_CONFIG.currency,
+        ref: 'gasfill_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+        channels: ['card', 'bank', 'ussd', 'mobile_money'],
+        metadata: {
+          custom_fields: [
+            {
+              display_name: "Customer Name",
+              variable_name: "customer_name",
+              value: customerData.name
+            },
+            {
+              display_name: "Phone Number", 
+              variable_name: "phone_number",
+              value: customerData.phone
+            },
+            {
+              display_name: "Delivery Address",
+              variable_name: "delivery_address", 
+              value: customerData.address
+            },
+            {
+              display_name: "Cart Items",
+              variable_name: "cart_items",
+              value: JSON.stringify(cart)
+            }
+          ]
+        },
+        callback: function(response) {
+          handlePaymentSuccess(response, customerData, cart, total);
+        },
+        onClose: function() {
+          showCartFeedback('Payment cancelled', 'error');
+        }
+      };
+      
+      try {
+        PaystackPop.setup(paymentData).openIframe();
+      } catch (error) {
+        console.error('Paystack initialization error:', error);
+        showCartFeedback('Payment system unavailable. Please try again.', 'error');
+        
+        // Fallback to regular checkout
+        checkoutWithoutPayment(customerData, cart, total);
+      }
+    }
+    
+    async function handlePaymentSuccess(response, customerData, cart, total) {
+      showCartFeedback('Payment successful! Creating your order...', 'success');
+      
+      try {
+        // Create order with payment information
+        await createPaidOrder(response, customerData, cart, total);
+      } catch (error) {
+        console.error('Order creation error:', error);
+        // Still create order but mark payment as pending verification
+        await createPaidOrder(response, customerData, cart, total, 'pending_verification');
+      }
+    }
+    
+    async function createPaidOrder(paymentResponse, customerData, cart, total, paymentStatus = 'paid') {
+      const orderData = {
+        items: cart.map(item => ({
+          name: item.name,
+          quantity: item.qty,
+          price: item.price
+        })),
+        total: total,
+        customerName: customerData.name,
+        customerPhone: customerData.phone,
+        customerEmail: customerData.email,
+        deliveryAddress: customerData.address,
+        paymentStatus: paymentStatus,
+        paymentMethod: 'paystack',
+        paymentReference: paymentResponse.reference,
+        paymentData: {
+          reference: paymentResponse.reference,
+          status: paymentResponse.status,
+          gateway_response: paymentResponse.gateway_response,
+          paid_at: new Date().toISOString()
+        }
+      };
+      
+      try {
+        // Try to create order via API
+        const result = await APIService.createOrder(orderData);
+        
+        // Save locally for offline access
+        const orders = loadOrders();
+        const localOrder = {
+          id: result.id,
+          items: cart,
+          total,
+          status: 'paid',
+          paymentStatus: paymentStatus,
+          paymentReference: paymentResponse.reference,
+          customerName: customerData.name,
+          customerPhone: customerData.phone,
+          customerEmail: customerData.email,
+          deliveryAddress: customerData.address,
+          createdAt: new Date().toISOString()
+        };
+        orders.unshift(localOrder);
+        saveOrders(orders);
+        
+        clearCart();
+        hideCheckoutForm();
+        closeCart();
+        showFeedback(`Payment successful! Order #${result.id} created. You will receive a confirmation SMS.`);
+        
+      } catch (error) {
+        console.log('API unavailable, saving locally:', error.message);
+        
+        // Fallback to localStorage
+        const orders = loadOrders();
+        const id = 'ORD-' + Date.now();
+        const order = {
+          id,
+          items: cart,
+          total,
+          status: 'paid',
+          paymentStatus: paymentStatus,
+          paymentReference: paymentResponse.reference,
+          customerName: customerData.name,
+          customerPhone: customerData.phone,
+          customerEmail: customerData.email,
+          deliveryAddress: customerData.address,
+          createdAt: new Date().toISOString()
+        };
+        orders.unshift(order);
+        saveOrders(orders);
+        
+        clearCart();
+        hideCheckoutForm();
+        closeCart();
+        showFeedback(`Payment successful! Order ${id} saved locally. You will receive a confirmation SMS.`);
+      }
+      
+      renderDashboard();
+    }
+    
+    async function checkoutWithoutPayment(customerData, cart, total) {
+      // Fallback for when Paystack is unavailable
+      const orderData = {
+        items: cart.map(item => ({
+          name: item.name,
+          quantity: item.qty,
+          price: item.price
+        })),
+        total: total,
+        customerName: customerData.name,
+        customerPhone: customerData.phone,
+        customerEmail: customerData.email,
+        deliveryAddress: customerData.address,
+        paymentStatus: 'pending',
+        paymentMethod: 'cash_on_delivery'
+      };
+      
+      try {
+        const result = await APIService.createOrder(orderData);
+        
+        const orders = loadOrders();
+        const localOrder = {
+          id: result.id,
+          items: cart,
+          total,
+          status: 'pending',
+          paymentStatus: 'pending',
+          customerName: customerData.name,
+          customerPhone: customerData.phone,
+          customerEmail: customerData.email,
+          deliveryAddress: customerData.address,
+          createdAt: new Date().toISOString()
+        };
+        orders.unshift(localOrder);
+        saveOrders(orders);
+        
+        clearCart();
+        hideCheckoutForm();
+        closeCart();
+        showFeedback(`Order #${result.id} created successfully! Payment on delivery.`);
+        
+      } catch (error) {
+        console.log('API unavailable, saving locally:', error.message);
+        
+        const orders = loadOrders();
+        const id = 'ORD-' + Date.now();
+        const order = {
+          id,
+          items: cart,
+          total,
+          status: 'pending',
+          paymentStatus: 'pending',
+          customerName: customerData.name,
+          customerPhone: customerData.phone,
+          customerEmail: customerData.email,
+          deliveryAddress: customerData.address,
+          createdAt: new Date().toISOString()
+        };
+        orders.unshift(order);
+        saveOrders(orders);
+        
+        clearCart();
+        hideCheckoutForm();
+        closeCart();
+        showFeedback(`Order ${id} created successfully! Payment on delivery.`);
+      }
+      
+      renderDashboard();
+    }
+    
+    function showCartFeedback(message, type = 'info') {
+      const feedback = document.getElementById('cartFeedback');
+      feedback.textContent = message;
+      feedback.style.display = 'block';
+      
+      // Set colors based on type
+      switch (type) {
+        case 'success':
+          feedback.style.background = '#d1fae5';
+          feedback.style.color = '#065f46';
+          feedback.style.border = '1px solid #a7f3d0';
+          break;
+        case 'error':
+          feedback.style.background = '#fee2e2';
+          feedback.style.color = '#991b1b';
+          feedback.style.border = '1px solid #fca5a5';
+          break;
+        case 'info':
+        default:
+          feedback.style.background = '#dbeafe';
+          feedback.style.color = '#1e40af';
+          feedback.style.border = '1px solid #93c5fd';
+          break;
+      }
+      
+      // Auto-hide after 5 seconds
+      setTimeout(() => {
+        feedback.style.display = 'none';
+      }, 5000);
+    }
+
+    // -------------------------
     // ORDERS (localStorage)
     // -------------------------
     function loadOrders(){ try{ return JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]') }catch(e){ return [] } }
@@ -1825,6 +2204,7 @@
         }],
         customerName: name,
         customerPhone: phone,
+        customer_email: AuthManager.currentUser?.email || 'guest',
         deliveryAddress: addr,
         total: total
       };
@@ -1869,9 +2249,10 @@
           price: price
         }],
         total: price,
-        customerName: 'Quick Order', // Will be updated when user management is added
-        customerPhone: '', // Will be updated when user management is added
-        deliveryAddress: 'To be provided' // Will be updated when user management is added
+        customer_email: AuthManager.currentUser?.email || 'guest',
+        customerName: AuthManager.currentUser?.name || 'Quick Order',
+        customerPhone: AuthManager.currentUser?.phone || '',
+        deliveryAddress: AuthManager.currentUser?.address || 'To be provided'
       };
       
       try {
@@ -1918,21 +2299,23 @@
     // ENHANCED DASHBOARD render - with rider info and tracking
     // -------------------------
     async function renderDashboard(){
-      let orders = loadOrders(); // Start with local orders
+      let orders = [];
       
-      // Try to fetch from API and merge with local orders
-      try {
-        const apiOrders = await APIService.getOrders();
-        // Merge API orders with local orders, avoiding duplicates
-        const allOrders = [...apiOrders];
-        orders.forEach(localOrder => {
-          if (!allOrders.find(order => order.id === localOrder.id)) {
-            allOrders.push(localOrder);
-          }
-        });
-        orders = allOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      } catch (error) {
-        console.log('API unavailable for dashboard, using local orders:', error.message);
+      // If authenticated, fetch from API with customer email filtering
+      if (APIService.authToken && AuthManager.currentUser) {
+        try {
+          // Fetch customer's orders from backend
+          const apiOrders = await APIService.request('/customer/orders');
+          orders = apiOrders || [];
+          // Sort by creation date, newest first
+          orders.sort((a, b) => new Date(b.created_at || b.createdAt) - new Date(a.created_at || a.createdAt));
+        } catch (error) {
+          console.log('API fetch failed, using local orders:', error.message);
+          orders = loadOrders();
+        }
+      } else {
+        // Fallback to local orders if not authenticated
+        orders = loadOrders();
       }
       
       const statOrdersEl = document.getElementById('statOrders');
@@ -1954,17 +2337,18 @@
         div.className='order-row';
         
         const statusInfo = OrderStatusManager.getStatusDisplay(o.status);
-        const timeAgo = getTimeAgo(new Date(o.createdAt));
+        const createdDate = o.created_at || o.createdAt;
+        const timeAgo = getTimeAgo(new Date(createdDate));
         
         const left = document.createElement('div'); 
         left.innerHTML = `
           <div style="font-weight:800;display:flex;align-items:center;gap:8px">
-            ${escapeHtml(o.product||'Cart order')} 
-            <span class="small" style="color:#94a3b8">(${o.qty||1})</span>
-            ${o.rider ? `<div class="rider-info">👤 ${o.rider.name}</div>` : ''}
+            ${escapeHtml(o.product || o.customer_name || 'Cart order')} 
+            <span class="small" style="color:#94a3b8">(Order: ${o.id})</span>
+            ${o.rider_id ? `<div class="rider-info">👤 Assigned to rider</div>` : ''}
           </div>
           <div class="small muted-2">${timeAgo} • ${o.total ? '₵' + o.total : 'Total pending'}</div>
-          ${o.estimatedArrival ? `<div class="eta-badge">ETA: ${getTimeFromNow(new Date(o.estimatedArrival))}</div>` : ''}
+          ${o.tracking_info && o.tracking_info.estimated_arrival ? `<div class="eta-badge">ETA: ${getTimeFromNow(new Date(o.tracking_info.estimated_arrival))}</div>` : ''}
         `;
         
         const right = document.createElement('div'); 
@@ -1979,7 +2363,7 @@
         if (o.status === 'nearby') {
           const callBtn = document.createElement('button'); 
           callBtn.textContent='Call Rider'; 
-          callBtn.onclick = ()=> window.location.href = `tel:${o.rider?.phone || '+233201022153'}`;
+          callBtn.onclick = ()=> window.location.href = `tel:+233201022153`;
           callBtn.setAttribute('aria-label', 'Call rider');
           right.appendChild(callBtn);
         } else if (o.status === 'delivered') {
@@ -2469,6 +2853,30 @@
       // DOM is already ready
       initializeApp();
     }
+    
+    // Add navigation helper for accessing other parts of the system
+    function navigateToAuth() {
+        AppRouter.redirectTo('app.html');
+    }
+    
+    function navigateToLanding() {
+        AppRouter.redirectTo('gasfill_verion3.html');
+    }
+    
+    // Check if user should be redirected based on role
+    document.addEventListener('DOMContentLoaded', function() {
+        const user = AppRouter.getCurrentUser();
+        if (user && user.role === 'rider') {
+            // Riders should use their dashboard instead
+            if (confirm('Would you like to go to your rider dashboard?')) {
+                AppRouter.redirectTo('rider_dashboard.html');
+            }
+        } else if (user && user.role === 'admin') {
+            // Admins can stay but show they have admin access
+            console.log('Admin user detected - full system access available');
+        }
+    });
+    
   </script>
 </body>
 </html>

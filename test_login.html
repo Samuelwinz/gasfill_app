@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login Test</title>
+</head>
+<body>
+    <h1>Login Test</h1>
+    
+    <div>
+        <h2>Register Test User</h2>
+        <button onclick="registerTestUser()">Register Test User</button>
+        <div id="registerResult"></div>
+    </div>
+    
+    <div>
+        <h2>Login Test</h2>
+        <button onclick="loginTestUser()">Login Test User</button>
+        <div id="loginResult"></div>
+    </div>
+    
+    <div>
+        <h2>Check Users in DB</h2>
+        <button onclick="checkUsers()">Check Users</button>
+        <div id="usersResult"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:5002/api';
+        
+        async function registerTestUser() {
+            const userData = {
+                username: "testuser",
+                email: "test@example.com",
+                password: "password123",
+                phone: "+233501234567",
+                address: "Test Address, Accra",
+                role: "customer"
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(userData)
+                });
+                
+                const result = await response.json();
+                document.getElementById('registerResult').innerHTML = 
+                    `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+                console.log('Register result:', result);
+            } catch (error) {
+                document.getElementById('registerResult').innerHTML = 
+                    `<pre>Error: ${error.message}</pre>`;
+                console.error('Register error:', error);
+            }
+        }
+        
+        async function loginTestUser() {
+            const loginData = {
+                email: "test@example.com",
+                password: "password123"
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(loginData)
+                });
+                
+                const result = await response.json();
+                document.getElementById('loginResult').innerHTML = 
+                    `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+                console.log('Login result:', result);
+            } catch (error) {
+                document.getElementById('loginResult').innerHTML = 
+                    `<pre>Error: ${error.message}</pre>`;
+                console.error('Login error:', error);
+            }
+        }
+        
+        async function checkUsers() {
+            try {
+                const response = await fetch(`${API_BASE}/debug/users`, {
+                    method: 'GET'
+                });
+                
+                const result = await response.json();
+                document.getElementById('usersResult').innerHTML = 
+                    `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+                console.log('Users result:', result);
+            } catch (error) {
+                document.getElementById('usersResult').innerHTML = 
+                    `<pre>Error: ${error.message}</pre>`;
+                console.error('Users error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

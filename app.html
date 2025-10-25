@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GasFill - LPG Delivery Service</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Paystack Inline Script -->
+    <script src="https://js.paystack.co/v1/inline.js"></script>
     <style>
         :root {
             --primary: #0f766e;
@@ -39,11 +41,13 @@
 
         /* Header */
         .header {
-            background: var(--surface);
-            box-shadow: var(--shadow);
+            background: linear-gradient(135deg, var(--surface) 0%, #f1f5f9 100%);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
             position: sticky;
             top: 0;
-            z-index: 100;
+            z-index: 1000;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .nav {
@@ -53,28 +57,169 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: relative;
         }
 
         .logo {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--primary);
+            font-size: 1.8rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
         }
 
+        .logo:hover {
+            transform: scale(1.05);
+        }
+
+        .logo::before {
+            content: '⛽';
+            font-size: 1.5rem;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+        }
+
+        /* Mobile Menu Toggle */
+        .mobile-menu-toggle {
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .mobile-menu-toggle:hover {
+            background: var(--background);
+        }
+
+        .hamburger-line {
+            width: 24px;
+            height: 3px;
+            background: var(--primary);
+            border-radius: 2px;
+            transition: all 0.3s ease;
+            transform-origin: center;
+        }
+
+        .mobile-menu-toggle.active .hamburger-line:nth-child(1) {
+            transform: rotate(45deg) translateY(7px);
+        }
+
+        .mobile-menu-toggle.active .hamburger-line:nth-child(2) {
+            opacity: 0;
+            transform: scaleX(0);
+        }
+
+        .mobile-menu-toggle.active .hamburger-line:nth-child(3) {
+            transform: rotate(-45deg) translateY(-7px);
+        }
+
+        /* Navigation Buttons */
         .nav-buttons {
             display: flex;
-            gap: 1rem;
+            gap: 0.75rem;
             align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .nav-btn {
+            position: relative;
+            padding: 0.75rem 1.25rem;
+            border: none;
+            border-radius: 0.75rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            white-space: nowrap;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.8);
+            color: var(--text);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            background: rgba(255, 255, 255, 0.95);
+        }
+
+        .nav-btn:active {
+            transform: translateY(0);
+        }
+
+        .nav-btn.active {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            box-shadow: 0 4px 20px rgba(15, 118, 110, 0.3);
+        }
+
+        /* Cart Badge */
+        .cart-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: linear-gradient(135deg, var(--error) 0%, #f87171 100%);
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            min-width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
         }
 
         .user-info {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            background: var(--background);
-            border-radius: 0.5rem;
-            border: 1px solid var(--border);
+            gap: 0.75rem;
+            padding: 0.75rem 1.25rem;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.9) 100%);
+            border-radius: 0.75rem;
+            border: 1px solid rgba(226, 232, 240, 0.5);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 0.875rem;
+        }
+
+        .user-email {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text);
         }
 
         /* Main Container */
@@ -356,6 +501,21 @@
         }
 
         /* Mobile Responsiveness */
+        @media (max-width: 1024px) {
+            .container {
+                padding: 1.5rem;
+            }
+            
+            .grid-3 {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1.5rem;
+            }
+            
+            .nav {
+                padding: 1rem 1.5rem;
+            }
+        }
+
         @media (max-width: 768px) {
             .nav {
                 padding: 1rem;
@@ -365,20 +525,829 @@
                 padding: 1rem;
             }
 
-            .nav-buttons {
-                flex-direction: column;
-                gap: 0.5rem;
+            /* Mobile Navigation */
+            .mobile-menu-toggle {
+                display: flex;
             }
 
+            .nav-buttons {
+                position: fixed;
+                top: 0;
+                right: -100%;
+                width: 280px;
+                height: 100vh;
+                background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
+                backdrop-filter: blur(20px);
+                flex-direction: column;
+                justify-content: flex-start;
+                align-items: stretch;
+                padding: 5rem 2rem 2rem;
+                gap: 1rem;
+                box-shadow: -10px 0 30px rgba(0, 0, 0, 0.1);
+                transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                z-index: 999;
+            }
+
+            .nav-buttons.mobile-open {
+                right: 0;
+            }
+
+            .nav-btn {
+                width: 100%;
+                justify-content: flex-start;
+                padding: 1rem 1.5rem;
+                font-size: 1rem;
+                border-radius: 0.75rem;
+            }
+
+            .user-info {
+                width: 100%;
+                justify-content: center;
+                margin-bottom: 1rem;
+                padding: 1rem;
+            }
+
+            /* Mobile Overlay */
+            .mobile-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                backdrop-filter: blur(2px);
+                z-index: 998;
+                opacity: 0;
+                visibility: hidden;
+                transition: all 0.3s ease;
+            }
+
+            .mobile-overlay.active {
+                opacity: 1;
+                visibility: visible;
+            }
+
+            /* Mobile Grid Adjustments */
             .grid-3 {
                 grid-template-columns: 1fr;
+                gap: 1rem;
             }
 
+            .grid-2 {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            /* Mobile Product Cards */
+            .product-card {
+                transform: none;
+                transition: box-shadow 0.3s ease;
+            }
+
+            .product-card:hover {
+                transform: none;
+                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            }
+
+            .product-image {
+                height: 150px;
+                font-size: 2.5rem;
+            }
+
+            .product-info {
+                padding: 1rem;
+            }
+
+            /* Mobile Notifications */
             .notification {
                 left: 1rem;
                 right: 1rem;
+                top: 5rem;
                 min-width: auto;
+                transform: translateY(-100px);
             }
+
+            .notification.show {
+                transform: translateY(0);
+            }
+
+            /* Mobile Forms */
+            .form-input, .btn {
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+
+            /* Mobile Cart */
+            .cart-item {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+
+            .cart-item > div:last-child {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .logo {
+                font-size: 1.5rem;
+            }
+
+            .nav {
+                padding: 0.75rem;
+            }
+
+            .container {
+                padding: 0.75rem;
+            }
+
+            .nav-buttons {
+                width: 100%;
+                right: -100%;
+            }
+
+            .product-image {
+                height: 120px;
+                font-size: 2rem;
+            }
+
+            .card {
+                padding: 1rem;
+            }
+
+            .btn {
+                padding: 0.875rem 1.25rem;
+                font-size: 0.875rem;
+            }
+
+            /* Smaller mobile adjustments */
+            .cart-badge {
+                top: -6px;
+                right: -6px;
+                font-size: 0.625rem;
+                padding: 0.125rem 0.375rem;
+                min-width: 16px;
+                height: 16px;
+            }
+        }
+
+        /* Landscape Mobile */
+        @media (max-width: 768px) and (orientation: landscape) {
+            .nav-buttons {
+                height: 100vh;
+                padding: 3rem 2rem 2rem;
+            }
+            
+            .product-image {
+                height: 100px;
+            }
+        }
+
+        /* Touch-friendly improvements */
+        @media (hover: none) and (pointer: coarse) {
+            .btn, .nav-btn {
+                min-height: 48px;
+                min-width: 48px;
+            }
+            
+            .product-card:hover {
+                transform: none;
+            }
+            
+            .nav-btn:hover {
+                transform: none;
+            }
+        }
+
+        /* Scroll Animations */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.6s ease;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Enhanced Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--background);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%);
+        }
+
+        /* Loading States */
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Improved Focus States */
+        .btn:focus,
+        .form-input:focus,
+        .nav-btn:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        /* Smooth Scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Section Transitions */
+        .section {
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.4s ease;
+        }
+
+        .section.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Services Styling */
+        .service-card {
+            text-align: center;
+            padding: 2rem;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+
+        .service-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-8px);
+            box-shadow: 0 12px 40px rgba(15, 118, 110, 0.15);
+        }
+
+        .service-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .service-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--text);
+        }
+
+        .service-description {
+            color: var(--text-muted);
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }
+
+        .service-features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+        }
+
+        .feature-tag {
+            background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        /* Package Cards */
+        .package-card {
+            background: var(--surface);
+            border: 2px solid var(--border);
+            border-radius: 1rem;
+            padding: 2rem;
+            text-align: center;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .package-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+        }
+
+        .package-card.featured {
+            border-color: var(--primary);
+            background: linear-gradient(135deg, rgba(15, 118, 110, 0.05) 0%, rgba(20, 184, 166, 0.05) 100%);
+        }
+
+        .package-badge {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, var(--accent) 0%, #f59e0b 100%);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .package-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .package-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--text);
+        }
+
+        .package-price {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 1.5rem;
+        }
+
+        .package-features {
+            list-style: none;
+            text-align: left;
+            margin-bottom: 2rem;
+        }
+
+        .package-features li {
+            padding: 0.5rem 0;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .package-features li:first-child {
+            padding-top: 0;
+        }
+
+        /* Service Tracking Styles */
+        .status-card {
+            background: var(--surface);
+            border: 2px solid var(--border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .status-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .status-title {
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 0.5rem;
+        }
+
+        .status-count {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--primary);
+        }
+
+        .service-tracking-item {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .service-tracking-item:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .service-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .service-info h4 {
+            margin: 0 0 0.5rem 0;
+            color: var(--text);
+            font-size: 1.125rem;
+        }
+
+        .service-meta {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .service-status {
+            background: var(--background);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .status-pending { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+        .status-assigned { background: #dbeafe; border-color: #3b82f6; color: #1e40af; }
+        .status-pickup_in_progress { background: #e0e7ff; border-color: #6366f1; color: #4338ca; }
+        .status-collected { background: #dcfce7; border-color: #22c55e; color: #15803d; }
+        .status-refill_in_progress { background: #fed7d7; border-color: #f56565; color: #c53030; }
+        .status-ready_for_delivery { background: #e6fffa; border-color: #38b2ac; color: #285e61; }
+        .status-delivery_in_progress { background: #f3e8ff; border-color: #8b5cf6; color: #5b21b6; }
+        .status-completed { background: #dcfce7; border-color: #16a34a; color: #14532d; }
+
+        .service-progress {
+            background: var(--background);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+            margin-bottom: 1rem;
+        }
+
+        .progress-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .progress-step-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .progress-step.active .progress-step-icon {
+            background: var(--primary);
+            color: white;
+        }
+
+        .progress-step.completed .progress-step-icon {
+            background: var(--success);
+            color: white;
+        }
+
+        .progress-step-label {
+            font-size: 0.75rem;
+            text-align: center;
+            color: var(--text-muted);
+            max-width: 80px;
+        }
+
+        .progress-line {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--border);
+            z-index: 0;
+        }
+
+        .progress-line-fill {
+            height: 100%;
+            background: var(--primary);
+            transition: width 0.5s ease;
+        }
+
+        .service-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .detail-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .detail-value {
+            font-size: 0.875rem;
+            color: var(--text);
+        }
+
+        .service-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .form-row .form-input {
+            min-width: 150px;
+        }
+
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+            background: var(--surface);
+            border-radius: 1rem;
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            z-index: 1;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 2rem 2rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 2rem;
+            cursor: pointer;
+            color: var(--text-muted);
+            padding: 0;
+            width: 2rem;
+            height: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: var(--background);
+            color: var(--text);
+        }
+
+        .modal-body {
+            padding: 2rem;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            padding: 1rem 2rem 2rem;
+            border-top: 1px solid var(--border);
+        }
+
+        /* Service Pricing */
+        .service-pricing {
+            background: var(--background);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .service-pricing h4 {
+            margin: 0 0 1rem 0;
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        .price-breakdown {
+            gap: 0.5rem;
+        }
+
+        .price-line {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            font-size: 0.875rem;
+        }
+
+        .price-line.total {
+            border-top: 1px solid var(--border);
+            font-weight: 700;
+            font-size: 1rem;
+            margin-top: 0.5rem;
+            padding-top: 1rem;
+        }
+
+        /* Service Request Items */
+        .service-request-item {
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .service-request-item:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 12px rgba(15, 118, 110, 0.1);
+        }
+
+        .service-request-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .service-request-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin: 0 0 0.25rem 0;
+            color: var(--text);
+        }
+
+        .service-request-id {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        .service-request-details {
+            margin-bottom: 1rem;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }
+
+        .service-request-details p {
+            margin: 0.25rem 0;
+        }
+
+        .service-request-actions {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        /* Mobile Modal Adjustments */
+        @media (max-width: 768px) {
+            .modal {
+                padding: 1rem;
+            }
+            
+            .modal-content {
+                max-height: 95vh;
+            }
+            
+            .modal-header,
+            .modal-body,
+            .modal-footer {
+                padding-left: 1.5rem;
+                padding-right: 1.5rem;
+            }
+            
+            .modal-footer {
+                flex-direction: column;
+            }
+            
+            .service-request-actions {
+                flex-direction: column;
+            }
+            
+            .service-features {
+                justify-content: flex-start;
+            }
+        }
+
+        /* Enhanced Typography */
+        h1, h2, h3, h4, h5, h6 {
+            line-height: 1.2;
+            letter-spacing: -0.025em;
+        }
+
+        /* Status Indicators */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-indicator::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
         }
 
         /* Hide sections by default */
@@ -458,18 +1427,52 @@
         <!-- Header -->
         <header class="header">
             <nav class="nav">
-                <div class="logo">GasFill</div>
-                <div class="nav-buttons">
+                <div class="logo" onclick="showSection('products')">GasFill</div>
+                
+                <!-- Mobile Menu Toggle -->
+                <button class="mobile-menu-toggle" onclick="toggleMobileMenu()">
+                    <span class="hamburger-line"></span>
+                    <span class="hamburger-line"></span>
+                    <span class="hamburger-line"></span>
+                </button>
+
+                <!-- Navigation Buttons -->
+                <div class="nav-buttons" id="navButtons">
                     <div class="user-info">
-                        <span id="userEmail">user@example.com</span>
+                        <div class="user-avatar" id="userAvatar">U</div>
+                        <span class="user-email" id="userEmail">user@example.com</span>
                     </div>
-                    <button class="btn btn-secondary" onclick="showSection('products')">Products</button>
-                    <button class="btn btn-secondary" onclick="showSection('cart')">Cart (<span id="cartCount">0</span>)</button>
-                    <button class="btn btn-secondary" onclick="showSection('orders')">Orders</button>
-                    <button class="btn btn-danger" onclick="logout()">Logout</button>
+                    <button class="nav-btn active" onclick="showSection('products')" data-section="products">
+                        🏠 Products
+                    </button>
+                    <button class="nav-btn" onclick="showSection('services')" data-section="services">
+                        🔧 Services
+                    </button>
+                    <button class="nav-btn" onclick="showSection('service-tracking')" data-section="service-tracking">
+                        📍 Service Tracking
+                    </button>
+                    <button class="nav-btn" onclick="showSection('cart')" data-section="cart">
+                        🛒 Cart
+                        <span class="cart-badge" id="cartCount">0</span>
+                    </button>
+                    <button class="nav-btn" onclick="showSection('orders')" data-section="orders">
+                        📦 Orders
+                    </button>
+                    <a href="admin_dashboard.html" class="btn btn-warning btn-sm" id="adminDashboardLink" style="display: none;">
+                        👑 Admin Dashboard
+                    </a>
+                    <a href="rider_dashboard.html" class="btn btn-info btn-sm" id="riderDashboardLink" style="display: none;">
+                        🚚 Rider Dashboard
+                    </a>
+                    <button class="btn btn-danger" onclick="logout()">
+                        🚪 Logout
+                    </button>
                 </div>
             </nav>
         </header>
+
+        <!-- Mobile Overlay -->
+        <div class="mobile-overlay" id="mobileOverlay" onclick="closeMobileMenu()"></div>
 
         <!-- Products Section -->
         <div id="products-section" class="section active">
@@ -477,6 +1480,190 @@
                 <h2 class="card-title" style="margin-bottom: 2rem;">Our Gas Cylinders</h2>
                 <div class="grid grid-3" id="productsGrid">
                     <!-- Products will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Services Section -->
+        <div id="services-section" class="section">
+            <div class="container">
+                <h2 class="card-title" style="margin-bottom: 2rem;">Our Services</h2>
+                
+                <!-- Service Categories -->
+                <div class="grid grid-2" style="margin-bottom: 3rem;">
+                    <!-- Pickup Service -->
+                    <div class="card service-card" data-service="pickup">
+                        <div class="service-icon">🚚</div>
+                        <div class="service-content">
+                            <h3 class="service-title">Cylinder Pickup</h3>
+                            <p class="service-description">We'll pick up your empty gas cylinders from your location</p>
+                            <div class="service-features">
+                                <span class="feature-tag">📍 Door-to-door</span>
+                                <span class="feature-tag">⏰ Same day</span>
+                                <span class="feature-tag">💰 ₵15 per cylinder</span>
+                            </div>
+                            <button class="btn btn-primary" onclick="openServiceModal('pickup')">
+                                Schedule Pickup
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Refill Service -->
+                    <div class="card service-card" data-service="refill">
+                        <div class="service-icon">⛽</div>
+                        <div class="service-content">
+                            <h3 class="service-title">Cylinder Refill</h3>
+                            <p class="service-description">Professional refilling of your gas cylinders with quality LPG</p>
+                            <div class="service-features">
+                                <span class="feature-tag">🔒 Safety certified</span>
+                                <span class="feature-tag">⚡ Quick turnaround</span>
+                                <span class="feature-tag">💰 From ₵45</span>
+                            </div>
+                            <button class="btn btn-primary" onclick="openServiceModal('refill')">
+                                Schedule Refill
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Service Packages -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Service Packages</h3>
+                    </div>
+                    <div class="grid grid-3">
+                        <div class="package-card">
+                            <div class="package-icon">📦</div>
+                            <h4 class="package-title">Basic Package</h4>
+                            <div class="package-price">₵60</div>
+                            <ul class="package-features">
+                                <li>✓ Pickup empty cylinder</li>
+                                <li>✓ Refill with quality LPG</li>
+                                <li>✓ Safety inspection</li>
+                                <li>✓ Same-day delivery</li>
+                            </ul>
+                            <button class="btn btn-secondary" onclick="addServiceToCart('basic-package')">
+                                Add to Cart
+                            </button>
+                        </div>
+
+                        <div class="package-card featured">
+                            <div class="package-badge">Most Popular</div>
+                            <div class="package-icon">⭐</div>
+                            <h4 class="package-title">Premium Package</h4>
+                            <div class="package-price">₵85</div>
+                            <ul class="package-features">
+                                <li>✓ Express pickup (2 hours)</li>
+                                <li>✓ Premium LPG refill</li>
+                                <li>✓ Cylinder maintenance</li>
+                                <li>✓ Express delivery</li>
+                                <li>✓ 6-month warranty</li>
+                            </ul>
+                            <button class="btn btn-primary" onclick="addServiceToCart('premium-package')">
+                                Add to Cart
+                            </button>
+                        </div>
+
+                        <div class="package-card">
+                            <div class="package-icon">🏢</div>
+                            <h4 class="package-title">Business Package</h4>
+                            <div class="package-price">₵120</div>
+                            <ul class="package-features">
+                                <li>✓ Multiple cylinder pickup</li>
+                                <li>✓ Bulk refill discount</li>
+                                <li>✓ Monthly service plan</li>
+                                <li>✓ Priority scheduling</li>
+                                <li>✓ Dedicated support</li>
+                            </ul>
+                            <button class="btn btn-secondary" onclick="addServiceToCart('business-package')">
+                                Add to Cart
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- My Services -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">My Service Requests</h3>
+                        <button class="btn btn-secondary" onclick="loadServiceRequests()">Refresh</button>
+                    </div>
+                    <div id="serviceRequestsList">
+                        <p style="text-align: center; color: var(--text-muted);">Loading service requests...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Service Tracking Section -->
+        <div id="service-tracking-section" class="section">
+            <div class="container">
+                <h2 class="card-title" style="margin-bottom: 2rem;">Service Tracking</h2>
+                
+                <!-- Service Status Overview -->
+                <div class="grid grid-3" style="margin-bottom: 2rem;">
+                    <div class="status-card">
+                        <div class="status-icon">⏳</div>
+                        <div class="status-title">Pending</div>
+                        <div class="status-count" id="pendingCount">0</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-icon">🚚</div>
+                        <div class="status-title">In Progress</div>
+                        <div class="status-count" id="inProgressCount">0</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-icon">✅</div>
+                        <div class="status-title">Completed</div>
+                        <div class="status-count" id="completedCount">0</div>
+                    </div>
+                </div>
+
+                <!-- Service Filter -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="card-header">
+                        <h3 class="card-title">Filter Services</h3>
+                    </div>
+                    <div class="form-row" style="display: flex; gap: 1rem; align-items: center;">
+                        <select class="form-input" id="statusFilter" onchange="filterServices()">
+                            <option value="all">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="assigned">Assigned</option>
+                            <option value="pickup_in_progress">Pickup in Progress</option>
+                            <option value="collected">Collected</option>
+                            <option value="refill_in_progress">Refill in Progress</option>
+                            <option value="ready_for_delivery">Ready for Delivery</option>
+                            <option value="delivery_in_progress">Delivery in Progress</option>
+                            <option value="completed">Completed</option>
+                        </select>
+                        <select class="form-input" id="serviceTypeFilter" onchange="filterServices()">
+                            <option value="all">All Types</option>
+                            <option value="pickup">Pickup Only</option>
+                            <option value="refill">Refill Only</option>
+                            <option value="package">Service Package</option>
+                        </select>
+                        <button class="btn btn-secondary" onclick="loadServiceTracking()">Refresh</button>
+                    </div>
+                </div>
+
+                <!-- Active Services -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Service Requests</h3>
+                    </div>
+                    <div id="serviceTrackingList">
+                        <p style="text-align: center; color: var(--text-muted);">Loading service tracking...</p>
+                    </div>
+                </div>
+
+                <!-- Service Map (Future Enhancement) -->
+                <div class="card" style="display: none;" id="serviceMapCard">
+                    <div class="card-header">
+                        <h3 class="card-title">Service Location Map</h3>
+                    </div>
+                    <div id="serviceMap" style="height: 400px; background: var(--background); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; color: var(--text-muted);">
+                        Service location map will appear here
+                    </div>
                 </div>
             </div>
         </div>
@@ -503,12 +1690,12 @@
                         </div>
                         <form id="checkoutForm">
                             <div class="form-group">
-                                <label class="form-label">Customer Name</label>
-                                <input type="text" class="form-input" id="customerName" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Phone Number</label>
-                                <input type="tel" class="form-input" id="customerPhone" required>
+                                <label class="form-label">Customer Information</label>
+                                <div class="user-info-display" style="background: var(--background); padding: 1rem; border-radius: 0.5rem; border: 1px solid var(--border);">
+                                    <div id="checkoutUserInfo" style="color: var(--text); font-weight: 500;">
+                                        <!-- User info will be populated here -->
+                                    </div>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label class="form-label">Delivery Address</label>
@@ -521,6 +1708,19 @@
                                     <option value="express">Express (1 hour) - ₵10</option>
                                 </select>
                             </div>
+                            <div class="form-group">
+                                <label class="form-label">Payment Method</label>
+                                <select class="form-input" id="paymentMethod" onchange="togglePaymentMethod()">
+                                    <option value="paystack">Pay Online (Card/Mobile Money/Bank)</option>
+                                    <option value="cash">Cash on Delivery</option>
+                                </select>
+                            </div>
+                            <div id="paystackNotice" class="form-group" style="background: #dbeafe; padding: 1rem; border-radius: 0.5rem; border: 1px solid #93c5fd;">
+                                <p style="margin: 0; color: #1e40af; font-size: 0.9rem;">
+                                    💳 Pay securely with your card, mobile money, or bank transfer. Powered by Paystack.
+                                </p>
+                            </div>
+                            <div id="paymentFeedback" style="display: none; padding: 1rem; margin-bottom: 1rem; border-radius: 0.5rem; font-size: 0.9rem;"></div>
                             <button type="submit" class="btn btn-success" style="width: 100%;" id="checkoutBtn" disabled>
                                 <span id="checkoutLoader" class="loading" style="display: none;"></span>
                                 <span id="checkoutText">Place Order</span>
@@ -550,17 +1750,176 @@
     <!-- Notification Container -->
     <div id="notificationContainer"></div>
 
+    <!-- Include centralized routing -->
+    <script src="routes.js"></script>
+
+    <!-- Service Booking Modal -->
+    <div id="serviceModal" class="modal">
+        <div class="modal-overlay" onclick="closeServiceModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">Schedule Service</h3>
+                <button class="modal-close" onclick="closeServiceModal()">×</button>
+            </div>
+            <form id="serviceBookingForm">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Service Type</label>
+                        <input type="text" class="form-input" id="serviceType" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Customer Information</label>
+                        <div class="user-info-display" style="background: var(--background); padding: 1rem; border-radius: 0.5rem; border: 1px solid var(--border);">
+                            <div id="serviceUserInfo" style="color: var(--text); font-weight: 500;">
+                                <!-- User info will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Service Address</label>
+                        <textarea class="form-input" id="serviceAddress" rows="3" required placeholder="Enter pickup/delivery address"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Number of Cylinders</label>
+                        <select class="form-input" id="cylinderCount">
+                            <option value="1">1 Cylinder</option>
+                            <option value="2">2 Cylinders</option>
+                            <option value="3">3 Cylinders</option>
+                            <option value="4">4 Cylinders</option>
+                            <option value="5+">5+ Cylinders (Business)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Cylinder Size</label>
+                        <select class="form-input" id="cylinderSize">
+                            <option value="6kg">6kg Cylinder</option>
+                            <option value="13kg">13kg Cylinder</option>
+                            <option value="14.5kg">14.5kg Cylinder</option>
+                            <option value="mixed">Mixed Sizes</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Preferred Date</label>
+                        <input type="date" class="form-input" id="serviceDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Preferred Time</label>
+                        <select class="form-input" id="serviceTime">
+                            <option value="morning">Morning (8AM - 12PM)</option>
+                            <option value="afternoon">Afternoon (12PM - 4PM)</option>
+                            <option value="evening">Evening (4PM - 8PM)</option>
+                            <option value="anytime">Anytime</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="pickupInstructions" style="display: none;">
+                        <label class="form-label">Special Instructions</label>
+                        <textarea class="form-input" id="serviceInstructions" rows="2" placeholder="Any special instructions for pickup/delivery"></textarea>
+                    </div>
+                    <div class="service-pricing">
+                        <h4>Service Cost Estimate</h4>
+                        <div class="price-breakdown">
+                            <div class="price-line">
+                                <span>Base Service:</span>
+                                <span id="basePrice">₵15</span>
+                            </div>
+                            <div class="price-line" id="multiplePrice" style="display: none;">
+                                <span>Additional Cylinders:</span>
+                                <span id="additionalPrice">₵0</span>
+                            </div>
+                            <div class="price-line total">
+                                <span>Total:</span>
+                                <span id="totalServicePrice">₵15</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeServiceModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="serviceSubmitBtn">
+                        <span id="serviceLoader" class="loading" style="display: none;"></span>
+                        <span id="serviceSubmitText">Schedule Service</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         // Configuration
         const API_BASE = 'http://localhost:5002/api';
+        
+        // Paystack Configuration
+        const PAYSTACK_CONFIG = {
+            publicKey: 'pk_test_8f47d72c938927ad07587345c116684e3ce8266f', // Your actual Paystack public key
+            currency: 'GHS', // Ghana Cedis
+            country: 'GH'    // Ghana
+        };
+        
         let authToken = localStorage.getItem('authToken');
         let currentUser = null;
         let cart = [];
+        let serviceRequests = [];
         let products = [
             { id: 'gas-6kg', name: '6kg Gas Cylinder', price: 45.00, icon: '⛽' },
             { id: 'gas-13kg', name: '13kg Gas Cylinder', price: 80.00, icon: '🔥' },
             { id: 'gas-14kg', name: '14.5kg Gas Cylinder', price: 85.00, icon: '💨' }
         ];
+
+        let services = [
+            { 
+                id: 'pickup-service', 
+                name: 'Cylinder Pickup', 
+                type: 'pickup',
+                basePrice: 15.00, 
+                description: 'Professional pickup of empty gas cylinders from your location',
+                icon: '🚚' 
+            },
+            { 
+                id: 'refill-service', 
+                name: 'Cylinder Refill', 
+                type: 'refill',
+                basePrice: 45.00, 
+                description: 'Complete refilling service for your gas cylinders',
+                icon: '⛽' 
+            },
+            { 
+                id: 'basic-package', 
+                name: 'Basic Package', 
+                type: 'package',
+                price: 60.00, 
+                description: 'Pickup + Refill + Same-day delivery',
+                icon: '📦' 
+            },
+            { 
+                id: 'premium-package', 
+                name: 'Premium Package', 
+                type: 'package',
+                price: 85.00, 
+                description: 'Express service with premium LPG and warranty',
+                icon: '⭐' 
+            },
+            { 
+                id: 'business-package', 
+                name: 'Business Package', 
+                type: 'package',
+                price: 120.00, 
+                description: 'Bulk service for multiple cylinders with priority support',
+                icon: '🏢' 
+            }
+        ];
+
+        const servicePricing = {
+            pickup: { base: 15, additional: 10 },
+            refill: { 
+                base: 45, 
+                additional: 40,
+                sizes: {
+                    '6kg': 45,
+                    '13kg': 70,
+                    '14.5kg': 75
+                }
+            }
+        };
 
         // Utility Functions
         function showNotification(message, type = 'success') {
@@ -619,6 +1978,15 @@
             localStorage.setItem('authToken', authToken);
             localStorage.setItem('currentUser', JSON.stringify(currentUser));
             
+            // Use centralized router for role-based redirection
+            if (currentUser.role === 'rider') {
+                AppRouter.redirectTo('rider_dashboard.html');
+                return data;
+            } else if (currentUser.role === 'admin') {
+                AppRouter.redirectTo('admin_dashboard.html');
+                return data;
+            }
+            
             return data;
         }
 
@@ -633,6 +2001,15 @@
             localStorage.setItem('authToken', authToken);
             localStorage.setItem('currentUser', JSON.stringify(currentUser));
             
+            // Use centralized router for role-based redirection
+            if (currentUser.role === 'rider') {
+                AppRouter.redirectTo('rider_dashboard.html');
+                return data;
+            } else if (currentUser.role === 'admin') {
+                AppRouter.redirectTo('admin_dashboard.html');
+                return data;
+            }
+            
             return data;
         }
 
@@ -642,8 +2019,14 @@
             localStorage.removeItem('authToken');
             localStorage.removeItem('currentUser');
             
-            document.getElementById('auth-section').style.display = 'block';
-            document.getElementById('main-app').style.display = 'none';
+            // Use centralized router for logout
+            if (typeof AppRouter !== 'undefined') {
+                AppRouter.logout();
+            } else {
+                // Fallback if router not loaded
+                document.getElementById('auth-section').style.display = 'block';
+                document.getElementById('main-app').style.display = 'none';
+            }
             
             showNotification('Logged out successfully');
         }
@@ -660,13 +2043,40 @@
         }
 
         function showMainApp() {
+            // Check user role and redirect using centralized router
+            if (currentUser) {
+                if (currentUser.role === 'rider') {
+                    AppRouter.redirectTo('rider_dashboard.html');
+                    return;
+                } else if (currentUser.role === 'admin') {
+                    // Show admin controls
+                    const riderDashboardLink = document.getElementById('riderDashboardLink');
+                    if (riderDashboardLink) {
+                        riderDashboardLink.style.display = 'inline-flex';
+                    }
+                    // Add admin dashboard link
+                    const adminDashboardLink = document.getElementById('adminDashboardLink');
+                    if (adminDashboardLink) {
+                        adminDashboardLink.style.display = 'inline-flex';
+                    }
+                }
+            }
+            
             document.getElementById('auth-section').style.display = 'none';
             document.getElementById('main-app').style.display = 'block';
             
             // Update user info
             if (currentUser) {
-                document.getElementById('userEmail').textContent = currentUser.email;
+                const userEmail = document.getElementById('userEmail');
+                const userAvatar = document.getElementById('userAvatar');
+                userEmail.textContent = currentUser.email;
+                userAvatar.textContent = currentUser.email.charAt(0).toUpperCase();
             }
+            
+            // Emit login event for router
+            window.dispatchEvent(new CustomEvent('userLogin', {
+                detail: { user: currentUser }
+            }));
             
             loadProducts();
             updateCartUI();
@@ -678,13 +2088,80 @@
                 section.classList.remove('active');
             });
             
+            // Update nav button states
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.section === sectionName) {
+                    btn.classList.add('active');
+                }
+            });
+            
             // Show selected section
             document.getElementById(`${sectionName}-section`).classList.add('active');
             
+            // Close mobile menu if open
+            closeMobileMenu();
+            
             if (sectionName === 'orders') {
+                // Check authentication before loading orders
+                if (!authToken || !currentUser) {
+                    showNotification('Please login first to view your orders', 'error');
+                    showSection('auth');
+                    return;
+                }
                 loadOrders();
+            } else if (sectionName === 'services') {
+                // Check authentication before loading services
+                if (!authToken || !currentUser) {
+                    showNotification('Please login first to view your service requests', 'error');
+                    showSection('auth');
+                    return;
+                }
+                loadServiceRequests();
+            } else if (sectionName === 'service-tracking') {
+                // Check authentication before loading service tracking
+                if (!authToken || !currentUser) {
+                    showNotification('Please login first to view service tracking', 'error');
+                    showSection('auth');
+                    return;
+                }
+                loadServiceTracking();
+            } else if (sectionName === 'cart') {
+                populateCheckoutUserInfo();
             }
         }
+
+        // Mobile Menu Functions
+        function toggleMobileMenu() {
+            const navButtons = document.getElementById('navButtons');
+            const overlay = document.getElementById('mobileOverlay');
+            const toggle = document.querySelector('.mobile-menu-toggle');
+            
+            navButtons.classList.toggle('mobile-open');
+            overlay.classList.toggle('active');
+            toggle.classList.toggle('active');
+            
+            // Prevent body scroll when menu is open
+            document.body.style.overflow = navButtons.classList.contains('mobile-open') ? 'hidden' : '';
+        }
+
+        function closeMobileMenu() {
+            const navButtons = document.getElementById('navButtons');
+            const overlay = document.getElementById('mobileOverlay');
+            const toggle = document.querySelector('.mobile-menu-toggle');
+            
+            navButtons.classList.remove('mobile-open');
+            overlay.classList.remove('active');
+            toggle.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        // Close mobile menu when clicking nav items
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.addEventListener('click', closeMobileMenu);
+            });
+        });
 
         // Product Functions
         function loadProducts() {
@@ -710,6 +2187,13 @@
 
         // Cart Functions
         function addToCart(productId) {
+            // Check if user is authenticated
+            if (!authToken || !currentUser) {
+                showNotification('Please login first to add items to cart', 'error');
+                showSection('auth');
+                return;
+            }
+            
             const product = products.find(p => p.id === productId);
             if (!product) return;
             
@@ -758,8 +2242,15 @@
             
             cartCount.textContent = itemCount;
             
+            // Hide cart badge if empty
+            if (itemCount === 0) {
+                cartCount.style.display = 'none';
+            } else {
+                cartCount.style.display = 'flex';
+            }
+            
             if (cart.length === 0) {
-                cartItems.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Your cart is empty</p>';
+                cartItems.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 2rem;">Your cart is empty</p>';
                 cartTotal.style.display = 'none';
                 checkoutBtn.disabled = true;
             } else {
@@ -767,20 +2258,285 @@
                     <div class="cart-item">
                         <div>
                             <strong>${item.name}</strong><br>
-                            <small>₵${item.price.toFixed(2)} each</small>
+                            <small style="color: var(--text-muted);">₵${item.price.toFixed(2)} each</small>
                         </div>
                         <div style="display: flex; align-items: center; gap: 1rem;">
-                            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem;" onclick="updateQuantity('${item.id}', -1)">-</button>
-                            <span>${item.quantity}</span>
-                            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem;" onclick="updateQuantity('${item.id}', 1)">+</button>
-                            <button class="btn btn-danger" style="padding: 0.25rem 0.5rem;" onclick="removeFromCart('${item.id}')">×</button>
+                            <button class="btn btn-secondary" style="padding: 0.5rem; min-width: 40px;" onclick="updateQuantity('${item.id}', -1)">−</button>
+                            <span style="min-width: 2rem; text-align: center; font-weight: 600;">${item.quantity}</span>
+                            <button class="btn btn-secondary" style="padding: 0.5rem; min-width: 40px;" onclick="updateQuantity('${item.id}', 1)">+</button>
+                            <button class="btn btn-danger" style="padding: 0.5rem; min-width: 40px;" onclick="removeFromCart('${item.id}')" title="Remove item">×</button>
                         </div>
                     </div>
                 `).join('');
                 
                 cartTotal.style.display = 'block';
                 totalAmount.textContent = total.toFixed(2);
-                checkoutBtn.disabled = false;
+                checkoutBtn.disabled = false; // Enable checkout button when cart has items
+            }
+        }
+
+        // Service Functions
+        function openServiceModal(serviceType) {
+            // Check if user is authenticated first
+            if (!authToken || !currentUser) {
+                showNotification('Please login first to book a service', 'error');
+                showSection('auth');
+                return;
+            }
+
+            const modal = document.getElementById('serviceModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const serviceTypeInput = document.getElementById('serviceType');
+            
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            
+            if (serviceType === 'pickup') {
+                modalTitle.textContent = 'Schedule Cylinder Pickup';
+                serviceTypeInput.value = 'Cylinder Pickup';
+                document.getElementById('pickupInstructions').style.display = 'block';
+            } else if (serviceType === 'refill') {
+                modalTitle.textContent = 'Schedule Cylinder Refill';
+                serviceTypeInput.value = 'Cylinder Refill';
+                document.getElementById('pickupInstructions').style.display = 'block';
+            }
+            
+            // Set minimum date to today
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('serviceDate').min = today;
+            document.getElementById('serviceDate').value = today;
+            
+            // Populate user info display
+            const userInfoDiv = document.getElementById('serviceUserInfo');
+            if (currentUser) {
+                userInfoDiv.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <span style="color: var(--primary);">👤</span>
+                        <strong>${currentUser.name || currentUser.username}</strong>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <span style="color: var(--primary);">📧</span>
+                        <span>${currentUser.email}</span>
+                    </div>
+                    ${currentUser.phone ? `
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="color: var(--primary);">📞</span>
+                            <span>${currentUser.phone}</span>
+                        </div>
+                    ` : ''}
+                `;
+            }
+            
+            updateServicePricing();
+        }
+
+        function closeServiceModal() {
+            const modal = document.getElementById('serviceModal');
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+            document.getElementById('serviceBookingForm').reset();
+        }
+
+        function updateServicePricing() {
+            const serviceType = document.getElementById('serviceType').value.toLowerCase();
+            const cylinderCount = parseInt(document.getElementById('cylinderCount').value) || 1;
+            const cylinderSize = document.getElementById('cylinderSize').value;
+            
+            let basePrice = 15;
+            let additionalPrice = 0;
+            
+            if (serviceType.includes('pickup')) {
+                basePrice = servicePricing.pickup.base;
+                if (cylinderCount > 1) {
+                    additionalPrice = (cylinderCount - 1) * servicePricing.pickup.additional;
+                }
+            } else if (serviceType.includes('refill')) {
+                if (cylinderSize in servicePricing.refill.sizes) {
+                    basePrice = servicePricing.refill.sizes[cylinderSize];
+                } else {
+                    basePrice = servicePricing.refill.base;
+                }
+                if (cylinderCount > 1) {
+                    additionalPrice = (cylinderCount - 1) * servicePricing.refill.additional;
+                }
+            }
+            
+            const totalPrice = basePrice + additionalPrice;
+            
+            document.getElementById('basePrice').textContent = `₵${basePrice}`;
+            document.getElementById('additionalPrice').textContent = `₵${additionalPrice}`;
+            document.getElementById('totalServicePrice').textContent = `₵${totalPrice}`;
+            
+            // Show/hide additional price line
+            const multiplePriceElement = document.getElementById('multiplePrice');
+            if (cylinderCount > 1) {
+                multiplePriceElement.style.display = 'flex';
+            } else {
+                multiplePriceElement.style.display = 'none';
+            }
+        }
+
+        function addServiceToCart(serviceId) {
+            const service = services.find(s => s.id === serviceId);
+            if (!service) return;
+            
+            const existingItem = cart.find(item => item.id === serviceId);
+            if (existingItem) {
+                existingItem.quantity += 1;
+            } else {
+                cart.push({
+                    id: service.id,
+                    name: service.name,
+                    price: service.price,
+                    type: 'service',
+                    quantity: 1
+                });
+            }
+            
+            updateCartUI();
+            showNotification(`${service.name} added to cart`);
+        }
+
+        function populateCheckoutUserInfo() {
+            const userInfoDiv = document.getElementById('checkoutUserInfo');
+            if (currentUser && userInfoDiv) {
+                userInfoDiv.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <span style="color: var(--primary);">👤</span>
+                        <strong>${currentUser.name || currentUser.username}</strong>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <span style="color: var(--primary);">📧</span>
+                        <span>${currentUser.email}</span>
+                    </div>
+                    ${currentUser.phone ? `
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="color: var(--primary);">📞</span>
+                            <span>${currentUser.phone}</span>
+                        </div>
+                    ` : ''}
+                `;
+            }
+        }
+
+        async function createServiceRequest(serviceData) {
+            try {
+                const response = await apiCall('/services', {
+                    method: 'POST',
+                    body: JSON.stringify(serviceData)
+                });
+                return response;
+            } catch (error) {
+                // If API endpoint doesn't exist, store locally
+                const newRequest = {
+                    id: Date.now().toString(),
+                    ...serviceData,
+                    status: 'pending',
+                    createdAt: new Date().toISOString()
+                };
+                
+                serviceRequests.push(newRequest);
+                localStorage.setItem('serviceRequests', JSON.stringify(serviceRequests));
+                return newRequest;
+            }
+        }
+
+        async function loadServiceRequests() {
+            const servicesList = document.getElementById('serviceRequestsList');
+            servicesList.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Loading service requests...</p>';
+            
+            // Check if user is authenticated
+            if (!authToken || !currentUser) {
+                servicesList.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Please login to view your service requests</p>';
+                return;
+            }
+            
+            try {
+                // Try to load from API first
+                try {
+                    serviceRequests = await apiCall('/services');
+                } catch (error) {
+                    console.error('API call failed:', error);
+                    if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+                        showNotification('Session expired. Please login again.', 'error');
+                        logout();
+                        return;
+                    }
+                    // Fallback to localStorage for other errors
+                    const stored = localStorage.getItem('serviceRequests');
+                    serviceRequests = stored ? JSON.parse(stored) : [];
+                }
+                
+                // Filter service requests for current user (additional client-side filtering)
+                const userServiceRequests = serviceRequests.filter(request => 
+                    request.userId === currentUser.id || 
+                    request.customerEmail === currentUser.email
+                );
+                
+                if (userServiceRequests.length === 0) {
+                    servicesList.innerHTML = '<p style="text-align: center; color: var(--text-muted);">No service requests found</p>';
+                } else {
+                    servicesList.innerHTML = userServiceRequests.map(request => `
+                        <div class="service-request-item">
+                            <div class="service-request-header">
+                                <div>
+                                    <h4 class="service-request-title">${request.serviceType}</h4>
+                                    <p class="service-request-id">Request #${request.id}</p>
+                                </div>
+                                <span class="status-badge status-${request.status}">${request.status}</span>
+                            </div>
+                            <div class="service-request-details">
+                                <p><strong>Date:</strong> ${request.serviceDate}</p>
+                                <p><strong>Time:</strong> ${request.serviceTime}</p>
+                                <p><strong>Cylinders:</strong> ${request.cylinderCount} × ${request.cylinderSize}</p>
+                                <p><strong>Address:</strong> ${request.serviceAddress}</p>
+                                <p><strong>Cost:</strong> ₵${request.totalCost.toFixed(2)}</p>
+                            </div>
+                            <div class="service-request-actions">
+                                <button class="btn btn-secondary btn-sm" onclick="viewServiceDetails('${request.id}')">
+                                    View Details
+                                </button>
+                                ${request.status === 'pending' ? `
+                                    <button class="btn btn-danger btn-sm" onclick="cancelServiceRequest('${request.id}')">
+                                        Cancel
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                servicesList.innerHTML = '<p style="text-align: center; color: var(--error);">Failed to load service requests</p>';
+                showNotification('Failed to load service requests', 'error');
+            }
+        }
+
+        function viewServiceDetails(requestId) {
+            const request = serviceRequests.find(r => r.id === requestId);
+            if (!request) return;
+            
+            const details = `Service: ${request.serviceType}\nDate: ${request.serviceDate}\nTime: ${request.serviceTime}\nCylinders: ${request.cylinderCount} × ${request.cylinderSize}\nAddress: ${request.serviceAddress}\nInstructions: ${request.serviceInstructions || 'None'}\nStatus: ${request.status}\nCost: ₵${request.totalCost.toFixed(2)}`;
+            
+            alert(details);
+        }
+
+        async function cancelServiceRequest(requestId) {
+            if (!confirm('Are you sure you want to cancel this service request?')) return;
+            
+            try {
+                // Try API call first
+                try {
+                    await apiCall(`/services/${requestId}`, { method: 'DELETE' });
+                } catch (error) {
+                    // Fallback to local storage
+                    serviceRequests = serviceRequests.filter(r => r.id !== requestId);
+                    localStorage.setItem('serviceRequests', JSON.stringify(serviceRequests));
+                }
+                
+                showNotification('Service request cancelled');
+                loadServiceRequests();
+            } catch (error) {
+                showNotification('Failed to cancel service request', 'error');
             }
         }
 
@@ -796,13 +2552,25 @@
             const ordersList = document.getElementById('ordersList');
             ordersList.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Loading orders...</p>';
             
+            // Check if user is authenticated
+            if (!authToken || !currentUser) {
+                ordersList.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Please login to view your orders</p>';
+                return;
+            }
+            
             try {
                 const orders = await apiCall('/orders');
                 
-                if (orders.length === 0) {
+                // Filter orders for current user
+                const userOrders = orders.filter(order => 
+                    order.user_id === currentUser.id || 
+                    order.customer_email === currentUser.email
+                );
+                
+                if (userOrders.length === 0) {
                     ordersList.innerHTML = '<p style="text-align: center; color: var(--text-muted);">No orders found</p>';
                 } else {
-                    ordersList.innerHTML = orders.map(order => `
+                    ordersList.innerHTML = userOrders.map(order => `
                         <div class="order-item">
                             <div class="order-header">
                                 <span class="order-id">${order.id}</span>
@@ -810,7 +2578,7 @@
                             </div>
                             <p><strong>Total:</strong> ₵${order.total.toFixed(2)}</p>
                             <p><strong>Items:</strong> ${order.items.length} item(s)</p>
-                            <p><strong>Date:</strong> ${new Date(order.createdAt).toLocaleDateString()}</p>
+                            <p><strong>Date:</strong> ${new Date(order.created_at).toLocaleDateString()}</p>
                         </div>
                     `).join('');
                 }
@@ -872,10 +2640,16 @@
         document.getElementById('checkoutForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const customerName = document.getElementById('customerName').value;
-            const customerPhone = document.getElementById('customerPhone').value;
+            // Check if user is authenticated
+            if (!authToken || !currentUser) {
+                showNotification('Please login first to place an order', 'error');
+                showSection('auth');
+                return;
+            }
+            
             const customerAddress = document.getElementById('customerAddress').value;
             const deliveryType = document.getElementById('deliveryType').value;
+            const paymentMethod = document.getElementById('paymentMethod').value;
             const loader = document.getElementById('checkoutLoader');
             const text = document.getElementById('checkoutText');
             
@@ -883,25 +2657,85 @@
             const deliveryFee = deliveryType === 'express' ? 10 : 0;
             const finalTotal = total + deliveryFee;
             
-            const orderData = {
-                customer_name: customerName,
-                customer_phone: customerPhone,
-                customer_address: customerAddress,
-                items: cart,
-                total: finalTotal,
-                delivery_type: deliveryType
+            if (cart.length === 0) {
+                showPaymentFeedback('Your cart is empty', 'error');
+                return;
+            }
+            
+            if (!customerAddress.trim()) {
+                showPaymentFeedback('Please enter your delivery address', 'error');
+                return;
+            }
+            
+            loader.style.display = 'block';
+            text.style.display = 'none';
+            
+            try {
+                if (paymentMethod === 'paystack') {
+                    await initiatePaystackPayment(finalTotal, customerAddress, deliveryType);
+                } else {
+                    // Cash on delivery
+                    await createCashOrder(finalTotal, customerAddress, deliveryType);
+                }
+            } catch (error) {
+                showPaymentFeedback(error.message, 'error');
+            } finally {
+                loader.style.display = 'none';
+                text.style.display = 'block';
+            }
+        });
+
+        // Service Booking Form
+        document.getElementById('serviceBookingForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Check if user is authenticated
+            if (!authToken || !currentUser) {
+                showNotification('Please login first to book a service', 'error');
+                closeServiceModal();
+                showSection('auth');
+                return;
+            }
+            
+            const serviceType = document.getElementById('serviceType').value;
+            const serviceAddress = document.getElementById('serviceAddress').value;
+            const cylinderCount = document.getElementById('cylinderCount').value;
+            const cylinderSize = document.getElementById('cylinderSize').value;
+            const serviceDate = document.getElementById('serviceDate').value;
+            const serviceTime = document.getElementById('serviceTime').value;
+            const serviceInstructions = document.getElementById('serviceInstructions').value;
+            
+            const loader = document.getElementById('serviceLoader');
+            const text = document.getElementById('serviceSubmitText');
+            
+            // Calculate total cost
+            const totalCost = parseFloat(document.getElementById('totalServicePrice').textContent.replace('₵', ''));
+            
+            const serviceData = {
+                serviceType,
+                customerName: currentUser.name || currentUser.username,
+                customerPhone: currentUser.phone || '',
+                customerEmail: currentUser.email,
+                userId: currentUser.id,
+                serviceAddress,
+                cylinderCount,
+                cylinderSize,
+                serviceDate,
+                serviceTime,
+                serviceInstructions,
+                totalCost,
+                status: 'pending'
             };
             
             loader.style.display = 'block';
             text.style.display = 'none';
             
             try {
-                await createOrder(orderData);
-                cart = [];
-                updateCartUI();
-                document.getElementById('checkoutForm').reset();
-                showNotification('Order placed successfully!');
-                showSection('orders');
+                await createServiceRequest(serviceData);
+                closeServiceModal();
+                showNotification('Service request submitted successfully!');
+                showSection('services');
+                loadServiceRequests();
             } catch (error) {
                 showNotification(error.message, 'error');
             } finally {
@@ -919,15 +2753,1021 @@
                 authToken = storedToken;
                 try {
                     currentUser = JSON.parse(storedUser);
-                    showMainApp();
+                    
+                    // Let the centralized router handle role-based redirection
+                    if (typeof AppRouter !== 'undefined') {
+                        // Router will handle redirection automatically
+                        if (AppRouter.hasAccessToRoute(window.location.pathname.split('/').pop(), currentUser.role)) {
+                            showMainApp();
+                        }
+                    } else {
+                        // Fallback for manual redirection
+                        if (currentUser.role === 'rider') {
+                            AppRouter.redirectTo('rider_dashboard.html');
+                            return;
+                        } else if (currentUser.role === 'admin') {
+                            AppRouter.redirectTo('admin_dashboard.html');
+                            return;
+                        }
+                        showMainApp();
+                    }
                 } catch (error) {
                     logout();
                 }
             }
+
+            // Setup scroll animations
+            setupScrollAnimations();
+            
+            // Setup responsive navigation
+            setupResponsiveNavigation();
+            
+            // Setup keyboard shortcuts
+            setupKeyboardShortcuts();
+            
+            // Setup touch gestures for mobile
+            setupTouchGestures();
+
+            // Setup service form dynamic pricing
+            setupServiceFormListeners();
+
+            // Load service requests from localStorage
+            const storedServiceRequests = localStorage.getItem('serviceRequests');
+            if (storedServiceRequests) {
+                try {
+                    serviceRequests = JSON.parse(storedServiceRequests);
+                } catch (error) {
+                    console.error('Failed to parse service requests:', error);
+                    serviceRequests = [];
+                }
+            }
+        }
+
+        function setupServiceFormListeners() {
+            // Add event listeners when DOM is ready
+            setTimeout(() => {
+                const cylinderCountSelect = document.getElementById('cylinderCount');
+                const cylinderSizeSelect = document.getElementById('cylinderSize');
+                
+                if (cylinderCountSelect) {
+                    cylinderCountSelect.addEventListener('change', updateServicePricing);
+                }
+                if (cylinderSizeSelect) {
+                    cylinderSizeSelect.addEventListener('change', updateServicePricing);
+                }
+            }, 100);
+        }
+
+        function setupScrollAnimations() {
+            const observerOptions = {
+                threshold: 0.1,
+                rootMargin: '0px 0px -50px 0px'
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                    }
+                });
+            }, observerOptions);
+
+            // Observe all animatable elements
+            const animateElements = () => {
+                document.querySelectorAll('.card, .product-card').forEach(el => {
+                    if (!el.classList.contains('fade-in')) {
+                        el.classList.add('fade-in');
+                        observer.observe(el);
+                    }
+                });
+            };
+
+            // Initial setup
+            setTimeout(animateElements, 100);
+
+            // Re-setup when sections change
+            const originalShowSection = showSection;
+            window.showSection = function(sectionName) {
+                originalShowSection(sectionName);
+                setTimeout(animateElements, 200);
+            };
+        }
+
+        function setupResponsiveNavigation() {
+            // Close mobile menu on window resize
+            window.addEventListener('resize', () => {
+                if (window.innerWidth > 768) {
+                    closeMobileMenu();
+                }
+            });
+
+            // Handle escape key for mobile menu
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeMobileMenu();
+                }
+            });
+
+            // Prevent body scroll when mobile menu is open
+            const navButtons = document.getElementById('navButtons');
+            const observer = new MutationObserver(() => {
+                document.body.style.overflow = navButtons.classList.contains('mobile-open') ? 'hidden' : '';
+            });
+            
+            if (navButtons) {
+                observer.observe(navButtons, { attributes: true, attributeFilter: ['class'] });
+            }
+        }
+
+        function setupKeyboardShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                // Only if user is logged in and not typing in an input
+                if (!currentUser || ['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+
+                if (e.ctrlKey || e.metaKey) {
+                    switch(e.key) {
+                        case '1':
+                            e.preventDefault();
+                            showSection('products');
+                            break;
+                        case '2':
+                            e.preventDefault();
+                            showSection('services');
+                            break;
+                        case '3':
+                            e.preventDefault();
+                            showSection('service-tracking');
+                            break;
+                        case '4':
+                            e.preventDefault();
+                            showSection('cart');
+                            break;
+                        case '5':
+                            e.preventDefault();
+                            showSection('orders');
+                            break;
+                    }
+                }
+            });
+        }
+
+        function setupTouchGestures() {
+            let startX = null;
+            let startY = null;
+
+            document.addEventListener('touchstart', (e) => {
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+            });
+
+            document.addEventListener('touchend', (e) => {
+                if (!startX || !startY) return;
+
+                const endX = e.changedTouches[0].clientX;
+                const endY = e.changedTouches[0].clientY;
+                const diffX = startX - endX;
+                const diffY = startY - endY;
+
+                // Swipe detection (minimum distance: 50px)
+                if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+                    if (diffX > 0) {
+                        // Swipe left - open mobile menu
+                        if (window.innerWidth <= 768 && !document.getElementById('navButtons').classList.contains('mobile-open')) {
+                            toggleMobileMenu();
+                        }
+                    } else {
+                        // Swipe right - close mobile menu
+                        if (window.innerWidth <= 768 && document.getElementById('navButtons').classList.contains('mobile-open')) {
+                            closeMobileMenu();
+                        }
+                    }
+                }
+
+                startX = null;
+                startY = null;
+            });
+        }
+
+        // -------------------------
+        // Service Tracking Functions
+        // -------------------------
+        
+        async function loadServiceTracking() {
+            const trackingList = document.getElementById('serviceTrackingList');
+            trackingList.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Loading service tracking...</p>';
+            
+            // Check if user is authenticated
+            if (!authToken || !currentUser) {
+                trackingList.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Please login to view service tracking</p>';
+                return;
+            }
+            
+            try {
+                // Try to load from API first
+                let services = [];
+                try {
+                    services = await apiCall('/services');
+                } catch (error) {
+                    console.error('API call failed:', error);
+                    if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+                        showNotification('Session expired. Please login again.', 'error');
+                        logout();
+                        return;
+                    }
+                    // Fallback to localStorage
+                    const stored = localStorage.getItem('serviceRequests');
+                    services = stored ? JSON.parse(stored) : [];
+                }
+                
+                // Filter services for current user
+                const userServices = services.filter(service => 
+                    service.userId === currentUser.id || 
+                    service.customerEmail === currentUser.email
+                );
+                
+                // Update status counts
+                updateServiceStatusCounts(userServices);
+                
+                // Apply filters
+                const filtered = filterServicesByStatus(userServices);
+                
+                if (filtered.length === 0) {
+                    trackingList.innerHTML = '<p style="text-align: center; color: var(--text-muted);">No service requests found</p>';
+                } else {
+                    trackingList.innerHTML = filtered.map(service => createServiceTrackingItem(service)).join('');
+                }
+            } catch (error) {
+                trackingList.innerHTML = '<p style="text-align: center; color: var(--error);">Failed to load service tracking</p>';
+                showNotification('Failed to load service tracking', 'error');
+            }
+        }
+        
+        function updateServiceStatusCounts(services) {
+            const counts = {
+                pending: 0,
+                inProgress: 0,
+                completed: 0
+            };
+            
+            services.forEach(service => {
+                if (service.status === 'pending') {
+                    counts.pending++;
+                } else if (['assigned', 'pickup_in_progress', 'collected', 'refill_in_progress', 'ready_for_delivery', 'delivery_in_progress'].includes(service.status)) {
+                    counts.inProgress++;
+                } else if (service.status === 'completed') {
+                    counts.completed++;
+                }
+            });
+            
+            document.getElementById('pendingCount').textContent = counts.pending;
+            document.getElementById('inProgressCount').textContent = counts.inProgress;
+            document.getElementById('completedCount').textContent = counts.completed;
+        }
+        
+        function filterServicesByStatus(services) {
+            const statusFilter = document.getElementById('statusFilter').value;
+            const typeFilter = document.getElementById('serviceTypeFilter').value;
+            
+            return services.filter(service => {
+                const statusMatch = statusFilter === 'all' || service.status === statusFilter;
+                const typeMatch = typeFilter === 'all' || 
+                    (typeFilter === 'package' && service.serviceType.includes('package')) ||
+                    (typeFilter !== 'package' && service.serviceType === typeFilter);
+                
+                return statusMatch && typeMatch;
+            });
+        }
+        
+        function filterServices() {
+            loadServiceTracking();
+        }
+        
+        function createServiceTrackingItem(service) {
+            const statusSteps = getServiceStatusSteps(service.serviceType);
+            const currentStepIndex = statusSteps.findIndex(step => step.status === service.status);
+            const progressPercentage = currentStepIndex >= 0 ? ((currentStepIndex + 1) / statusSteps.length) * 100 : 0;
+            
+            return `
+                <div class="service-tracking-item">
+                    <div class="service-header">
+                        <div class="service-info">
+                            <h4>${service.serviceType} - ${service.cylinderCount} × ${service.cylinderSize}</h4>
+                            <div class="service-meta">
+                                Request #${service.id} • ${formatDate(service.createdAt || service.serviceDate)}
+                                ${service.rider_name ? ` • Rider: ${service.rider_name}` : ''}
+                            </div>
+                        </div>
+                        <div class="service-status status-${service.status}">
+                            ${formatStatusLabel(service.status)}
+                        </div>
+                    </div>
+                    
+                    <div class="service-progress">
+                        <div class="progress-steps">
+                            <div class="progress-line">
+                                <div class="progress-line-fill" style="width: ${progressPercentage}%"></div>
+                            </div>
+                            ${statusSteps.map((step, index) => {
+                                const isActive = index === currentStepIndex;
+                                const isCompleted = index < currentStepIndex;
+                                const stepClass = isCompleted ? 'completed' : (isActive ? 'active' : '');
+                                
+                                return `
+                                    <div class="progress-step ${stepClass}">
+                                        <div class="progress-step-icon">${step.icon}</div>
+                                        <div class="progress-step-label">${step.label}</div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                    
+                    <div class="service-details">
+                        <div class="detail-item">
+                            <div class="detail-label">Service Address</div>
+                            <div class="detail-value">${service.serviceAddress}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Scheduled Date</div>
+                            <div class="detail-value">${service.serviceDate} ${service.serviceTime}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Total Cost</div>
+                            <div class="detail-value">₵${service.totalCost.toFixed(2)}</div>
+                        </div>
+                        ${service.estimatedCompletion ? `
+                            <div class="detail-item">
+                                <div class="detail-label">Estimated Completion</div>
+                                <div class="detail-value">${formatDate(service.estimatedCompletion)}</div>
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    ${service.lastUpdate ? `
+                        <div class="service-update" style="background: var(--background); padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; border-left: 4px solid var(--primary);">
+                            <div style="font-weight: 600; color: var(--text); margin-bottom: 0.5rem;">Latest Update</div>
+                            <div style="color: var(--text-muted); font-size: 0.875rem;">${service.lastUpdate}</div>
+                            ${service.updateTime ? `<div style="color: var(--text-muted); font-size: 0.75rem; margin-top: 0.25rem;">${formatDate(service.updateTime)}</div>` : ''}
+                        </div>
+                    ` : ''}
+                    
+                    <div class="service-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="viewFullServiceDetails('${service.id}')">
+                            View Details
+                        </button>
+                        ${service.rider_phone ? `
+                            <button class="btn btn-primary btn-sm" onclick="contactRider('${service.rider_phone}')">
+                                Contact Rider
+                            </button>
+                        ` : ''}
+                        ${service.status === 'pending' ? `
+                            <button class="btn btn-danger btn-sm" onclick="cancelService('${service.id}')">
+                                Cancel
+                            </button>
+                        ` : ''}
+                        ${['pickup_in_progress', 'delivery_in_progress'].includes(service.status) ? `
+                            <button class="btn btn-info btn-sm" onclick="trackRiderLocation('${service.id}')">
+                                Track Rider
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+        
+        function getServiceStatusSteps(serviceType) {
+            if (serviceType.includes('package')) {
+                return [
+                    { status: 'pending', icon: '📋', label: 'Pending' },
+                    { status: 'assigned', icon: '👤', label: 'Assigned' },
+                    { status: 'pickup_in_progress', icon: '🚚', label: 'Pickup' },
+                    { status: 'collected', icon: '📦', label: 'Collected' },
+                    { status: 'refill_in_progress', icon: '⛽', label: 'Refilling' },
+                    { status: 'ready_for_delivery', icon: '✅', label: 'Ready' },
+                    { status: 'delivery_in_progress', icon: '🚛', label: 'Delivering' },
+                    { status: 'completed', icon: '🎉', label: 'Completed' }
+                ];
+            } else if (serviceType === 'pickup') {
+                return [
+                    { status: 'pending', icon: '📋', label: 'Pending' },
+                    { status: 'assigned', icon: '👤', label: 'Assigned' },
+                    { status: 'pickup_in_progress', icon: '🚚', label: 'Pickup' },
+                    { status: 'completed', icon: '✅', label: 'Completed' }
+                ];
+            } else if (serviceType === 'refill') {
+                return [
+                    { status: 'pending', icon: '📋', label: 'Pending' },
+                    { status: 'assigned', icon: '👤', label: 'Assigned' },
+                    { status: 'refill_in_progress', icon: '⛽', label: 'Refilling' },
+                    { status: 'ready_for_delivery', icon: '✅', label: 'Ready' },
+                    { status: 'delivery_in_progress', icon: '🚛', label: 'Delivering' },
+                    { status: 'completed', icon: '🎉', label: 'Completed' }
+                ];
+            }
+            
+            return [
+                { status: 'pending', icon: '📋', label: 'Pending' },
+                { status: 'completed', icon: '✅', label: 'Completed' }
+            ];
+        }
+        
+        function formatStatusLabel(status) {
+            const statusLabels = {
+                'pending': 'Pending',
+                'assigned': 'Assigned',
+                'pickup_in_progress': 'Pickup in Progress',
+                'collected': 'Collected',
+                'refill_in_progress': 'Refill in Progress',
+                'ready_for_delivery': 'Ready for Delivery',
+                'delivery_in_progress': 'Delivery in Progress',
+                'completed': 'Completed'
+            };
+            
+            return statusLabels[status] || status;
+        }
+        
+        function formatDate(dateString) {
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } catch (error) {
+                return dateString;
+            }
+        }
+        
+        async function viewFullServiceDetails(serviceId) {
+            try {
+                let service;
+                try {
+                    service = await apiCall(`/services/${serviceId}`);
+                } catch (error) {
+                    // Fallback to localStorage
+                    const stored = localStorage.getItem('serviceRequests');
+                    const services = stored ? JSON.parse(stored) : [];
+                    service = services.find(s => s.id === serviceId);
+                }
+                
+                if (!service) {
+                    showNotification('Service not found', 'error');
+                    return;
+                }
+                
+                const detailsHtml = `
+                    <div style="max-width: 500px;">
+                        <h3 style="margin-bottom: 1rem; color: var(--text);">${service.serviceType}</h3>
+                        <div style="background: var(--background); padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
+                            <p><strong>Request ID:</strong> ${service.id}</p>
+                            <p><strong>Status:</strong> ${formatStatusLabel(service.status)}</p>
+                            <p><strong>Cylinders:</strong> ${service.cylinderCount} × ${service.cylinderSize}</p>
+                            <p><strong>Address:</strong> ${service.serviceAddress}</p>
+                            <p><strong>Scheduled:</strong> ${service.serviceDate} ${service.serviceTime}</p>
+                            <p><strong>Total Cost:</strong> ₵${service.totalCost.toFixed(2)}</p>
+                            ${service.serviceInstructions ? `<p><strong>Instructions:</strong> ${service.serviceInstructions}</p>` : ''}
+                            ${service.rider_name ? `<p><strong>Rider:</strong> ${service.rider_name}</p>` : ''}
+                            ${service.rider_phone ? `<p><strong>Rider Phone:</strong> ${service.rider_phone}</p>` : ''}
+                        </div>
+                        ${service.status_updates && service.status_updates.length > 0 ? `
+                            <div>
+                                <h4 style="margin-bottom: 0.5rem; color: var(--text);">Status Updates</h4>
+                                <div style="max-height: 200px; overflow-y: auto;">
+                                    ${service.status_updates.map(update => `
+                                        <div style="background: var(--surface); padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 0.5rem; border-left: 3px solid var(--primary);">
+                                            <div style="font-weight: 600; color: var(--text);">${formatStatusLabel(update.status)}</div>
+                                            ${update.notes ? `<div style="color: var(--text-muted); font-size: 0.875rem; margin: 0.25rem 0;">${update.notes}</div>` : ''}
+                                            <div style="color: var(--text-muted); font-size: 0.75rem;">${formatDate(update.timestamp)}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+                
+                // Create and show modal-like dialog
+                const existingModal = document.getElementById('serviceDetailsModal');
+                if (existingModal) {
+                    existingModal.remove();
+                }
+                
+                const modal = document.createElement('div');
+                modal.id = 'serviceDetailsModal';
+                modal.className = 'modal active';
+                modal.innerHTML = `
+                    <div class="modal-overlay" onclick="closeServiceDetailsModal()"></div>
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3 class="modal-title">Service Details</h3>
+                            <button class="modal-close" onclick="closeServiceDetailsModal()">×</button>
+                        </div>
+                        <div class="modal-body">
+                            ${detailsHtml}
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary" onclick="closeServiceDetailsModal()">Close</button>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(modal);
+                
+            } catch (error) {
+                showNotification('Failed to load service details', 'error');
+            }
+        }
+        
+        function closeServiceDetailsModal() {
+            const modal = document.getElementById('serviceDetailsModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+        
+        function contactRider(riderPhone) {
+            if (riderPhone) {
+                window.open(`tel:${riderPhone}`, '_self');
+            } else {
+                showNotification('Rider contact not available', 'error');
+            }
+        }
+        
+        async function cancelService(serviceId) {
+            if (!confirm('Are you sure you want to cancel this service? This action cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                try {
+                    await apiCall(`/services/${serviceId}`, { method: 'DELETE' });
+                } catch (error) {
+                    // Fallback to localStorage
+                    const stored = localStorage.getItem('serviceRequests');
+                    let services = stored ? JSON.parse(stored) : [];
+                    services = services.filter(s => s.id !== serviceId);
+                    localStorage.setItem('serviceRequests', JSON.stringify(services));
+                }
+                
+                showNotification('Service cancelled successfully', 'success');
+                loadServiceTracking();
+                
+            } catch (error) {
+                showNotification('Failed to cancel service', 'error');
+            }
+        }
+        
+        function trackRiderLocation(serviceId) {
+            // For now, show a placeholder message
+            // In a real implementation, this would integrate with GPS tracking
+            showNotification('Rider tracking feature coming soon! Contact rider directly for location updates.', 'info');
+        }
+
+        // -------------------------
+        // Paystack Payment Functions
+        // -------------------------
+        
+        function togglePaymentMethod() {
+            const paymentMethod = document.getElementById('paymentMethod').value;
+            const paystackNotice = document.getElementById('paystackNotice');
+            const checkoutText = document.getElementById('checkoutText');
+            
+            if (paymentMethod === 'paystack') {
+                paystackNotice.style.display = 'block';
+                checkoutText.textContent = 'Pay Now';
+            } else {
+                paystackNotice.style.display = 'none';
+                checkoutText.textContent = 'Place Order';
+            }
+        }
+        
+        async function initiatePaystackPayment(finalTotal, customerAddress, deliveryType) {
+            const amountInPesewas = Math.round(finalTotal * 100); // Convert cedis to pesewas
+            
+            showPaymentFeedback('Initializing payment...', 'info');
+            
+            const paymentData = {
+                key: PAYSTACK_CONFIG.publicKey,
+                email: currentUser.email,
+                amount: amountInPesewas,
+                currency: PAYSTACK_CONFIG.currency,
+                ref: 'gasfill_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                channels: ['card', 'bank', 'ussd', 'mobile_money'],
+                metadata: {
+                    custom_fields: [
+                        {
+                            display_name: "Customer Name",
+                            variable_name: "customer_name",
+                            value: currentUser.name || currentUser.username
+                        },
+                        {
+                            display_name: "Phone Number", 
+                            variable_name: "phone_number",
+                            value: currentUser.phone || ''
+                        },
+                        {
+                            display_name: "Delivery Address",
+                            variable_name: "delivery_address", 
+                            value: customerAddress
+                        },
+                        {
+                            display_name: "Delivery Type",
+                            variable_name: "delivery_type",
+                            value: deliveryType
+                        },
+                        {
+                            display_name: "Cart Items",
+                            variable_name: "cart_items",
+                            value: JSON.stringify(cart)
+                        }
+                    ]
+                },
+                callback: function(response) {
+                    handlePaymentSuccess(response, finalTotal, customerAddress, deliveryType);
+                },
+                onClose: function() {
+                    showPaymentFeedback('Payment cancelled', 'error');
+                }
+            };
+            
+            try {
+                PaystackPop.setup(paymentData).openIframe();
+            } catch (error) {
+                console.error('Paystack initialization error:', error);
+                showPaymentFeedback('Payment system unavailable. Please try cash on delivery.', 'error');
+                
+                // Fallback to cash on delivery
+                await createCashOrder(finalTotal, customerAddress, deliveryType);
+            }
+        }
+        
+        async function handlePaymentSuccess(response, finalTotal, customerAddress, deliveryType) {
+            showPaymentFeedback('Payment successful! Creating your order...', 'success');
+            
+            try {
+                await createPaidOrder(response, finalTotal, customerAddress, deliveryType);
+            } catch (error) {
+                console.error('Order creation error:', error);
+                showPaymentFeedback('Payment successful but order creation failed. Please contact support.', 'error');
+            }
+        }
+        
+        async function createPaidOrder(paymentResponse, finalTotal, customerAddress, deliveryType) {
+            const orderData = {
+                customer_name: currentUser.name || currentUser.username,
+                customer_phone: currentUser.phone || '',
+                customer_email: currentUser.email,
+                customer_address: customerAddress,
+                user_id: currentUser.id,
+                items: cart,
+                total: finalTotal,
+                delivery_type: deliveryType,
+                payment_status: 'paid',
+                payment_method: 'paystack',
+                payment_reference: paymentResponse.reference,
+                payment_data: {
+                    reference: paymentResponse.reference,
+                    status: paymentResponse.status,
+                    gateway_response: paymentResponse.gateway_response,
+                    paid_at: new Date().toISOString()
+                }
+            };
+            
+            try {
+                // Try to create order via payment endpoint
+                const response = await fetch(`${API_BASE}/orders/payment`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        items: cart.map(item => ({
+                            name: item.name,
+                            quantity: item.quantity,
+                            price: item.price
+                        })),
+                        total: finalTotal,
+                        customerName: currentUser.name || currentUser.username,
+                        customerPhone: currentUser.phone || '',
+                        customerEmail: currentUser.email,
+                        deliveryAddress: customerAddress,
+                        paymentStatus: 'paid',
+                        paymentMethod: 'paystack',
+                        paymentReference: paymentResponse.reference,
+                        paymentData: orderData.payment_data
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to create order');
+                }
+                
+                const result = await response.json();
+                
+                // Clear cart and show success
+                cart = [];
+                updateCartUI();
+                document.getElementById('checkoutForm').reset();
+                showPaymentFeedback(`Payment successful! Order #${result.order_id} created.`, 'success');
+                showNotification(`Order #${result.order_id} created successfully!`);
+                showSection('orders');
+                
+            } catch (error) {
+                console.log('API unavailable, creating order via regular endpoint:', error.message);
+                
+                // Fallback to regular order creation
+                await createOrder(orderData);
+                cart = [];
+                updateCartUI();
+                document.getElementById('checkoutForm').reset();
+                showPaymentFeedback('Payment successful! Order created.', 'success');
+                showNotification('Order created successfully!');
+                showSection('orders');
+            }
+        }
+        
+        async function createCashOrder(finalTotal, customerAddress, deliveryType) {
+            const orderData = {
+                customer_name: currentUser.name || currentUser.username,
+                customer_phone: currentUser.phone || '',
+                customer_email: currentUser.email,
+                customer_address: customerAddress,
+                user_id: currentUser.id,
+                items: cart,
+                total: finalTotal,
+                delivery_type: deliveryType,
+                payment_status: 'pending',
+                payment_method: 'cash_on_delivery'
+            };
+            
+            await createOrder(orderData);
+            cart = [];
+            updateCartUI();
+            document.getElementById('checkoutForm').reset();
+            showPaymentFeedback('Order placed successfully! Pay on delivery.', 'success');
+            showNotification('Order placed successfully!');
+            showSection('orders');
+        }
+        
+        function showPaymentFeedback(message, type = 'info') {
+            const feedback = document.getElementById('paymentFeedback');
+            feedback.textContent = message;
+            feedback.style.display = 'block';
+            
+            // Set colors based on type
+            switch (type) {
+                case 'success':
+                    feedback.style.background = '#d1fae5';
+                    feedback.style.color = '#065f46';
+                    feedback.style.border = '1px solid #a7f3d0';
+                    break;
+                case 'error':
+                    feedback.style.background = '#fee2e2';
+                    feedback.style.color = '#991b1b';
+                    feedback.style.border = '1px solid #fca5a5';
+                    break;
+                case 'info':
+                default:
+                    feedback.style.background = '#dbeafe';
+                    feedback.style.color = '#1e40af';
+                    feedback.style.border = '1px solid #93c5fd';
+                    break;
+            }
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                feedback.style.display = 'none';
+            }, 5000);
         }
 
         // Start the app
         document.addEventListener('DOMContentLoaded', initApp);
+
+        // ========================
+        // PAYSTACK PAYMENT FUNCTIONS
+        // ========================
+
+        function togglePaymentMethod() {
+            const paymentMethod = document.getElementById('paymentMethod').value;
+            const paystackNotice = document.getElementById('paystackNotice');
+            const checkoutText = document.getElementById('checkoutText');
+            
+            if (paymentMethod === 'paystack') {
+                paystackNotice.style.display = 'block';
+                checkoutText.textContent = 'Pay Now';
+            } else {
+                paystackNotice.style.display = 'none';
+                checkoutText.textContent = 'Place Order (Cash on Delivery)';
+            }
+        }
+
+        async function initiatePaystackPayment(finalTotal, customerAddress, deliveryType) {
+            if (!window.PaystackPop) {
+                throw new Error('Paystack is not available. Please try again or use cash on delivery.');
+            }
+
+            showPaymentFeedback('Initializing payment...', 'info');
+            
+            const amountInPesewas = Math.round(finalTotal * 100); // Convert cedis to pesewas
+            
+            const paymentData = {
+                key: PAYSTACK_CONFIG.publicKey,
+                email: currentUser.email,
+                amount: amountInPesewas,
+                currency: PAYSTACK_CONFIG.currency,
+                ref: 'gasfill_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                channels: ['card', 'bank', 'ussd', 'mobile_money'],
+                metadata: {
+                    custom_fields: [
+                        {
+                            display_name: "Customer Name",
+                            variable_name: "customer_name",
+                            value: currentUser.name || currentUser.username
+                        },
+                        {
+                            display_name: "Phone Number", 
+                            variable_name: "phone_number",
+                            value: currentUser.phone || ''
+                        },
+                        {
+                            display_name: "Delivery Address",
+                            variable_name: "delivery_address", 
+                            value: customerAddress
+                        },
+                        {
+                            display_name: "Cart Items",
+                            variable_name: "cart_items",
+                            value: JSON.stringify(cart)
+                        }
+                    ]
+                },
+                callback: function(response) {
+                    handlePaymentSuccess(response, finalTotal, customerAddress, deliveryType);
+                },
+                onClose: function() {
+                    showPaymentFeedback('Payment cancelled', 'error');
+                }
+            };
+            
+            try {
+                PaystackPop.setup(paymentData).openIframe();
+            } catch (error) {
+                console.error('Paystack initialization error:', error);
+                showPaymentFeedback('Payment system unavailable. Please try again.', 'error');
+                // Fallback to cash on delivery
+                await createCashOrder(finalTotal, customerAddress, deliveryType);
+            }
+        }
+
+        async function handlePaymentSuccess(response, finalTotal, customerAddress, deliveryType) {
+            showPaymentFeedback('Payment successful! Creating your order...', 'success');
+            
+            try {
+                await createPaidOrder(response, finalTotal, customerAddress, deliveryType);
+            } catch (error) {
+                console.error('Order creation error:', error);
+                // Still create order but mark payment as pending verification
+                await createPaidOrder(response, finalTotal, customerAddress, deliveryType, 'pending_verification');
+            }
+        }
+
+        async function createPaidOrder(paymentResponse, finalTotal, customerAddress, deliveryType, paymentStatus = 'paid') {
+            const orderData = {
+                customer_name: currentUser.name || currentUser.username,
+                customer_phone: currentUser.phone || '',
+                customer_email: currentUser.email,
+                customer_address: customerAddress,
+                user_id: currentUser.id,
+                items: cart,
+                total: finalTotal,
+                delivery_type: deliveryType,
+                paymentStatus: paymentStatus,
+                paymentMethod: 'paystack',
+                paymentReference: paymentResponse.reference,
+                paymentData: {
+                    reference: paymentResponse.reference,
+                    status: paymentResponse.status,
+                    gateway_response: paymentResponse.gateway_response,
+                    paid_at: new Date().toISOString()
+                }
+            };
+            
+            try {
+                // Try to create order via API
+                await createOrder(orderData);
+                
+                cart = [];
+                updateCartUI();
+                document.getElementById('checkoutForm').reset();
+                showNotification(`Payment successful! Order created. You will receive a confirmation SMS.`);
+                showSection('orders');
+                
+            } catch (error) {
+                console.log('API unavailable, saving locally:', error.message);
+                
+                // Fallback to localStorage
+                const orders = JSON.parse(localStorage.getItem('orders') || '[]');
+                const order = {
+                    id: 'ORD-' + Date.now(),
+                    items: cart,
+                    total: finalTotal,
+                    status: 'paid',
+                    paymentStatus: paymentStatus,
+                    paymentReference: paymentResponse.reference,
+                    customerName: currentUser.name || currentUser.username,
+                    customerPhone: currentUser.phone || '',
+                    customerEmail: currentUser.email,
+                    deliveryAddress: customerAddress,
+                    createdAt: new Date().toISOString()
+                };
+                orders.unshift(order);
+                localStorage.setItem('orders', JSON.stringify(orders));
+                
+                cart = [];
+                updateCartUI();
+                document.getElementById('checkoutForm').reset();
+                showNotification(`Payment successful! Order ${order.id} saved. You will receive a confirmation SMS.`);
+                showSection('orders');
+            }
+        }
+
+        async function createCashOrder(finalTotal, customerAddress, deliveryType) {
+            const orderData = {
+                customer_name: currentUser.name || currentUser.username,
+                customer_phone: currentUser.phone || '',
+                customer_email: currentUser.email,
+                customer_address: customerAddress,
+                user_id: currentUser.id,
+                items: cart,
+                total: finalTotal,
+                delivery_type: deliveryType,
+                paymentStatus: 'pending',
+                paymentMethod: 'cash_on_delivery'
+            };
+            
+            try {
+                await createOrder(orderData);
+                cart = [];
+                updateCartUI();
+                document.getElementById('checkoutForm').reset();
+                showNotification('Order placed successfully! Payment on delivery.');
+                showSection('orders');
+                
+            } catch (error) {
+                console.log('API unavailable, saving locally:', error.message);
+                
+                const orders = JSON.parse(localStorage.getItem('orders') || '[]');
+                const order = {
+                    id: 'ORD-' + Date.now(),
+                    items: cart,
+                    total: finalTotal,
+                    status: 'pending',
+                    paymentStatus: 'pending',
+                    customerName: currentUser.name || currentUser.username,
+                    customerPhone: currentUser.phone || '',
+                    customerEmail: currentUser.email,
+                    deliveryAddress: customerAddress,
+                    createdAt: new Date().toISOString()
+                };
+                orders.unshift(order);
+                localStorage.setItem('orders', JSON.stringify(orders));
+                
+                cart = [];
+                updateCartUI();
+                document.getElementById('checkoutForm').reset();
+                showNotification(`Order ${order.id} created successfully! Payment on delivery.`);
+                showSection('orders');
+            }
+        }
+        
+        function showPaymentFeedback(message, type = 'info') {
+            const feedback = document.getElementById('paymentFeedback');
+            feedback.textContent = message;
+            feedback.style.display = 'block';
+            
+            // Set colors based on type
+            switch (type) {
+                case 'success':
+                    feedback.style.background = '#d1fae5';
+                    feedback.style.color = '#065f46';
+                    feedback.style.border = '1px solid #a7f3d0';
+                    break;
+                case 'error':
+                    feedback.style.background = '#fee2e2';
+                    feedback.style.color = '#991b1b';
+                    feedback.style.border = '1px solid #fca5a5';
+                    break;
+                case 'info':
+                default:
+                    feedback.style.background = '#dbeafe';
+                    feedback.style.color = '#1e40af';
+                    feedback.style.border = '1px solid #93c5fd';
+                    break;
+            }
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                feedback.style.display = 'none';
+            }, 5000);
+        }
     </script>
 </body>
 </html>

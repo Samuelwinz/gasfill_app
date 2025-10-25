@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "GasFill",
+    "slug": "gasfill-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0b5ed7"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gasfill.mobile",
+      "buildNumber": "1.0.0",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "whatsapp",
+          "tel",
+          "mailto",
+          "maps",
+          "comgooglemaps"
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0b5ed7"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.gasfill.mobile"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "apiUrl": "http://localhost:8000"
+    },
+    "plugins": [
+      "expo-web-browser"
+    ]
+  }
+}

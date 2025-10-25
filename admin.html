@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GasFill Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0f766e;
+            --primary-light: #14b8a6;
+            --secondary: #1e40af;
+            --accent: #f59e0b;
+            --success: #059669;
+            --error: #dc2626;
+            --warning: #d97706;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text: #0f172a;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+            --admin-primary: #7c3aed;
+            --admin-secondary: #a855f7;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* Admin Header */
+        .admin-header {
+            background: linear-gradient(135deg, var(--admin-primary) 0%, var(--admin-secondary) 100%);
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: var(--shadow-lg);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .admin-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1400px;
+            margin: 0 auto;
+            position: relative;
+            min-height: 60px;
+        }
+
+        .admin-logo {
+            font-size: 1.8rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            z-index: 1001;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
+        .admin-logo::before {
+            content: '👑';
+            font-size: 1.5rem;
+        }
+
+        /* Mobile Menu Toggle */
+        .mobile-menu-toggle {
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            transition: all 0.3s ease;
+            z-index: 1001;
+            position: relative;
+            min-width: 44px;
+            min-height: 44px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* TESTING MODE: Show mobile menu toggle on all screen sizes */
+        .mobile-menu-toggle {
+            display: flex !important;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .mobile-menu-toggle:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .mobile-menu-toggle:focus {
+            outline: 2px solid rgba(255, 255, 255, 0.5);
+            outline-offset: 2px;
+        }
+
+        .mobile-menu-toggle span {
+            width: 25px;
+            height: 3px;
+            background: white;
+            border-radius: 3px;
+            transition: all 0.3s ease;
+            transform-origin: center;
+            display: block;
+        }
+
+        .mobile-menu-toggle.active span:nth-child(1) {
+            transform: rotate(45deg) translate(6px, 6px);
+        }
+
+        .mobile-menu-toggle.active span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .mobile-menu-toggle.active span:nth-child(3) {
+            transform: rotate(-45deg) translate(6px, -6px);
+        }
+
+        .admin-user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            z-index: 1001;
+            flex-shrink: 0;
+        }
+
+        .admin-user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .logout-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Admin Layout */
+        .admin-container {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            min-height: calc(100vh - 80px);
+            max-width: 1400px;
+            margin: 0 auto;
+            gap: 2rem;
+            padding: 2rem;
+            position: relative;
+        }
+
+        /* Sidebar */
+        .admin-sidebar {
+            background: var(--surface);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            height: fit-content;
+            position: sticky;
+            top: 100px;
+            transition: all 0.3s ease;
+        }
+
+        /* TESTING MODE: Force mobile sidebar behavior for all screen sizes */
+        .admin-sidebar {
+            position: fixed !important;
+            top: 0 !important;
+            left: -280px !important;
+            width: 280px !important;
+            height: 100vh !important;
+            z-index: 1000 !important;
+            transition: left 0.3s ease !important;
+            border-radius: 0 !important;
+            padding-top: 100px !important;
+            overflow-y: auto !important;
+            background: var(--surface) !important;
+            box-shadow: var(--shadow-lg) !important;
+        }
+
+        .admin-sidebar.mobile-open {
+            left: 0 !important;
+        }
+
+        /* TESTING MODE: Force single column layout */
+        .admin-container {
+            grid-template-columns: 1fr !important;
+            gap: 1rem !important;
+            padding: 1rem !important;
+        }
+
+        /* Mobile Sidebar Overlay */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+
+        /* TESTING MODE: Ensure overlay is always available */
+        .sidebar-overlay {
+            display: block !important;
+        }
+
+        /* Mobile Sidebar */
+        @media (max-width: 1024px) {
+            .admin-sidebar {
+                position: fixed;
+                top: 0;
+                left: -280px;
+                width: 280px;
+                height: 100vh;
+                z-index: 1000;
+                transition: left 0.3s ease;
+                border-radius: 0;
+                padding-top: 100px;
+                overflow-y: auto;
+                background: var(--surface);
+                box-shadow: var(--shadow-lg);
+            }
+
+            .admin-sidebar.mobile-open {
+                left: 0;
+            }
+
+            .mobile-menu-toggle {
+                display: flex;
+            }
+
+            .admin-container {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+                padding: 1rem;
+            }
+        }
+
+        /* Medium screens adjustments */
+        @media (max-width: 896px) {
+            .admin-header {
+                padding: 0.875rem 1.5rem;
+            }
+
+            .admin-logo {
+                font-size: 1.6rem;
+            }
+
+            .admin-user-info {
+                gap: 0.75rem;
+            }
+
+            .admin-user-info > div:not(.admin-user-avatar):not(.logout-btn) {
+                display: none;
+            }
+        }
+
+        .sidebar-nav {
+            list-style: none;
+        }
+
+        .sidebar-nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-nav a {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .sidebar-nav a:hover,
+        .sidebar-nav a.active {
+            background: var(--admin-primary);
+            color: white;
+            transform: translateX(4px);
+        }
+
+        .sidebar-nav .icon {
+            font-size: 1.2rem;
+        }
+
+        /* Main Content */
+        .admin-main {
+            background: var(--surface);
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+        }
+
+        .admin-section {
+            display: none;
+        }
+
+        .admin-section.active {
+            display: block;
+        }
+
+        /* Dashboard Cards */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, var(--surface) 0%, #f1f5f9 100%);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--admin-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .stat-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.7;
+        }
+
+        /* Tables */
+        .admin-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            background: var(--surface);
+            border-radius: 0.5rem;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            font-size: 0.9rem;
+        }
+
+        .admin-table th,
+        .admin-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .admin-table th {
+            background: var(--background);
+            font-weight: 600;
+            color: var(--text);
+            position: sticky;
+            top: 0;
+            font-size: 0.875rem;
+        }
+
+        .admin-table tr:hover {
+            background: var(--background);
+        }
+
+        /* Responsive Table */
+        .table-container {
+            overflow-x: auto;
+            margin: 1rem 0;
+            border-radius: 0.5rem;
+            box-shadow: var(--shadow);
+        }
+
+        .table-container::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .table-container::-webkit-scrollbar-track {
+            background: var(--background);
+        }
+
+        .table-container::-webkit-scrollbar-thumb {
+            background: var(--admin-primary);
+            border-radius: 4px;
+        }
+
+        /* Status Badges */
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .status-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-accepted,
+        .status-confirmed {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-delivered,
+        .status-completed {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-cancelled {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Action Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: var(--admin-primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--admin-secondary);
+        }
+
+        .btn-secondary {
+            background: var(--text-muted);
+            color: white;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-danger {
+            background: var(--error);
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        /* Loading States */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .admin-container {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+                padding: 1rem;
+                padding-left: 1rem;
+            }
+
+            .admin-sidebar {
+                position: static;
+                margin-bottom: 1rem;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 1rem;
+            }
+
+            .admin-main {
+                padding: 1.5rem;
+            }
+
+            .stat-card {
+                padding: 1rem;
+            }
+
+            .stat-number {
+                font-size: 2rem;
+            }
+
+            .admin-table th,
+            .admin-table td {
+                padding: 0.75rem 0.5rem;
+                font-size: 0.875rem;
+            }
+
+            /* Hide less important columns on mobile */
+            .admin-table .hide-mobile {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .admin-nav {
+                padding: 0;
+            }
+
+            .admin-header {
+                padding: 0.75rem 1rem;
+            }
+
+            .admin-logo {
+                font-size: 1.5rem;
+            }
+
+            .admin-user-info {
+                gap: 0.5rem;
+            }
+
+            .admin-user-info > div:not(.admin-user-avatar):not(.logout-btn) {
+                display: none;
+            }
+
+            .admin-user-avatar {
+                width: 36px;
+                height: 36px;
+                font-size: 0.875rem;
+            }
+
+            .logout-btn {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.875rem;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .admin-main {
+                padding: 1rem;
+            }
+
+            .admin-table {
+                font-size: 0.8rem;
+            }
+
+            .admin-table th,
+            .admin-table td {
+                padding: 0.5rem 0.25rem;
+            }
+
+            .btn {
+                padding: 0.375rem 0.75rem;
+                font-size: 0.875rem;
+            }
+
+            .btn-sm {
+                padding: 0.25rem 0.5rem;
+                font-size: 0.75rem;
+            }
+
+            /* Stack dashboard overview */
+            .dashboard-overview {
+                display: block !important;
+            }
+
+            .dashboard-overview > div {
+                margin-bottom: 1rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .admin-header {
+                padding: 0.5rem 0.75rem;
+            }
+
+            .admin-nav {
+                min-height: 50px;
+            }
+
+            .admin-logo {
+                font-size: 1.25rem;
+            }
+
+            .admin-logo::before {
+                font-size: 1.25rem;
+            }
+
+            .admin-user-info {
+                gap: 0.25rem;
+            }
+
+            .admin-user-avatar {
+                width: 32px;
+                height: 32px;
+                font-size: 0.75rem;
+            }
+
+            .logout-btn {
+                padding: 0.375rem 0.5rem;
+                font-size: 0.75rem;
+                min-width: auto;
+            }
+
+            .mobile-menu-toggle {
+                padding: 0.375rem;
+            }
+
+            .mobile-menu-toggle span {
+                width: 20px;
+                height: 2px;
+            }
+
+            .admin-container {
+                padding: 0.5rem;
+            }
+
+            .admin-main {
+                padding: 0.75rem;
+                border-radius: 0.5rem;
+            }
+
+            .stat-card {
+                padding: 0.75rem;
+                text-align: center;
+            }
+
+            .stat-number {
+                font-size: 1.75rem;
+            }
+
+            .stat-icon {
+                font-size: 2rem;
+                margin-bottom: 0.5rem;
+            }
+
+            /* Mobile-first table design */
+            .admin-table-mobile {
+                display: block;
+            }
+
+            .admin-table-mobile thead {
+                display: none;
+            }
+
+            .admin-table-mobile tr {
+                display: block;
+                margin-bottom: 1rem;
+                background: var(--surface);
+                border-radius: 0.5rem;
+                box-shadow: var(--shadow);
+                padding: 1rem;
+            }
+
+            .admin-table-mobile td {
+                display: block;
+                padding: 0.25rem 0;
+                border: none;
+                text-align: left;
+            }
+
+            .admin-table-mobile td:before {
+                content: attr(data-label) ": ";
+                font-weight: 600;
+                color: var(--admin-primary);
+            }
+        }
+
+        /* Touch-friendly improvements */
+        @media (hover: none) and (pointer: coarse) {
+            .btn,
+            .sidebar-nav a,
+            .mobile-menu-toggle {
+                min-height: 44px;
+                min-width: 44px;
+            }
+
+            .sidebar-nav a {
+                padding: 1rem;
+                margin-bottom: 0.25rem;
+            }
+
+            .admin-table td,
+            .admin-table th {
+                padding: 1rem 0.75rem;
+            }
+        }
+
+        /* Login Form Styles */
+        .admin-login {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--admin-primary) 0%, var(--admin-secondary) 100%);
+        }
+
+        .login-card {
+            background: var(--surface);
+            padding: 3rem;
+            border-radius: 1rem;
+            box-shadow: var(--shadow-lg);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .login-title {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--admin-primary);
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .login-title::before {
+            content: '👑';
+            font-size: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--border);
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--admin-primary);
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--admin-primary);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .login-btn:hover {
+            background: var(--admin-secondary);
+        }
+
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <!-- Admin Login Section -->
+    <div id="admin-login-section" class="admin-login">
+        <div class="login-card">
+            <h1 class="login-title">GasFill Admin</h1>
+            <div id="login-error" class="error-message" style="display: none;"></div>
+            <form id="admin-login-form">
+                <div class="form-group">
+                    <label class="form-label">Admin Email</label>
+                    <input type="email" class="form-input" id="admin-email" required value="admin@gasfill.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="admin-password" required value="admin123">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Admin Key</label>
+                    <input type="password" class="form-input" id="admin-key" required placeholder="Enter admin key">
+                </div>
+                <button type="submit" class="login-btn" id="login-btn">
+                    <span id="login-loader" class="loading" style="display: none;"></span>
+                    <span id="login-text">Login to Dashboard</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard Section -->
+    <div id="admin-dashboard-section" style="display: none;">
+        <!-- Admin Header -->
+        <header class="admin-header">
+            <nav class="admin-nav">
+                <div class="admin-logo">GasFill Admin</div>
+                
+                <!-- Mobile Menu Toggle -->
+                <button class="mobile-menu-toggle" id="mobile-menu-toggle" onclick="toggleMobileMenu()" 
+                        title="Toggle mobile menu" aria-label="Toggle navigation menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+
+                <div class="admin-user-info">
+                    <div class="admin-user-avatar" id="admin-avatar">A</div>
+                    <div>
+                        <div id="admin-username">Admin User</div>
+                        <div style="font-size: 0.875rem; opacity: 0.8;" id="admin-email-display">admin@gasfill.com</div>
+                    </div>
+                    <button class="logout-btn" onclick="adminLogout()">Logout</button>
+                </div>
+                
+                <!-- Debug Info (temporary) -->
+                <div id="debug-info" style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 0.5rem; font-size: 0.75rem; border-radius: 0.25rem; z-index: 9999; display: none;">
+                    <div>Screen: <span id="screen-size">-</span></div>
+                    <div>Mobile Menu: <span id="mobile-menu-status">-</span></div>
+                    <div>Toggle Visible: <span id="toggle-visible">-</span></div>
+                </div>
+            </nav>
+        </header>
+
+        <!-- Admin Container -->
+        <div class="admin-container">
+            <!-- Sidebar Overlay for Mobile -->
+            <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeMobileMenu()"></div>
+            
+            <!-- Sidebar -->
+            <aside class="admin-sidebar" id="admin-sidebar">
+                <ul class="sidebar-nav">
+                    <li><a href="#" onclick="showAdminSection('dashboard'); closeMobileMenu();" class="active">
+                        <span class="icon">📊</span> Dashboard
+                    </a></li>
+                    <li><a href="#" onclick="showAdminSection('users'); closeMobileMenu();">
+                        <span class="icon">👥</span> Users
+                    </a></li>
+                    <li><a href="#" onclick="showAdminSection('orders'); closeMobileMenu();">
+                        <span class="icon">📦</span> Orders
+                    </a></li>
+                    <li><a href="#" onclick="showAdminSection('services'); closeMobileMenu();">
+                        <span class="icon">🔧</span> Services
+                    </a></li>
+                    <li><a href="#" onclick="showAdminSection('analytics'); closeMobileMenu();">
+                        <span class="icon">📈</span> Analytics
+                    </a></li>
+                    <li><a href="#" onclick="showAdminSection('settings'); closeMobileMenu();">
+                        <span class="icon">⚙️</span> Settings
+                    </a></li>
+                </ul>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="admin-main">
+                <!-- Dashboard Section -->
+                <section id="dashboard-section" class="admin-section active">
+                    <h2 style="margin-bottom: 2rem; color: var(--admin-primary); font-size: 2rem;">Dashboard Overview</h2>
+                    
+                    <div class="dashboard-grid" id="dashboard-stats">
+                        <!-- Stats will be loaded here -->
+                    </div>
+
+                    <div class="dashboard-overview" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 2rem;">
+                        <div>
+                            <h3 style="margin-bottom: 1rem;">Recent Orders</h3>
+                            <div id="recent-orders" style="background: var(--surface); border-radius: 0.5rem; padding: 1rem; box-shadow: var(--shadow);">
+                                Loading...
+                            </div>
+                        </div>
+                        <div>
+                            <h3 style="margin-bottom: 1rem;">Recent Services</h3>
+                            <div id="recent-services" style="background: var(--surface); border-radius: 0.5rem; padding: 1rem; box-shadow: var(--shadow);">
+                                Loading...
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Users Section -->
+                <section id="users-section" class="admin-section">
+                    <h2 style="margin-bottom: 2rem; color: var(--admin-primary); font-size: 2rem;">User Management</h2>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <button class="btn btn-primary" onclick="refreshUsers()">
+                            🔄 Refresh Users
+                        </button>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Username</th>
+                                    <th>Email</th>
+                                    <th class="hide-mobile">Phone</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th class="hide-mobile">Orders</th>
+                                    <th class="hide-mobile">Services</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body">
+                                <tr>
+                                    <td colspan="9" style="text-align: center; padding: 2rem;">Loading users...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Orders Section -->
+                <section id="orders-section" class="admin-section">
+                    <h2 style="margin-bottom: 2rem; color: var(--admin-primary); font-size: 2rem;">Order Management</h2>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <button class="btn btn-primary" onclick="refreshOrders()">
+                            🔄 Refresh Orders
+                        </button>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Order ID</th>
+                                    <th>Customer</th>
+                                    <th class="hide-mobile">Items</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                    <th class="hide-mobile">Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="orders-table-body">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; padding: 2rem;">Loading orders...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Services Section -->
+                <section id="services-section" class="admin-section">
+                    <h2 style="margin-bottom: 2rem; color: var(--admin-primary); font-size: 2rem;">Service Management</h2>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <button class="btn btn-primary" onclick="refreshServices()" id="refresh-services-btn">
+                            🔄 Refresh Services
+                        </button>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Service ID</th>
+                                    <th>Customer</th>
+                                    <th>Type</th>
+                                    <th class="hide-mobile">Address</th>
+                                    <th class="hide-mobile">Date</th>
+                                    <th>Status</th>
+                                    <th class="hide-mobile">Cost</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="services-table-body">
+                                <tr>
+                                    <td colspan="8" style="text-align: center; padding: 2rem;">Loading services...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Analytics Section -->
+                <section id="analytics-section" class="admin-section">
+                    <h2 style="margin-bottom: 2rem; color: var(--admin-primary); font-size: 2rem;">Analytics & Reports</h2>
+                    <p>Advanced analytics coming soon...</p>
+                </section>
+
+                <!-- Settings Section -->
+                <section id="settings-section" class="admin-section">
+                    <h2 style="margin-bottom: 2rem; color: var(--admin-primary); font-size: 2rem;">System Settings</h2>
+                    <p>System configuration options coming soon...</p>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        const API_BASE = 'http://localhost:5002/api';
+        let adminAuthToken = null;
+        let currentAdmin = null;
+
+        // Utility function to safely format dates
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                const date = new Date(dateString);
+                if (isNaN(date.getTime())) {
+                    return 'Invalid Date';
+                }
+                return date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (error) {
+                console.error('Date formatting error:', error);
+                return 'Invalid Date';
+            }
+        }
+
+        // Utility function for API calls
+        async function adminApiCall(endpoint, options = {}) {
+            const url = `${API_BASE}${endpoint}`;
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(adminAuthToken && { 'Authorization': `Bearer ${adminAuthToken}` })
+                },
+                ...options
+            };
+
+            console.log(`🌐 API Call: ${options.method || 'GET'} ${url}`);
+
+            try {
+                const response = await fetch(url, config);
+                
+                console.log(`📡 Response: ${response.status} ${response.statusText}`);
+                
+                if (!response.ok) {
+                    let errorMessage;
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.detail || errorData.message || response.statusText;
+                    } catch {
+                        errorMessage = response.statusText;
+                    }
+                    throw new Error(`HTTP ${response.status}: ${errorMessage}`);
+                }
+                
+                const data = await response.json();
+                console.log(`✅ API Success:`, data);
+                return data;
+            } catch (error) {
+                console.error(`❌ API Error:`, error);
+                
+                // Check if it's a network error
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    throw new Error('Network error - Please check if the server is running');
+                }
+                
+                throw error;
+            }
+        }
+
+        // Admin Authentication
+        document.getElementById('admin-login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('admin-email').value;
+            const password = document.getElementById('admin-password').value;
+            const adminKey = document.getElementById('admin-key').value;
+            
+            const loader = document.getElementById('login-loader');
+            const text = document.getElementById('login-text');
+            const errorDiv = document.getElementById('login-error');
+            
+            loader.style.display = 'block';
+            text.style.display = 'none';
+            errorDiv.style.display = 'none';
+            
+            try {
+                const data = await adminApiCall('/auth/admin-login', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        email: email,
+                        password: password,
+                        admin_key: adminKey
+                    })
+                });
+                
+                adminAuthToken = data.token;
+                currentAdmin = data.user;
+                
+                // Store admin session
+                localStorage.setItem('adminToken', adminAuthToken);
+                localStorage.setItem('currentAdmin', JSON.stringify(currentAdmin));
+                
+                showAdminDashboard();
+                loadDashboardData();
+                
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                loader.style.display = 'none';
+                text.style.display = 'block';
+            }
+        });
+
+        // Show admin dashboard
+        function showAdminDashboard() {
+            document.getElementById('admin-login-section').style.display = 'none';
+            document.getElementById('admin-dashboard-section').style.display = 'block';
+            
+            // Update admin info in header
+            if (currentAdmin) {
+                document.getElementById('admin-avatar').textContent = currentAdmin.username.charAt(0).toUpperCase();
+                document.getElementById('admin-username').textContent = currentAdmin.username;
+                document.getElementById('admin-email-display').textContent = currentAdmin.email;
+            }
+        }
+
+        // Mobile menu functions
+        function toggleMobileMenu() {
+            const sidebar = document.getElementById('admin-sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            const toggle = document.getElementById('mobile-menu-toggle');
+            
+            if (!sidebar || !overlay || !toggle) {
+                console.error('Missing elements for mobile menu:', { 
+                    sidebar: !!sidebar, 
+                    overlay: !!overlay, 
+                    toggle: !!toggle 
+                });
+                return;
+            }
+
+            const isOpen = sidebar.classList.contains('mobile-open');
+            
+            if (isOpen) {
+                closeMobileMenu();
+            } else {
+                openMobileMenu();
+            }
+        }
+
+        function openMobileMenu() {
+            const sidebar = document.getElementById('admin-sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            const toggle = document.getElementById('mobile-menu-toggle');
+            
+            if (!sidebar || !overlay || !toggle) return;
+
+            sidebar.classList.add('mobile-open');
+            overlay.style.display = 'block';
+            overlay.classList.add('active');
+            toggle.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeMobileMenu() {
+            const sidebar = document.getElementById('admin-sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            const toggle = document.getElementById('mobile-menu-toggle');
+            
+            if (!sidebar || !overlay || !toggle) return;
+
+            sidebar.classList.remove('mobile-open');
+            overlay.classList.remove('active');
+            toggle.classList.remove('active');
+            document.body.style.overflow = '';
+            
+            setTimeout(() => {
+                overlay.style.display = 'none';
+            }, 300);
+        }
+
+        // Admin logout
+        function adminLogout() {
+            adminAuthToken = null;
+            currentAdmin = null;
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('currentAdmin');
+            
+            document.getElementById('admin-login-section').style.display = 'flex';
+            document.getElementById('admin-dashboard-section').style.display = 'none';
+            
+            // Reset form
+            document.getElementById('admin-login-form').reset();
+        }
+
+        // Show admin section
+        function showAdminSection(sectionName) {
+            // Hide all sections
+            document.querySelectorAll('.admin-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            // Update nav buttons
+            document.querySelectorAll('.sidebar-nav a').forEach(link => {
+                link.classList.remove('active');
+                if (link.onclick && link.onclick.toString().includes(sectionName)) {
+                    link.classList.add('active');
+                }
+            });
+            
+            // Show selected section
+            document.getElementById(`${sectionName}-section`).classList.add('active');
+            
+            // Load section data
+            switch (sectionName) {
+                case 'dashboard':
+                    loadDashboardData();
+                    break;
+                case 'users':
+                    loadUsers();
+                    break;
+                case 'orders':
+                    loadOrders();
+                    break;
+                case 'services':
+                    loadServices();
+                    break;
+            }
+        }
+
+        // Load dashboard data
+        async function loadDashboardData() {
+            try {
+                const dashboardData = await adminApiCall('/admin/dashboard');
+                
+                // Update stats cards
+                const statsContainer = document.getElementById('dashboard-stats');
+                statsContainer.innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-number">${dashboardData.users.total}</div>
+                        <div class="stat-label">Total Users</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📦</div>
+                        <div class="stat-number">${dashboardData.orders.total}</div>
+                        <div class="stat-label">Total Orders</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🔧</div>
+                        <div class="stat-number">${dashboardData.services.total}</div>
+                        <div class="stat-label">Total Services</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">💰</div>
+                        <div class="stat-number">₵${dashboardData.revenue.total.toFixed(2)}</div>
+                        <div class="stat-label">Total Revenue</div>
+                    </div>
+                `;
+                
+                // Update recent activities
+                const recentOrders = document.getElementById('recent-orders');
+                const recentServices = document.getElementById('recent-services');
+                
+                if (dashboardData.recent_activity.recent_orders.length > 0) {
+                    recentOrders.innerHTML = dashboardData.recent_activity.recent_orders.map(order => `
+                        <div style="padding: 0.5rem; border-bottom: 1px solid var(--border);">
+                            <strong>Order #${order.id}</strong> - ₵${order.total.toFixed(2)}
+                            <br><small>Status: ${order.status}</small>
+                        </div>
+                    `).join('');
+                } else {
+                    recentOrders.innerHTML = '<p>No recent orders</p>';
+                }
+                
+                if (dashboardData.recent_activity.recent_services.length > 0) {
+                    recentServices.innerHTML = dashboardData.recent_activity.recent_services.map(service => `
+                        <div style="padding: 0.5rem; border-bottom: 1px solid var(--border);">
+                            <strong>${service.service_type}</strong> - ₵${service.total_cost.toFixed(2)}
+                            <br><small>Status: ${service.status}</small>
+                        </div>
+                    `).join('');
+                } else {
+                    recentServices.innerHTML = '<p>No recent services</p>';
+                }
+                
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+            }
+        }
+
+        // Load users
+        async function loadUsers() {
+            try {
+                const users = await adminApiCall('/admin/users');
+                const tbody = document.getElementById('users-table-body');
+                
+                if (users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center;">No users found</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = users.map(user => `
+                    <tr>
+                        <td data-label="ID">${user.id}</td>
+                        <td data-label="Username">${user.username}</td>
+                        <td data-label="Email">${user.email}</td>
+                        <td data-label="Phone" class="hide-mobile">${user.phone || 'N/A'}</td>
+                        <td data-label="Role"><span class="status-badge ${user.role === 'admin' ? 'status-completed' : 'status-pending'}">${user.role}</span></td>
+                        <td data-label="Status"><span class="status-badge ${user.is_active ? 'status-accepted' : 'status-cancelled'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
+                        <td data-label="Orders" class="hide-mobile">${user.order_count}</td>
+                        <td data-label="Services" class="hide-mobile">${user.service_count}</td>
+                        <td data-label="Actions">
+                            <button class="btn btn-sm ${user.is_active ? 'btn-danger' : 'btn-success'}" 
+                                    onclick="toggleUserStatus(${user.id}, ${!user.is_active})">
+                                ${user.is_active ? 'Deactivate' : 'Activate'}
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load users:', error);
+            }
+        }
+
+        // Load orders
+        async function loadOrders() {
+            try {
+                const orders = await adminApiCall('/admin/orders');
+                const tbody = document.getElementById('orders-table-body');
+                
+                if (orders.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No orders found</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = orders.map(order => `
+                    <tr>
+                        <td data-label="Order ID">#${order.id}</td>
+                        <td data-label="Customer">${order.customer_name}</td>
+                        <td data-label="Items" class="hide-mobile">${order.items.length} item(s)</td>
+                        <td data-label="Total">₵${order.total.toFixed(2)}</td>
+                        <td data-label="Status"><span class="status-badge status-${order.status}">${order.status}</span></td>
+                        <td data-label="Date" class="hide-mobile">${formatDate(order.created_at)}</td>
+                        <td data-label="Actions">
+                            <select onchange="updateOrderStatus('${order.id}', this.value)" class="btn btn-sm" style="max-width: 120px;">
+                                <option value="${order.status}">${order.status}</option>
+                                <option value="pending">pending</option>
+                                <option value="accepted">accepted</option>
+                                <option value="assigned">assigned</option>
+                                <option value="delivered">delivered</option>
+                                <option value="cancelled">cancelled</option>
+                            </select>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load orders:', error);
+            }
+        }
+
+        // Load services
+        async function loadServices() {
+            console.log('🔄 Loading services...');
+            const tbody = document.getElementById('services-table-body');
+            
+            try {
+                // Show loading state
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">🔄 Loading services...</td></tr>';
+                
+                const services = await adminApiCall('/admin/services');
+                console.log('✅ Services loaded:', services);
+                
+                if (services.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No services found</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = services.map(service => `
+                    <tr>
+                        <td data-label="Service ID">#${service.id}</td>
+                        <td data-label="Customer">${service.customer_name}</td>
+                        <td data-label="Type">${service.service_type}</td>
+                        <td data-label="Address" class="hide-mobile">${service.service_address}</td>
+                        <td data-label="Date" class="hide-mobile">${service.service_date}</td>
+                        <td data-label="Status"><span class="status-badge status-${service.status}">${service.status}</span></td>
+                        <td data-label="Cost" class="hide-mobile">₵${service.total_cost.toFixed(2)}</td>
+                        <td data-label="Actions">
+                            <select onchange="updateServiceStatus('${service.id}', this.value)" class="btn btn-sm" style="max-width: 120px;">
+                                <option value="${service.status}">${service.status}</option>
+                                <option value="pending">pending</option>
+                                <option value="accepted">accepted</option>
+                                <option value="assigned">assigned</option>
+                                <option value="completed">completed</option>
+                                <option value="cancelled">cancelled</option>
+                            </select>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                console.log('✅ Services table updated successfully');
+            } catch (error) {
+                console.error('❌ Failed to load services:', error);
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: red;">
+                    ❌ Error loading services: ${error.message}
+                    <br><button onclick="loadServices()" class="btn btn-primary" style="margin-top: 0.5rem;">Try Again</button>
+                </td></tr>`;
+            }
+        }
+
+        // Admin actions
+        async function toggleUserStatus(userId, isActive) {
+            try {
+                await adminApiCall(`/admin/users/${userId}/status`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ is_active: isActive })
+                });
+                loadUsers(); // Refresh users table
+            } catch (error) {
+                alert('Failed to update user status: ' + error.message);
+            }
+        }
+
+        async function updateOrderStatus(orderId, status) {
+            try {
+                await adminApiCall(`/admin/orders/${orderId}/status`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ status: status })
+                });
+                loadOrders(); // Refresh orders table
+            } catch (error) {
+                alert('Failed to update order status: ' + error.message);
+            }
+        }
+
+        async function updateServiceStatus(serviceId, status) {
+            try {
+                await adminApiCall(`/admin/services/${serviceId}/status`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ status: status })
+                });
+                loadServices(); // Refresh services table
+            } catch (error) {
+                alert('Failed to update service status: ' + error.message);
+            }
+        }
+
+        // Refresh functions
+        function refreshUsers() {
+            console.log('🔄 Refreshing users...');
+            loadUsers();
+        }
+
+        function refreshOrders() {
+            console.log('🔄 Refreshing orders...');
+            loadOrders();
+        }
+
+        function refreshServices() {
+            console.log('🔄 Refreshing services...');
+            
+            // Visual feedback on button
+            const btn = document.getElementById('refresh-services-btn');
+            if (btn) {
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '⏳ Refreshing...';
+                btn.disabled = true;
+                
+                // Call loadServices and restore button after completion
+                loadServices().finally(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                });
+            } else {
+                loadServices();
+            }
+        }
+
+        // Initialize admin dashboard
+        function initAdminDashboard() {
+            const storedToken = localStorage.getItem('adminToken');
+            const storedAdmin = localStorage.getItem('currentAdmin');
+            
+            if (storedToken && storedAdmin) {
+                adminAuthToken = storedToken;
+                try {
+                    currentAdmin = JSON.parse(storedAdmin);
+                    showAdminDashboard();
+                    loadDashboardData();
+                } catch (error) {
+                    adminLogout();
+                }
+            }
+
+            // Setup responsive features
+            setupResponsiveFeatures();
+            
+            // Add global debug function
+            window.testMobileMenu = function() {
+                console.log('Testing mobile menu...');
+                toggleMobileMenu();
+            };
+        }
+
+        // Setup responsive features
+        function setupResponsiveFeatures() {
+            // Debug function to show current state
+            function updateDebugInfo() {
+                const debugInfo = document.getElementById('debug-info');
+                const toggle = document.getElementById('mobile-menu-toggle');
+                const sidebar = document.getElementById('admin-sidebar');
+                
+                if (debugInfo) {
+                    document.getElementById('screen-size').textContent = `${window.innerWidth}x${window.innerHeight}`;
+                    document.getElementById('mobile-menu-status').textContent = sidebar?.classList.contains('mobile-open') ? 'Open' : 'Closed';
+                    
+                    if (toggle) {
+                        const computedStyle = window.getComputedStyle(toggle);
+                        document.getElementById('toggle-visible').textContent = computedStyle.display !== 'none' ? 'Yes' : 'No';
+                    }
+                }
+            }
+
+            // Show debug info if URL has debug parameter
+            if (window.location.search.includes('debug=true')) {
+                document.getElementById('debug-info').style.display = 'block';
+                setInterval(updateDebugInfo, 1000);
+            }
+
+            // Close mobile menu on window resize
+            window.addEventListener('resize', () => {
+                if (window.innerWidth > 1024) {
+                    closeMobileMenu();
+                }
+                updateDebugInfo();
+            });
+
+            // Close mobile menu when clicking outside
+            document.addEventListener('click', (e) => {
+                const sidebar = document.getElementById('admin-sidebar');
+                const toggle = document.getElementById('mobile-menu-toggle');
+                
+                if (sidebar && toggle && 
+                    !sidebar.contains(e.target) && 
+                    !toggle.contains(e.target) && 
+                    sidebar.classList.contains('mobile-open')) {
+                    closeMobileMenu();
+                }
+            });
+
+            // Keyboard navigation
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeMobileMenu();
+                }
+                
+                // Handle Enter and Space for mobile menu toggle
+                if ((e.key === 'Enter' || e.key === ' ') && 
+                    e.target.id === 'mobile-menu-toggle') {
+                    e.preventDefault();
+                    toggleMobileMenu();
+                }
+                
+                // Debug shortcut: Ctrl+D to toggle debug info
+                if (e.ctrlKey && e.key === 'd') {
+                    e.preventDefault();
+                    const debugInfo = document.getElementById('debug-info');
+                    debugInfo.style.display = debugInfo.style.display === 'none' ? 'block' : 'none';
+                    if (debugInfo.style.display === 'block') {
+                        setInterval(updateDebugInfo, 1000);
+                        updateDebugInfo();
+                    }
+                }
+            });
+
+            // Add swipe gesture support for mobile
+            let touchStartX = 0;
+            let touchStartY = 0;
+            
+            document.addEventListener('touchstart', (e) => {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            });
+            
+            document.addEventListener('touchend', (e) => {
+                const touchEndX = e.changedTouches[0].clientX;
+                const touchEndY = e.changedTouches[0].clientY;
+                const deltaX = touchEndX - touchStartX;
+                const deltaY = touchEndY - touchStartY;
+                
+                // Only trigger on horizontal swipes (not vertical scrolling)
+                if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+                    const sidebar = document.getElementById('admin-sidebar');
+                    
+                    if (sidebar && sidebar.classList.contains('mobile-open') && deltaX < -50) {
+                        // Swipe left to close
+                        closeMobileMenu();
+                    }
+                }
+            });
+            
+            updateDebugInfo();
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', initAdminDashboard);
+    </script>
+</body>
+</html>

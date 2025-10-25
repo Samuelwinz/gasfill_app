@@ -1,9 +1,14 @@
 // Service Worker for GasFill App
 // Provides offline support and faster load times
 
-const CACHE_NAME = 'gasfill-v1';
+const CACHE_NAME = 'gasfill-v2';
 const urlsToCache = [
   '/g8.html',
+  '/gasfill_verion3.html',
+  '/app.html',
+  '/rider_dashboard.html',
+  '/admin_dashboard.html',
+  '/routes.js',
   '/',
 ];
 
