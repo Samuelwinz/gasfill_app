@@ -144,6 +144,69 @@ class ApiService {
     }
   }
 
+  async getOrderTracking(orderId: string): Promise<any> {
+    try {
+      const response = await this.api.get(`/api/order/tracking/${orderId}`);
+      return response.data;
+    } catch (error) {
+      console.warn('⚠️ Order tracking endpoint not available, using mock data');
+      
+      // Return mock tracking data for demo
+      const mockTrackingData = {
+        order_id: orderId,
+        status: 'in_transit',
+        customer_name: 'Customer Name',
+        customer_address: '123 Main Street, Accra',
+        customer_phone: '+233241111111',
+        rider_name: 'John Kofi',
+        rider_phone: '+233241234567',
+        rider_rating: 4.8,
+        customer_location: {
+          lat: 5.6037,
+          lng: -0.1870,
+        },
+        rider_location: {
+          lat: 5.6057,
+          lng: -0.1890,
+        },
+        items: [
+          {
+            name: '12.5kg Gas Cylinder',
+            quantity: 1,
+            price: 150.00,
+          },
+        ],
+        total: 150.00,
+        estimated_arrival: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 minutes from now
+        created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(), // 30 minutes ago
+        status_history: [
+          {
+            status: 'pending',
+            timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+            note: 'Order placed',
+          },
+          {
+            status: 'assigned',
+            timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+            note: 'Rider assigned',
+          },
+          {
+            status: 'pickup',
+            timestamp: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+            note: 'Rider picking up order',
+          },
+          {
+            status: 'in_transit',
+            timestamp: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+            note: 'On the way to you',
+          },
+        ],
+      };
+      
+      return mockTrackingData;
+    }
+  }
+
   // Stats (for admin dashboard)
   async getStats(): Promise<any> {
     try {

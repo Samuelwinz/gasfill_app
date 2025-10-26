@@ -249,6 +249,17 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                   </View>
                   <Text style={styles.total}>₵{order.total.toFixed(2)}</Text>
                 </View>
+                
+                {/* Track Order Button for active orders */}
+                {['pending', 'assigned', 'pickup', 'picked_up', 'in_transit'].includes(order.status.toLowerCase()) && (
+                  <TouchableOpacity 
+                    style={styles.trackButton}
+                    onPress={() => navigation.navigate('DeliveryTracking', { orderId: order.id })}
+                  >
+                    <Ionicons name="location" size={18} color="#ffffff" />
+                    <Text style={styles.trackButtonText}>Track Order</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             );
           })
@@ -384,6 +395,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#757575',
     marginTop: 8,
+  },
+  trackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10b981',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
+  },
+  trackButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
 

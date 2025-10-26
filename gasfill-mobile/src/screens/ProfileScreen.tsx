@@ -19,17 +19,40 @@ interface ProfileScreenProps {
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const { user, rider, isAuthenticated, userRole, logout } = useAuth();
-  const [loyalty, setLoyalty] = useState({
-    level: 'Gold Member',
-    points: 42,
-    nextLevelPoints: 50,
+  const [orderStats, setOrderStats] = useState({
+    total_orders: 0,
+    pending_orders: 0,
+    completed_orders: 0,
   });
 
   // Determine display data based on user role
   const displayName = rider?.username || user?.username || 'User';
   const displayEmail = rider?.email || user?.email || '';
-  const displayPhone = rider?.phone || '';
+  const displayPhone = rider?.phone || user?.phone || '';
   const isRider = userRole === 'rider';
+  const isCustomer = userRole === 'customer';
+  const isAdmin = userRole === 'admin';
+
+  useEffect(() => {
+    if (isCustomer && isAuthenticated) {
+      loadCustomerStats();
+    }
+  }, [isCustomer, isAuthenticated]);
+
+  const loadCustomerStats = async () => {
+    try {
+      // TODO: Replace with actual API call when backend endpoint is ready
+      // const stats = await apiService.getCustomerStats();
+      // For now, using mock data
+      setOrderStats({
+        total_orders: 0,
+        pending_orders: 0,
+        completed_orders: 0,
+      });
+    } catch (error) {
+      console.error('Error loading customer stats:', error);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -54,16 +77,32 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     navigation.navigate('Login');
   };
 
-  const menuItems = [
-    // Commented out screens that aren't implemented yet
-    // { icon: 'person-outline', name: 'Account Settings', screen: 'AccountSettings' },
-    // { icon: 'location-outline', name: 'Address Management', screen: 'AddressManagement' },
-    // { icon: 'notifications-outline', name: 'Notifications', screen: 'Notifications' },
-    // { icon: 'card-outline', name: 'Payment Methods', screen: 'PaymentMethods' },
-    // { icon: 'help-buoy-outline', name: 'Help & Support', screen: 'Support' },
-    // { icon: 'call-outline', name: 'Contact Us', screen: 'Contact' },
-    { icon: 'receipt-outline', name: 'Order History', screen: 'Orders' },
+  const customerMenuItems = [
+    { icon: 'receipt-outline', name: 'Order History', screen: 'Orders', description: 'View all your orders' },
+    { icon: 'location-outline', name: 'Delivery Addresses', screen: null, description: 'Manage saved addresses' },
+    { icon: 'card-outline', name: 'Payment Methods', screen: null, description: 'Manage payment options' },
+    { icon: 'notifications-outline', name: 'Notifications', screen: null, description: 'Notification preferences' },
+    { icon: 'help-circle-outline', name: 'Help & Support', screen: null, description: 'Get help and contact us' },
+    { icon: 'information-circle-outline', name: 'About', screen: null, description: 'App version and info' },
   ];
+
+  const riderMenuItems = [
+    { icon: 'settings-outline', name: 'Account Settings', screen: null, description: 'Update your information' },
+    { icon: 'notifications-outline', name: 'Notifications', screen: null, description: 'Notification preferences' },
+    { icon: 'help-circle-outline', name: 'Help & Support', screen: null, description: 'Get help and contact us' },
+  ];
+
+  const adminMenuItems = [
+    { icon: 'people-outline', name: 'User Management', screen: null, description: 'Manage users and riders' },
+    { icon: 'analytics-outline', name: 'Analytics & Reports', screen: null, description: 'View detailed analytics' },
+    { icon: 'settings-outline', name: 'System Settings', screen: null, description: 'Configure app settings' },
+    { icon: 'shield-outline', name: 'Security', screen: null, description: 'Security and permissions' },
+    { icon: 'notifications-outline', name: 'Notifications', screen: null, description: 'Notification preferences' },
+    { icon: 'document-text-outline', name: 'Activity Logs', screen: null, description: 'View system activity' },
+    { icon: 'help-circle-outline', name: 'Help & Support', screen: null, description: 'Get help and resources' },
+  ];
+
+  const menuItems = isRider ? riderMenuItems : isAdmin ? adminMenuItems : customerMenuItems;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -113,9 +152,17 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                     </View>
                   )}
                 </View>
-              ) : (
-                <Text style={styles.userLevel}>{loyalty.level}</Text>
-              )}
+              ) : isCustomer ? (
+                <View style={styles.customerBadge}>
+                  <Ionicons name="shield-checkmark" size={16} color="#3b82f6" />
+                  <Text style={styles.customerBadgeText}>VERIFIED CUSTOMER</Text>
+                </View>
+              ) : isAdmin ? (
+                <View style={styles.adminBadge}>
+                  <Ionicons name="shield-half" size={16} color="#ffffff" />
+                  <Text style={styles.adminBadgeText}>ADMINISTRATOR</Text>
+                </View>
+              ) : null}
               
               {isRider && rider && (
                 <View style={styles.riderStatsContainer}>
@@ -139,16 +186,58 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                 </View>
               )}
               
-              {!isRider && (
-                <View style={styles.progressContainer}>
-                  <View style={styles.progressBar}>
-                    <View style={[styles.progress, { width: `${(loyalty.points / loyalty.nextLevelPoints) * 100}%` }]} />
+              {isCustomer && (
+                <View style={styles.customerStatsContainer}>
+                  <View style={styles.customerStat}>
+                    <Ionicons name="receipt" size={18} color="#3b82f6" />
+                    <Text style={styles.customerStatValue}>{orderStats.total_orders}</Text>
+                    <Text style={styles.customerStatLabel}>Orders</Text>
                   </View>
-                  <Text style={styles.progressText}>{loyalty.points}</Text>
+                  <View style={styles.customerStatDivider} />
+                  <View style={styles.customerStat}>
+                    <Ionicons name="time" size={18} color="#f59e0b" />
+                    <Text style={styles.customerStatValue}>{orderStats.pending_orders}</Text>
+                    <Text style={styles.customerStatLabel}>Pending</Text>
+                  </View>
+                  <View style={styles.customerStatDivider} />
+                  <View style={styles.customerStat}>
+                    <Ionicons name="checkmark-circle" size={18} color="#10b981" />
+                    <Text style={styles.customerStatValue}>{orderStats.completed_orders}</Text>
+                    <Text style={styles.customerStatLabel}>Completed</Text>
+                  </View>
                 </View>
               )}
             </View>
 
+            {isCustomer && (
+              <View style={styles.customerInfoCard}>
+                <Text style={styles.customerInfoTitle}>Account Information</Text>
+                
+                <View style={styles.infoRow}>
+                  <Ionicons name="mail-outline" size={20} color="#6b7280" />
+                  <Text style={styles.infoLabel}>Email:</Text>
+                  <Text style={styles.infoValue}>{user?.email || 'Not set'}</Text>
+                </View>
+                
+                <View style={styles.infoRow}>
+                  <Ionicons name="call-outline" size={20} color="#6b7280" />
+                  <Text style={styles.infoLabel}>Phone:</Text>
+                  <Text style={styles.infoValue}>{user?.phone || 'Not set'}</Text>
+                </View>
+                
+                <View style={styles.infoRow}>
+                  <Ionicons name="location-outline" size={20} color="#6b7280" />
+                  <Text style={styles.infoLabel}>Address:</Text>
+                  <Text style={styles.infoValue}>{user?.address || 'Not set'}</Text>
+                </View>
+                
+                <TouchableOpacity style={styles.editButton}>
+                  <Ionicons name="create-outline" size={18} color="#3b82f6" />
+                  <Text style={styles.editButtonText}>Edit Profile</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            
             {isRider && rider && (
               <View style={styles.riderInfoCard}>
                 <Text style={styles.riderInfoTitle}>Rider Information</Text>
@@ -179,17 +268,83 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               </View>
             )}
 
+            {isAdmin && (
+              <View style={styles.adminStatsCard}>
+                <Text style={styles.adminStatsTitle}>System Overview</Text>
+                
+                <View style={styles.adminStatsGrid}>
+                  <View style={styles.adminStatItem}>
+                    <View style={[styles.adminStatIcon, { backgroundColor: '#dbeafe' }]}>
+                      <Ionicons name="people" size={24} color="#3b82f6" />
+                    </View>
+                    <Text style={styles.adminStatValue}>127</Text>
+                    <Text style={styles.adminStatLabel}>Total Users</Text>
+                  </View>
+                  
+                  <View style={styles.adminStatItem}>
+                    <View style={[styles.adminStatIcon, { backgroundColor: '#fef3c7' }]}>
+                      <Ionicons name="bicycle" size={24} color="#f59e0b" />
+                    </View>
+                    <Text style={styles.adminStatValue}>12</Text>
+                    <Text style={styles.adminStatLabel}>Active Riders</Text>
+                  </View>
+                  
+                  <View style={styles.adminStatItem}>
+                    <View style={[styles.adminStatIcon, { backgroundColor: '#d1fae5' }]}>
+                      <Ionicons name="receipt" size={24} color="#10b981" />
+                    </View>
+                    <Text style={styles.adminStatValue}>45</Text>
+                    <Text style={styles.adminStatLabel}>Today's Orders</Text>
+                  </View>
+                  
+                  <View style={styles.adminStatItem}>
+                    <View style={[styles.adminStatIcon, { backgroundColor: '#e0e7ff' }]}>
+                      <Ionicons name="cash" size={24} color="#6366f1" />
+                    </View>
+                    <Text style={styles.adminStatValue}>₵3.2K</Text>
+                    <Text style={styles.adminStatLabel}>Revenue</Text>
+                  </View>
+                </View>
+
+                <View style={styles.adminQuickActions}>
+                  <TouchableOpacity style={styles.adminQuickAction}>
+                    <Ionicons name="notifications-outline" size={20} color="#3b82f6" />
+                    <Text style={styles.adminQuickActionText}>8 Pending</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity style={styles.adminQuickAction}>
+                    <Ionicons name="alert-circle-outline" size={20} color="#f59e0b" />
+                    <Text style={styles.adminQuickActionText}>3 Issues</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity style={styles.adminQuickAction}>
+                    <Ionicons name="checkmark-done-outline" size={20} color="#10b981" />
+                    <Text style={styles.adminQuickActionText}>View All</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
             <View style={styles.menuContainer}>
               {menuItems.map((item, index) => (
                 <TouchableOpacity
                   key={index}
                   style={styles.menuItem}
-                  onPress={() => navigation.navigate(item.screen)}
+                  onPress={() => {
+                    if (item.screen) {
+                      navigation.navigate(item.screen);
+                    } else {
+                      Alert.alert('Coming Soon', `${item.name} feature will be available soon!`);
+                    }
+                  }}
                 >
                   <View style={styles.menuIcon}>
-                    <Ionicons name={item.icon as any} size={24} color="#0A2540" />
+                    <Ionicons name={item.icon as any} size={24} color="#3b82f6" />
                   </View>
-                  <Text style={styles.menuText}>{item.name}</Text>
+                  <View style={styles.menuContent}>
+                    <Text style={styles.menuText}>{item.name}</Text>
+                    <Text style={styles.menuDescription}>{item.description}</Text>
+                  </View>
                   <Ionicons name="chevron-forward" size={20} color="#B2C7DD" />
                 </TouchableOpacity>
               ))}
@@ -202,7 +357,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                 <View style={[styles.menuIcon, styles.logoutIcon]}>
                   <Ionicons name="log-out-outline" size={24} color="#DC2626" />
                 </View>
-                <Text style={[styles.menuText, styles.logoutText]}>Logout</Text>
+                <View style={styles.menuContent}>
+                  <Text style={[styles.menuText, styles.logoutText]}>Logout</Text>
+                  <Text style={styles.logoutDescription}>Sign out of your account</Text>
+                </View>
                 <Ionicons name="chevron-forward" size={20} color="#DC2626" />
               </TouchableOpacity>
             </View>
@@ -322,6 +480,85 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#065f46',
+  },
+  customerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+    marginBottom: 16,
+  },
+  customerBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1e40af',
+    letterSpacing: 0.5,
+  },
+  customerStatsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  customerStat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  customerStatDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  customerStatValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginTop: 4,
+  },
+  customerStatLabel: {
+    fontSize: 11,
+    color: '#B2C7DD',
+    marginTop: 2,
+  },
+  customerInfoCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    marginHorizontal: 24,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  customerInfoTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0A2540',
+    marginBottom: 16,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    paddingVertical: 12,
+    marginTop: 16,
+    gap: 8,
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
   },
   riderStatsContainer: {
     flexDirection: 'row',
@@ -443,6 +680,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0A2540',
   },
+  menuContent: {
+    flex: 1,
+  },
+  menuDescription: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginTop: 2,
+  },
   logoutButton: {
     borderWidth: 1,
     borderColor: '#FEE2E2',
@@ -453,6 +698,100 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     color: '#DC2626',
+  },
+  logoutDescription: {
+    fontSize: 13,
+    color: '#ef4444',
+    marginTop: 2,
+  },
+  // Admin Styles
+  adminBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 12,
+    gap: 6,
+    marginBottom: 16,
+  },
+  adminBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
+    letterSpacing: 0.8,
+  },
+  adminStatsCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    marginHorizontal: 24,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  adminStatsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 16,
+  },
+  adminStatsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 20,
+  },
+  adminStatItem: {
+    flex: 1,
+    minWidth: '47%',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+  },
+  adminStatIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  adminStatValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  adminStatLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  adminQuickActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  adminQuickAction: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: 12,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  adminQuickActionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4b5563',
   },
   notLoggedInContainer: {
     flex: 1,

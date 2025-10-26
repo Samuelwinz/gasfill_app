@@ -294,6 +294,13 @@ function AppStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={MainComponent} />
       <Stack.Screen 
+        name="DeliveryTracking" 
+        component={DeliveryTrackingScreen as any}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
         name="OrderDetails" 
         component={OrderDetailsScreen}
         options={{ 

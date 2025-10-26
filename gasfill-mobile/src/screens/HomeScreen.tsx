@@ -11,6 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StorageService } from '../utils/storage';
+import ApiService from '../services/api';
+import { Order } from '../types';
 
 interface HomeScreenProps {
   navigation: any;
@@ -20,10 +22,24 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [userName, setUserName] = useState('Akon');
   const [points, setPoints] = useState(1200);
   const [ordersCompleted, setOrdersCompleted] = useState(42);
+  const [activeOrders, setActiveOrders] = useState<Order[]>([]);
 
   useEffect(() => {
     loadUserData();
+    loadActiveOrders();
   }, []);
+
+  const loadActiveOrders = async () => {
+    try {
+      const orders = await ApiService.getCustomerOrders();
+      const active = orders.filter(order => 
+        ['pending', 'assigned', 'pickup', 'picked_up', 'in_transit'].includes(order.status.toLowerCase())
+      );
+      setActiveOrders(active.slice(0, 2)); // Show max 2 active orders
+    } catch (error) {
+      console.log('Error loading active orders:', error);
+    }
+  };
 
   const loadUserData = async () => {
     try {
@@ -81,6 +97,61 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <Text style={styles.cardTitle}>Track Delivery</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Active Orders Section */}
+        {activeOrders.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Active Deliveries</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Orders')}>
+                <Text style={styles.seeAllText}>See All</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {activeOrders.map((order) => (
+              <TouchableOpacity
+                key={order.id}
+                style={styles.activeOrderCard}
+                onPress={() => navigation.navigate('DeliveryTracking', { orderId: order.id })}
+              >
+                <View style={styles.activeOrderHeader}>
+                  <View style={styles.activeOrderInfo}>
+                    <Text style={styles.activeOrderId}>Order #{order.id}</Text>
+                    <Text style={styles.activeOrderStatus}>
+                      {order.status === 'pending' && '⏳ Order Placed'}
+                      {order.status === 'assigned' && '👤 Rider Assigned'}
+                      {order.status === 'pickup' && '📦 Picking Up'}
+                      {order.status === 'picked_up' && '📦 Picked Up'}
+                      {order.status === 'in_transit' && '🚴 On the Way'}
+                    </Text>
+                  </View>
+                  <View style={styles.trackIconContainer}>
+                    <Ionicons name="location" size={20} color="#10b981" />
+                  </View>
+                </View>
+                <View style={styles.activeOrderItems}>
+                  {order.items.slice(0, 2).map((item, idx) => (
+                    <Text key={idx} style={styles.activeOrderItem}>
+                      {item.quantity}x {item.name}
+                    </Text>
+                  ))}
+                  {order.items.length > 2 && (
+                    <Text style={styles.activeOrderItem}>
+                      +{order.items.length - 2} more
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.activeOrderFooter}>
+                  <Text style={styles.activeOrderTotal}>₵{order.total.toFixed(2)}</Text>
+                  <View style={styles.trackButton}>
+                    <Ionicons name="navigate" size={14} color="#10b981" />
+                    <Text style={styles.trackText}>Track Order</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </>
+        )}
 
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.quickActions}>
@@ -221,6 +292,92 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0A2540',
     marginLeft: 12,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  seeAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  activeOrderCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  activeOrderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  activeOrderInfo: {
+    flex: 1,
+  },
+  activeOrderId: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  activeOrderStatus: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  trackIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#d1fae5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activeOrderItems: {
+    marginBottom: 12,
+  },
+  activeOrderItem: {
+    fontSize: 13,
+    color: '#4b5563',
+    marginBottom: 2,
+  },
+  activeOrderFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  activeOrderTotal: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  trackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#d1fae5',
+    borderRadius: 8,
+  },
+  trackText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#10b981',
   },
 });
 

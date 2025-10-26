@@ -36,6 +36,14 @@ const AdminDashboard: React.FC = () => {
   const [showOutletModal, setShowOutletModal] = useState(false);
   const [selectedRider, setSelectedRider] = useState<Rider | null>(null);
   const [selectedOutlet, setSelectedOutlet] = useState<RefillOutlet | null>(null);
+  
+  // Outlet form fields
+  const [outletName, setOutletName] = useState('');
+  const [outletAddress, setOutletAddress] = useState('');
+  const [outletPhone, setOutletPhone] = useState('');
+  const [outletHours, setOutletHours] = useState('');
+  const [outletCommission, setOutletCommission] = useState('15');
+  const [outletActive, setOutletActive] = useState(true);
 
   useEffect(() => {
     loadData();
@@ -117,9 +125,51 @@ const AdminDashboard: React.FC = () => {
   };
 
   const loadOutlets = async () => {
-    // Outlets might not have a specific endpoint yet
-    // Keep mock data for now or implement when backend is ready
-    setOutlets([]);
+    try {
+      console.log('🏪 Loading outlets...');
+      // Mock data until backend endpoint is ready
+      const mockOutlets: RefillOutlet[] = [
+        {
+          id: 1,
+          name: 'Shell Gas Station - Airport',
+          address: 'Airport Residential Area, Accra',
+          phone: '+233302123456',
+          location: { latitude: 5.6037, longitude: -0.1870 },
+          operating_hours: '6:00 AM - 10:00 PM',
+          commission_rate: 15,
+          cylinder_types: ['6kg', '12.5kg', '14.5kg'],
+          is_active: true,
+        },
+        {
+          id: 2,
+          name: 'Total Gas - East Legon',
+          address: 'American House, East Legon, Accra',
+          phone: '+233302234567',
+          location: { latitude: 5.6437, longitude: -0.1562 },
+          operating_hours: '24/7',
+          commission_rate: 12,
+          cylinder_types: ['12.5kg', '14.5kg'],
+          is_active: true,
+        },
+        {
+          id: 3,
+          name: 'Goil Station - Tema',
+          address: 'Community 1, Tema',
+          phone: '+233303345678',
+          location: { latitude: 5.6698, longitude: -0.0166 },
+          operating_hours: '7:00 AM - 9:00 PM',
+          commission_rate: 10,
+          cylinder_types: ['6kg', '12.5kg'],
+          is_active: false,
+        },
+      ];
+      
+      setOutlets(mockOutlets);
+      console.log('✅ Outlets loaded:', mockOutlets.length);
+    } catch (error) {
+      console.error('❌ Error loading outlets:', error);
+      throw error;
+    }
   };
 
   const loadCommissions = async () => {
@@ -149,6 +199,57 @@ const AdminDashboard: React.FC = () => {
     } catch (error) {
       console.error('❌ Error loading payouts:', error);
       throw error;
+    }
+  };
+
+  const handleAddOutlet = async () => {
+    try {
+      // Validate form
+      if (!outletName.trim()) {
+        Alert.alert('Validation Error', 'Please enter outlet name');
+        return;
+      }
+      if (!outletAddress.trim()) {
+        Alert.alert('Validation Error', 'Please enter outlet address');
+        return;
+      }
+      if (!outletPhone.trim()) {
+        Alert.alert('Validation Error', 'Please enter phone number');
+        return;
+      }
+
+      console.log('🏪 Adding new outlet...');
+      
+      // For now, add to local state (backend integration pending)
+      const newOutlet: RefillOutlet = {
+        id: outlets.length + 1,
+        name: outletName,
+        address: outletAddress,
+        phone: outletPhone,
+        location: { latitude: 5.6037, longitude: -0.1870 }, // Default location
+        operating_hours: outletHours || '8:00 AM - 6:00 PM',
+        commission_rate: parseFloat(outletCommission) || 15,
+        cylinder_types: ['6kg', '12.5kg', '14.5kg'],
+        is_active: outletActive,
+      };
+
+      setOutlets([...outlets, newOutlet]);
+      
+      // Reset form
+      setOutletName('');
+      setOutletAddress('');
+      setOutletPhone('');
+      setOutletHours('');
+      setOutletCommission('15');
+      setOutletActive(true);
+      setShowOutletModal(false);
+      setSelectedOutlet(null);
+
+      Alert.alert('Success', 'Outlet added successfully!');
+      console.log('✅ Outlet added:', newOutlet);
+    } catch (error: any) {
+      console.error('❌ Error adding outlet:', error);
+      Alert.alert('Error', error.message || 'Failed to add outlet');
     }
   };
 
@@ -387,7 +488,19 @@ const AdminDashboard: React.FC = () => {
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Gas Outlets ({outlets.length})</Text>
-        <TouchableOpacity style={styles.addButton}>
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => {
+            setSelectedOutlet(null);
+            setOutletName('');
+            setOutletAddress('');
+            setOutletPhone('');
+            setOutletHours('');
+            setOutletCommission('15');
+            setOutletActive(true);
+            setShowOutletModal(true);
+          }}
+        >
           <Ionicons name="add" size={20} color="#ffffff" />
           <Text style={styles.addButtonText}>Add Outlet</Text>
         </TouchableOpacity>
@@ -776,6 +889,107 @@ const AdminDashboard: React.FC = () => {
               </View>
             </ScrollView>
           )}
+        </SafeAreaView>
+      </Modal>
+
+      {/* Add/Edit Outlet Modal */}
+      <Modal
+        visible={showOutletModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {selectedOutlet ? 'Edit Outlet' : 'Add New Outlet'}
+            </Text>
+            <TouchableOpacity onPress={() => setShowOutletModal(false)}>
+              <Ionicons name="close" size={24} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Outlet Name *</Text>
+              <TextInput
+                style={styles.formInput}
+                value={outletName}
+                onChangeText={setOutletName}
+                placeholder="Enter outlet name"
+                placeholderTextColor="#9ca3af"
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Address *</Text>
+              <TextInput
+                style={[styles.formInput, styles.textArea]}
+                value={outletAddress}
+                onChangeText={setOutletAddress}
+                placeholder="Enter full address"
+                placeholderTextColor="#9ca3af"
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Phone Number *</Text>
+              <TextInput
+                style={styles.formInput}
+                value={outletPhone}
+                onChangeText={setOutletPhone}
+                placeholder="+233 XXX XXX XXX"
+                placeholderTextColor="#9ca3af"
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Operating Hours</Text>
+              <TextInput
+                style={styles.formInput}
+                value={outletHours}
+                onChangeText={setOutletHours}
+                placeholder="e.g., 8:00 AM - 6:00 PM"
+                placeholderTextColor="#9ca3af"
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Commission Rate (%)</Text>
+              <TextInput
+                style={styles.formInput}
+                value={outletCommission}
+                onChangeText={setOutletCommission}
+                placeholder="15"
+                placeholderTextColor="#9ca3af"
+                keyboardType="decimal-pad"
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <View style={styles.switchRow}>
+                <Text style={styles.formLabel}>Active Status</Text>
+                <Switch
+                  value={outletActive}
+                  onValueChange={setOutletActive}
+                  trackColor={{ false: '#d1d5db', true: '#86efac' }}
+                  thumbColor={outletActive ? '#10b981' : '#f3f4f6'}
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={handleAddOutlet}
+            >
+              <Ionicons name="checkmark-circle" size={20} color="#ffffff" />
+              <Text style={styles.submitButtonText}>
+                {selectedOutlet ? 'Update Outlet' : 'Add Outlet'}
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -1184,6 +1398,51 @@ const styles = StyleSheet.create({
   pendingSummaryText: {
     fontSize: 14,
     color: '#92400e',
+    fontWeight: '600',
+  },
+  // Form Styles
+  formSection: {
+    marginBottom: 20,
+  },
+  formLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  formInput: {
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#111827',
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  submitButton: {
+    flexDirection: 'row',
+    backgroundColor: '#0b5ed7',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    marginBottom: 20,
+    gap: 8,
+  },
+  submitButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
     fontWeight: '600',
   },
 });
