@@ -129,10 +129,15 @@ export interface EarningsData {
   week_earnings: number;
   month_earnings: number;
   earnings_breakdown: Array<{
+    id?: number;
     order_id: number;
     amount: number;
     date: string;
     status: string;
+    earning_type?: string;
+    description?: string;
+    gross_amount?: number;
+    commission_rate?: number;
   }>;
 }
 

@@ -54,7 +54,19 @@ const RiderDashboard: React.FC = () => {
 
   useEffect(() => {
     loadDashboard();
+    loadSavedStatus();
   }, []);
+
+  const loadSavedStatus = async () => {
+    try {
+      const savedStatus = await AsyncStorage.getItem('rider_status');
+      if (savedStatus) {
+        setIsAvailable(savedStatus === 'available');
+      }
+    } catch (err) {
+      console.error('Error loading saved status:', err);
+    }
+  };
 
   const loadDashboard = async () => {
     try {
@@ -68,7 +80,13 @@ const RiderDashboard: React.FC = () => {
 
       const data = await getRiderDashboard();
       setDashboardData(data);
-      setIsAvailable(data.status === 'available');
+      
+      // Only update status toggle if we don't have a saved preference
+      const savedStatus = await AsyncStorage.getItem('rider_status');
+      if (!savedStatus) {
+        setIsAvailable(data.status === 'available');
+      }
+      
       console.log('✅ Dashboard loaded:', data);
     } catch (err: any) {
       console.error('❌ Error loading dashboard:', err);
@@ -91,6 +109,9 @@ const RiderDashboard: React.FC = () => {
       
       await updateRiderStatus(newStatus);
       setIsAvailable(value);
+      
+      // Persist status to AsyncStorage
+      await AsyncStorage.setItem('rider_status', newStatus);
       
       console.log('✅ Status updated to:', newStatus);
     } catch (err: any) {

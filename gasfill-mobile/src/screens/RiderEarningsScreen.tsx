@@ -243,48 +243,123 @@ const RiderEarningsScreen: React.FC = () => {
 
     return (
       <View style={styles.historyList}>
-        {earningsData.earnings_breakdown.map((item, index) => (
-          <View key={index} style={styles.historyItem}>
-            <View style={styles.historyIcon}>
-              <Ionicons
-                name={item.status === 'paid' ? 'checkmark-circle' : 'time-outline'}
-                size={20}
-                color={item.status === 'paid' ? '#10b981' : '#f59e0b'}
-              />
-            </View>
-            
-            <View style={styles.historyDetails}>
-              <Text style={styles.historyDescription}>Order #{item.order_id}</Text>
-              <Text style={styles.historyDate}>
-                {new Date(item.date).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </Text>
-            </View>
-            
-            <View style={styles.historyAmount}>
-              <Text style={[
-                styles.historyAmountText,
-                { color: item.status === 'paid' ? '#10b981' : '#f59e0b' }
-              ]}>
-                ₵{item.amount.toFixed(2)}
-              </Text>
-              <View style={[
-                styles.statusBadge,
-                { backgroundColor: item.status === 'paid' ? '#d1fae5' : '#fef3c7' }
-              ]}>
-                <Text style={[
-                  styles.statusText,
-                  { color: item.status === 'paid' ? '#065f46' : '#92400e' }
-                ]}>
-                  {item.status.toUpperCase()}
-                </Text>
+        {earningsData.earnings_breakdown.map((item, index) => {
+          // Calculate breakdown
+          const orderTotal = item.gross_amount || 0;
+          const commissionRate = item.commission_rate || 0.15;
+          const commission = item.earning_type === 'delivery_commission' ? item.amount : (orderTotal * commissionRate);
+          const deliveryFee = item.earning_type === 'delivery_fee' ? item.amount : 10;
+          const isBonus = item.earning_type === 'daily_bonus' || item.earning_type === 'weekly_bonus';
+          const isService = item.earning_type === 'service_pickup' || item.earning_type === 'service_refill';
+          
+          return (
+            <View key={`earning-${item.id || index}`} style={styles.earningCard}>
+              {/* Header */}
+              <View style={styles.earningHeader}>
+                <View style={styles.earningHeaderLeft}>
+                  <Ionicons
+                    name={
+                      isBonus ? 'trophy' :
+                      isService ? 'construct' :
+                      item.earning_type === 'delivery_fee' ? 'bicycle' :
+                      'cash'
+                    }
+                    size={24}
+                    color={
+                      isBonus ? '#f59e0b' :
+                      item.status === 'paid' ? '#10b981' : '#6b7280'
+                    }
+                  />
+                  <View style={styles.earningInfo}>
+                    <Text style={styles.earningTitle}>
+                      {isBonus || isService ? (item.description || item.earning_type) : `Order #${item.order_id || 'N/A'}`}
+                    </Text>
+                    <Text style={styles.earningDate}>
+                      {new Date(item.date).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                  </View>
+                </View>
+                
+                <View style={styles.earningAmountSection}>
+                  <Text style={[
+                    styles.earningTotalAmount,
+                    { color: item.status === 'paid' ? '#10b981' : '#f59e0b' }
+                  ]}>
+                    ₵{(item.amount ?? 0).toFixed(2)}
+                  </Text>
+                  <View style={[
+                    styles.earningStatusBadge,
+                    { backgroundColor: item.status === 'paid' ? '#d1fae5' : '#fef3c7' }
+                  ]}>
+                    <Text style={[
+                      styles.earningStatusText,
+                      { color: item.status === 'paid' ? '#065f46' : '#92400e' }
+                    ]}>
+                      {item.status?.toUpperCase() || 'PENDING'}
+                    </Text>
+                  </View>
+                </View>
               </View>
+
+              {/* Breakdown Details - Only for delivery earnings */}
+              {!isBonus && !isService && orderTotal > 0 && (
+                <View style={styles.earningBreakdown}>
+                  <Text style={styles.breakdownTitle}>💰 Earning Breakdown</Text>
+                  
+                  <View style={styles.breakdownItem}>
+                    <View style={styles.breakdownLeft}>
+                      <Text style={styles.breakdownDot}>•</Text>
+                      <Text style={styles.breakdownLabel}>Order Value</Text>
+                    </View>
+                    <Text style={styles.breakdownSubValue}>₵{orderTotal.toFixed(2)}</Text>
+                  </View>
+                  
+                  <View style={styles.breakdownItem}>
+                    <View style={styles.breakdownLeft}>
+                      <Text style={styles.breakdownDot}>•</Text>
+                      <Text style={styles.breakdownLabel}>Commission (15%)</Text>
+                    </View>
+                    <Text style={styles.breakdownValue}>₵{(orderTotal * 0.15).toFixed(2)}</Text>
+                  </View>
+                  
+                  <View style={styles.breakdownItem}>
+                    <View style={styles.breakdownLeft}>
+                      <Text style={styles.breakdownDot}>•</Text>
+                      <Text style={styles.breakdownLabel}>Delivery Fee</Text>
+                    </View>
+                    <Text style={styles.breakdownValue}>₵10.00</Text>
+                  </View>
+                  
+                  <View style={[styles.breakdownItem, styles.breakdownTotal]}>
+                    <Text style={styles.breakdownTotalLabel}>Your Earning</Text>
+                    <Text style={styles.breakdownTotalValue}>
+                      ₵{((orderTotal * 0.15) + 10).toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Service or Bonus Info */}
+              {(isBonus || isService) && item.description && (
+                <View style={styles.earningNote}>
+                  <Ionicons 
+                    name={isBonus ? "star" : "information-circle-outline"} 
+                    size={14} 
+                    color={isBonus ? "#f59e0b" : "#3b82f6"} 
+                  />
+                  <Text style={styles.earningNoteText}>
+                    {item.description}
+                  </Text>
+                </View>
+              )}
             </View>
-          </View>
-        ))}
+          );
+        })}
       </View>
     );
   };
@@ -817,6 +892,131 @@ const styles = StyleSheet.create({
   errorContainer: {
     flex: 1,
     padding: 20,
+  },
+  // Earnings breakdown styles
+  earningCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  earningHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  earningHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+  },
+  earningInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  earningTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 2,
+  },
+  earningDate: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  earningAmountSection: {
+    alignItems: 'flex-end',
+  },
+  earningTotalAmount: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  earningStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  earningStatusText: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  earningBreakdown: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 4,
+  },
+  breakdownTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 8,
+  },
+  breakdownItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  breakdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  breakdownDot: {
+    fontSize: 16,
+    color: '#10b981',
+    marginRight: 6,
+  },
+  breakdownLabel: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  breakdownValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#10b981',
+  },
+  breakdownSubValue: {
+    fontSize: 13,
+    color: '#9ca3af',
+  },
+  breakdownTotal: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  breakdownTotalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  breakdownTotalValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#10b981',
+  },
+  earningNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f9ff',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 8,
+  },
+  earningNoteText: {
+    fontSize: 12,
+    color: '#3b82f6',
+    marginLeft: 6,
+    flex: 1,
   },
 });
 
