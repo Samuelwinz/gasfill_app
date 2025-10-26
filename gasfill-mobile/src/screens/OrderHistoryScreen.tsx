@@ -224,6 +224,29 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                   <Text style={styles.orderId}>{order.id}</Text>
                   <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>
                 </View>
+                
+                {/* Rider Info - Show when order is assigned */}
+                {order.rider_name && ['assigned', 'pickup', 'picked_up', 'in_transit'].includes(order.status.toLowerCase()) && (
+                  <View style={styles.riderInfoCard}>
+                    <View style={styles.riderIconContainer}>
+                      <Ionicons name="bicycle" size={20} color="#10b981" />
+                    </View>
+                    <View style={styles.riderDetails}>
+                      <Text style={styles.riderLabel}>Your Rider</Text>
+                      <Text style={styles.riderName}>{order.rider_name}</Text>
+                      {order.rider_phone && (
+                        <Text style={styles.riderPhone}>{order.rider_phone}</Text>
+                      )}
+                    </View>
+                    {order.rider_rating && (
+                      <View style={styles.riderRatingBadge}>
+                        <Ionicons name="star" size={14} color="#fbbf24" />
+                        <Text style={styles.riderRatingText}>{order.rider_rating.toFixed(1)}</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+                
                 <View style={styles.itemsContainer}>
                   {order.items.map((item, index) => (
                     <Text key={index} style={styles.itemText}>
@@ -335,6 +358,60 @@ const styles = StyleSheet.create({
   orderDate: {
     fontSize: 14,
     color: '#757575',
+  },
+  riderInfoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0fdf4',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  riderIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#d1fae5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  riderDetails: {
+    flex: 1,
+  },
+  riderLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  riderName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  riderPhone: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  riderRatingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  riderRatingText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#111827',
   },
   itemsContainer: {
     marginBottom: 12,

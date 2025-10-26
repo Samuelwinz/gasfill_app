@@ -27,6 +27,9 @@ export interface Order {
   created_at: string;
   updated_at: string;
   rider_id?: number;
+  rider_name?: string;
+  rider_phone?: string;
+  rider_rating?: number;
   tracking_info?: TrackingInfo;
 }
 

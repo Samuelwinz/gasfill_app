@@ -273,8 +273,9 @@ class EarningEntry(BaseModel):
     date: str
 
 class CommissionStructure(BaseModel):
-    delivery_base_rate: float = 0.15  # 15% of order value
-    delivery_fee: float = 10.0  # Fixed delivery fee for rider
+    delivery_base_rate: float = 0.15  # 15% of order value (legacy)
+    rider_commission_rate: float = 0.80  # 80% of delivery fee goes to rider
+    delivery_fee: float = 10.0  # Fixed delivery fee per order
     service_pickup_fee: float = 15.0  # Fixed fee for pickup service
     service_refill_fee: float = 20.0  # Fixed fee for refill service
     bonus_threshold: int = 10  # Orders needed for daily bonus
@@ -690,7 +691,7 @@ async def get_orders(credentials: HTTPAuthorizationCredentials = Depends(securit
 
 @app.get("/api/customer/orders")
 async def get_customer_orders(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Get customer's orders (requires authentication)"""
+    """Get customer's orders with rider information (requires authentication)"""
     current_user = get_current_user(credentials)
     
     if not current_user:
@@ -702,7 +703,23 @@ async def get_customer_orders(credentials: HTTPAuthorizationCredentials = Depend
     customer_email = current_user.get("email")
     customer_orders = db.get_orders_for_customer(customer_email)
     
-    return customer_orders
+    # Enrich orders with rider information
+    enriched_orders = []
+    for order in customer_orders:
+        enriched_order = order.copy()
+        
+        # Add rider info if order has a rider assigned
+        rider_id = order.get("rider_id")
+        if rider_id:
+            rider = riders_db.get(rider_id)
+            if rider:
+                enriched_order["rider_name"] = rider.get("username")
+                enriched_order["rider_phone"] = rider.get("phone")
+                enriched_order["rider_rating"] = rider.get("rating")
+        
+        enriched_orders.append(enriched_order)
+    
+    return enriched_orders
 
 @app.get("/api/orders/{order_id}")
 async def get_order(order_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -1445,18 +1462,35 @@ async def delete_user(user_id: int, current_admin: dict = Depends(get_current_ad
 
 @app.get("/api/rider/dashboard")
 async def get_rider_dashboard(current_rider: dict = Depends(get_current_rider)):
-    """Get rider dashboard data"""
-    # Get rider's assigned orders
+    """Get rider dashboard data with 80% commission on delivery fees"""
+    print(f"\n{'='*60}")
+    print(f"🎯 RIDER DASHBOARD REQUEST")
+    print(f"{'='*60}")
+    
+    # Get rider ID (handle both 'id' and 'rider_id' fields)
+    rider_id = current_rider.get("id") or current_rider.get("rider_id")
+    print(f"👤 Rider ID: {rider_id}")
+    print(f"👤 Rider Username: {current_rider.get('username')}")
+    print(f"👤 Rider Status: {current_rider.get('status')}")
+    
+    # Get rider's assigned orders - check both rider_id and assigned_rider_id
     rider_orders = [
         order for order in orders_db 
-        if order.get("assigned_rider_id") == current_rider["id"]
+        if order.get("rider_id") == rider_id or order.get("assigned_rider_id") == rider_id
     ]
     
     # Get rider's assigned services
     rider_services = [
         service for service in services_db 
-        if service.get("assigned_rider_id") == current_rider["id"]
+        if service.get("assigned_rider_id") == rider_id
     ]
+    
+    print(f"\n📦 ORDERS ANALYSIS:")
+    print(f"   Total orders in DB: {len(orders_db)}")
+    print(f"   Rider's orders found: {len(rider_orders)}")
+    if rider_orders:
+        print(f"   Order IDs: {[o.get('id') for o in rider_orders]}")
+        print(f"   Order statuses: {[(o.get('id'), o.get('status')) for o in rider_orders]}")
     
     # Calculate statistics
     today = utc_now().date()
@@ -1470,44 +1504,63 @@ async def get_rider_dashboard(current_rider: dict = Depends(get_current_rider)):
         if datetime.fromisoformat(service["created_at"]).date() == today
     ]
     
-    pending_orders = [order for order in rider_orders if order["status"] in ["assigned", "picked_up", "in_transit"]]
-    pending_services = [service for service in rider_services if service["status"] in ["assigned", "in_progress"]]
-    completed_today = [order for order in today_orders if order["status"] == "delivered"]
+    active_orders = [order for order in rider_orders if order["status"] in ["assigned", "picked_up", "in_transit"]]
+    active_services = [service for service in rider_services if service["status"] in ["assigned", "in_progress"]]
+    
+    completed_today_orders = [order for order in today_orders if order["status"] == "delivered"]
     completed_services_today = [service for service in today_services if service["status"] == "completed"]
     
-    # Calculate combined earnings (orders + services)
-    order_earnings = current_rider["earnings"]
-    service_earnings = len([s for s in rider_services if s["status"] == "completed"]) * 15.0
-    total_earnings = order_earnings + service_earnings
+    print(f"\n📊 STATS:")
+    print(f"   Active orders: {len(active_orders)}")
+    print(f"   Active services: {len(active_services)}")
+    print(f"   Completed today: {len(completed_today_orders)}")
+    print(f"   Total deliveries: {len([o for o in rider_orders if o['status'] == 'delivered'])}")
     
-    return {
-        "rider": {
-            "id": current_rider["id"],
-            "username": current_rider["username"],
-            "status": current_rider["status"],
-            "rating": current_rider["rating"],
-            "total_deliveries": current_rider["total_deliveries"],
-            "total_services": len([s for s in rider_services if s["status"] == "completed"]),
-            "earnings": total_earnings
-        },
-        "stats": {
-            "pending_orders": len(pending_orders),
-            "pending_services": len(pending_services),
-            "completed_today": len(completed_today),
-            "completed_services_today": len(completed_services_today),
-            "total_orders": len(rider_orders),
-            "total_services": len(rider_services),
-            "success_rate": round((current_rider["successful_deliveries"] / max(current_rider["total_deliveries"], 1)) * 100, 2)
-        },
-        "orders": {
-            "pending": pending_orders[:5],  # Latest 5 pending orders
-            "completed_today": completed_today
-        },
-        "services": {
-            "pending": pending_services[:5],  # Latest 5 pending services
-            "completed_today": completed_services_today
-        }
+    # Calculate earnings with 80% commission
+    # Each delivered order earns rider 80% of delivery fee
+    rider_earnings_per_delivery = commission_structure.delivery_fee * commission_structure.rider_commission_rate
+    
+    # Calculate total earnings from delivered orders
+    total_delivered_orders = len([order for order in rider_orders if order["status"] == "delivered"])
+    total_order_earnings = total_delivered_orders * rider_earnings_per_delivery
+    
+    # Calculate service earnings
+    completed_services = len([s for s in rider_services if s["status"] == "completed"])
+    service_earnings = (completed_services * commission_structure.service_pickup_fee) + \
+                      (completed_services * commission_structure.service_refill_fee)
+    
+    total_earnings = total_order_earnings + service_earnings
+    
+    # Calculate today's earnings
+    today_delivered = len(completed_today_orders)
+    today_earnings = (today_delivered * rider_earnings_per_delivery) + \
+                    (len(completed_services_today) * (commission_structure.service_pickup_fee + commission_structure.service_refill_fee))
+    
+    print(f"\n� EARNINGS:")
+    print(f"   Commission rate: {commission_structure.rider_commission_rate * 100}%")
+    print(f"   Delivery fee: ₵{commission_structure.delivery_fee}")
+    print(f"   Earnings per delivery: ₵{rider_earnings_per_delivery}")
+    print(f"   Total deliveries: {total_delivered_orders}")
+    print(f"   Total earnings: ₵{total_earnings}")
+    print(f"   Today's earnings: ₵{today_earnings}")
+    print(f"{'='*60}\n")
+    
+    # Return in format expected by mobile app
+    dashboard_data = {
+        "status": current_rider["status"],
+        "total_earnings": round(total_earnings, 2),
+        "today_earnings": round(today_earnings, 2),
+        "total_deliveries": total_delivered_orders + completed_services,
+        "active_orders": len(active_orders) + len(active_services),
+        "completed_today": len(completed_today_orders) + len(completed_services_today),
+        "rating": current_rider["rating"],
+        "commission_rate": commission_structure.rider_commission_rate,
+        "delivery_fee": commission_structure.delivery_fee,
+        "earnings_per_delivery": round(rider_earnings_per_delivery, 2)
     }
+    
+    print(f"📤 Returning dashboard data: {dashboard_data}\n")
+    return dashboard_data
 
 @app.get("/api/rider/orders")
 async def get_rider_orders(

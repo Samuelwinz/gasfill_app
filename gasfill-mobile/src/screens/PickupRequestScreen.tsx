@@ -74,14 +74,9 @@ const PickupRequestScreen: React.FC = () => {
       }
 
       const location = await ExpoLocation.getCurrentPositionAsync({});
-      const address = await ExpoLocation.reverseGeocodeAsync({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
-
-      const formattedAddress = address[0] 
-        ? `${address[0].street || ''} ${address[0].city || ''} ${address[0].region || ''}`.trim()
-        : 'Current Location';
+      
+      // Use coordinates directly without geocoding to avoid rate limits
+      const formattedAddress = `${location.coords.latitude.toFixed(6)}, ${location.coords.longitude.toFixed(6)}`;
 
       setCurrentLocation({
         latitude: location.coords.latitude,
@@ -91,6 +86,31 @@ const PickupRequestScreen: React.FC = () => {
 
       if (useCurrentLocation) {
         setPickupAddress(formattedAddress);
+      }
+
+      // Optional: Try geocoding with error handling for rate limits
+      try {
+        const address = await ExpoLocation.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+
+        if (address && address[0]) {
+          const betterAddress = `${address[0].street || ''} ${address[0].city || ''} ${address[0].region || ''}`.trim();
+          if (betterAddress) {
+            setCurrentLocation(prev => prev ? { ...prev, address: betterAddress } : null);
+            if (useCurrentLocation) {
+              setPickupAddress(betterAddress);
+            }
+          }
+        }
+      } catch (geocodeError: any) {
+        // Silently fail geocoding - we already have coordinates
+        if (geocodeError.message?.includes('rate limit')) {
+          console.warn('⚠️ Geocoding rate limit - using coordinates instead');
+        } else {
+          console.warn('⚠️ Geocoding failed:', geocodeError.message);
+        }
       }
     } catch (error) {
       console.error('Error getting location:', error);

@@ -24,6 +24,7 @@ import RiderDashboard from '../screens/RiderDashboard';
 import RiderJobsScreen from '../screens/RiderJobsScreen';
 import RiderEarningsScreen from '../screens/RiderEarningsScreen';
 import AdminDashboard from '../screens/AdminDashboard';
+import AboutScreen from '../screens/AboutScreen';
 
 // Import services
 import { StorageService } from '../utils/storage';
@@ -334,6 +335,13 @@ function AppStack() {
       <Stack.Screen 
         name="Rewards" 
         component={RewardLoyaltyScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="About" 
+        component={AboutScreen}
         options={{ 
           headerShown: false,
         }}

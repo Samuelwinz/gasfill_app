@@ -343,31 +343,46 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
         {/* Rider Info */}
         {trackingData.rider_name && (
           <View style={styles.riderCard}>
+            <Text style={styles.riderCardTitle}>Your Rider</Text>
             <View style={styles.riderHeader}>
-              <Image
-                source={{ uri: `https://ui-avatars.com/api/?name=${trackingData.rider_name}&background=3b82f6&color=fff&size=128` }}
-                style={styles.riderAvatar}
-              />
+              <View style={styles.riderAvatarContainer}>
+                <Image
+                  source={{ uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(trackingData.rider_name)}&background=3b82f6&color=fff&size=200&bold=true&rounded=true` }}
+                  style={styles.riderAvatar}
+                />
+                <View style={styles.riderOnlineBadge}>
+                  <View style={styles.onlineDot} />
+                </View>
+              </View>
               <View style={styles.riderInfo}>
                 <Text style={styles.riderName}>{trackingData.rider_name}</Text>
                 {trackingData.rider_rating && (
                   <View style={styles.riderRatingContainer}>
-                    <Ionicons name="star" size={16} color="#fbbf24" />
+                    <Ionicons name="star" size={18} color="#fbbf24" />
                     <Text style={styles.riderRating}>
-                      {trackingData.rider_rating.toFixed(1)} Rating
+                      {trackingData.rider_rating.toFixed(1)}
                     </Text>
+                    <Text style={styles.riderRatingText}> (Excellent)</Text>
+                  </View>
+                )}
+                {trackingData.rider_phone && (
+                  <View style={styles.riderPhoneContainer}>
+                    <Ionicons name="call-outline" size={16} color="#6b7280" />
+                    <Text style={styles.riderPhone}>{trackingData.rider_phone}</Text>
                   </View>
                 )}
               </View>
-              {trackingData.rider_phone && (
-                <TouchableOpacity 
-                  style={styles.callButton}
-                  onPress={handleCallRider}
-                >
-                  <Ionicons name="call" size={22} color="#ffffff" />
-                </TouchableOpacity>
-              )}
             </View>
+            {trackingData.rider_phone && (
+              <TouchableOpacity 
+                style={styles.callButton}
+                onPress={handleCallRider}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="call" size={24} color="#ffffff" />
+                <Text style={styles.callButtonText}>Call Rider</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -574,53 +589,114 @@ const styles = StyleSheet.create({
   riderCard: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
-    padding: 16,
+    padding: 20,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  riderCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginBottom: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   riderHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 16,
+  },
+  riderAvatarContainer: {
+    position: 'relative',
+    marginRight: 16,
   },
   riderAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    marginRight: 12,
-    borderWidth: 2,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 3,
     borderColor: '#3b82f6',
+    backgroundColor: '#e5e7eb',
+  },
+  riderOnlineBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  onlineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10b981',
   },
   riderInfo: {
     flex: 1,
   },
   riderName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     color: '#111827',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   riderRatingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    marginBottom: 6,
   },
   riderRating: {
+    fontSize: 15,
+    color: '#111827',
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  riderRatingText: {
     fontSize: 13,
     color: '#6b7280',
+    fontWeight: '500',
+  },
+  riderPhoneContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  riderPhone: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
   },
   callButton: {
     backgroundColor: '#10b981',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  callButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
   },
   orderDetailsCard: {
     backgroundColor: '#ffffff',

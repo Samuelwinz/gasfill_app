@@ -83,13 +83,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     { icon: 'card-outline', name: 'Payment Methods', screen: null, description: 'Manage payment options' },
     { icon: 'notifications-outline', name: 'Notifications', screen: null, description: 'Notification preferences' },
     { icon: 'help-circle-outline', name: 'Help & Support', screen: null, description: 'Get help and contact us' },
-    { icon: 'information-circle-outline', name: 'About', screen: null, description: 'App version and info' },
+    { icon: 'information-circle-outline', name: 'About', screen: 'About', description: 'App version and info' },
   ];
 
   const riderMenuItems = [
     { icon: 'settings-outline', name: 'Account Settings', screen: null, description: 'Update your information' },
     { icon: 'notifications-outline', name: 'Notifications', screen: null, description: 'Notification preferences' },
     { icon: 'help-circle-outline', name: 'Help & Support', screen: null, description: 'Get help and contact us' },
+    { icon: 'information-circle-outline', name: 'About', screen: 'About', description: 'App version and info' },
   ];
 
   const adminMenuItems = [
@@ -100,6 +101,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     { icon: 'notifications-outline', name: 'Notifications', screen: null, description: 'Notification preferences' },
     { icon: 'document-text-outline', name: 'Activity Logs', screen: null, description: 'View system activity' },
     { icon: 'help-circle-outline', name: 'Help & Support', screen: null, description: 'Get help and resources' },
+    { icon: 'information-circle-outline', name: 'About', screen: 'About', description: 'App version and info' },
   ];
 
   const menuItems = isRider ? riderMenuItems : isAdmin ? adminMenuItems : customerMenuItems;
