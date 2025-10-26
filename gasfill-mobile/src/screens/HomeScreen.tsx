@@ -5,233 +5,93 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   StatusBar,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StorageService } from '../utils/storage';
-import { CartItem, Order } from '../types';
-import NativeIntegrations from '../utils/nativeIntegrations';
 
-interface QuickOrderItem {
-  id: string;
-  name: string;
-  price: number;
-  description: string;
+interface HomeScreenProps {
+  navigation: any;
 }
 
-const QUICK_ORDER_ITEMS: QuickOrderItem[] = [
-  { id: '6kg', name: '6kg Cylinder', price: 120, description: 'Portable & safe' },
-  { id: '12.5kg', name: '12.5kg Cylinder', price: 220, description: 'Standard household' },
-  { id: '37kg', name: '37kg Cylinder', price: 680, description: 'Commercial use' },
-];
-
-const HomeScreen: React.FC = () => {
-  const [cartCount, setCartCount] = useState(0);
-  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
+const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
+  const [userName, setUserName] = useState('Akon');
+  const [points, setPoints] = useState(1200);
+  const [ordersCompleted, setOrdersCompleted] = useState(42);
 
   useEffect(() => {
-    loadCartCount();
-    loadRecentOrders();
+    loadUserData();
   }, []);
 
-  const loadCartCount = async () => {
+  const loadUserData = async () => {
     try {
-      const cart = await StorageService.loadCart();
-      setCartCount(cart.reduce((sum, item) => sum + item.qty, 0));
-    } catch (error) {
-      console.error('Error loading cart count:', error);
-    }
-  };
-
-  const loadRecentOrders = async () => {
-    try {
-      const orders = await StorageService.loadOrders();
-      setRecentOrders(orders.slice(0, 3)); // Show last 3 orders
-    } catch (error) {
-      console.error('Error loading recent orders:', error);
-    }
-  };
-
-  const addToCart = async (item: QuickOrderItem) => {
-    try {
-      const cart = await StorageService.loadCart();
-      const existingItem = cart.find(cartItem => cartItem.id === item.id);
-
-      if (existingItem) {
-        existingItem.qty += 1;
-      } else {
-        cart.push({
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          qty: 1,
-        });
+      const user = await StorageService.getUser();
+      if (user) {
+        setUserName(user.username || 'Akon');
       }
-
-      await StorageService.saveCart(cart);
-      setCartCount(cart.reduce((sum, cartItem) => sum + cartItem.qty, 0));
-      Alert.alert('Success', `${item.name} added to cart`);
+      // Mock data for points and orders
+      // In a real app, this would come from an API
     } catch (error) {
-      console.error('Error adding to cart:', error);
-      Alert.alert('Error', 'Failed to add item to cart');
-    }
-  };
-
-  const oneClickOrder = (item: QuickOrderItem) => {
-    Alert.alert(
-      'Quick Order',
-      `Order ${item.name} for ₵${item.price}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Order via WhatsApp', 
-          onPress: () => NativeIntegrations.sendOrderViaWhatsApp({
-            name: 'Quick Order',
-            phone: '',
-            product: item.name,
-            qty: 1,
-            address: 'To be provided',
-          })
-        },
-        { text: 'Add to Cart', onPress: () => addToCart(item) },
-      ]
-    );
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return '#0b5ed7';
-      case 'assigned': return '#f59e0b';
-      case 'in_transit': return '#8b5cf6';
-      case 'delivered': return '#10b981';
-      default: return '#6b7280';
+      console.error('Error loading user:', error);
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8fbff" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.brand}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>GF</Text>
-          </View>
-          <View>
-            <Text style={styles.brandTitle}>GasFill</Text>
-            <Text style={styles.brandSubtitle}>Fast • Safe • Premium</Text>
-          </View>
-        </View>
-        
-        <TouchableOpacity 
-          style={styles.cartButton}
-          onPress={() => {/* Navigate to cart */}}
-        >
-          <Ionicons name="basket-outline" size={24} color="#0b5ed7" />
-          {cartCount > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{cartCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-
+      <StatusBar barStyle="dark-content" backgroundColor="#F4F7FA" />
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Hero Section */}
-        <View style={styles.hero}>
-          <View style={styles.heroContent}>
-            <Text style={styles.heroTitle}>Premium LPG Delivery</Text>
-            <Text style={styles.heroSubtitle}>
-              Safe, fast cylinder delivery and refill service across Ghana
-            </Text>
-            <View style={styles.heroActions}>
-              <TouchableOpacity 
-                style={styles.primaryButton}
-                onPress={() => {/* Navigate to products */}}
-              >
-                <Text style={styles.primaryButtonText}>Order Now</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.secondaryButton}
-                onPress={() => NativeIntegrations.openWhatsApp()}
-              >
-                <Ionicons name="logo-whatsapp" size={20} color="#10b981" />
-                <Text style={styles.secondaryButtonText}>WhatsApp</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+        <View style={styles.header}>
+          <Text style={styles.greeting}>Hi, {userName}!</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+            <Image
+              source={{ uri: 'https://i.pravatar.cc/150?u=akon' }} // Placeholder image
+              style={styles.avatar}
+            />
+          </TouchableOpacity>
         </View>
 
-        {/* Quick Order Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Order</Text>
-          <Text style={styles.sectionSubtitle}>Tap to order instantly</Text>
-          
-          <View style={styles.quickOrderGrid}>
-            {QUICK_ORDER_ITEMS.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.quickOrderCard}
-                onPress={() => oneClickOrder(item)}
-              >
-                <View style={styles.cylinderIcon}>
-                  <Ionicons name="cellular-outline" size={32} color="#0b5ed7" />
-                </View>
-                <Text style={styles.quickOrderName}>{item.name}</Text>
-                <Text style={styles.quickOrderDescription}>{item.description}</Text>
-                <Text style={styles.quickOrderPrice}>₵{item.price}</Text>
-              </TouchableOpacity>
-            ))}
+        <View style={styles.loyaltyCard}>
+          <View style={styles.loyaltyHeader}>
+            <Text style={styles.levelText}>Level</Text>
+            <Text style={styles.pointsText}>→ Points</Text>
           </View>
-        </View>
-
-        {/* Recent Orders */}
-        {recentOrders.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent Orders</Text>
-            {recentOrders.map((order: any) => (
-              <View key={order.id} style={styles.orderCard}>
-                <View style={styles.orderHeader}>
-                  <Text style={styles.orderId}>#{order.id}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
-                    <Text style={styles.statusText}>{order.status}</Text>
-                  </View>
-                </View>
-                <Text style={styles.orderTotal}>₵{order.total}</Text>
-                <Text style={styles.orderDate}>
-                  {new Date(order.createdAt || order.created_at).toLocaleDateString()}
-                </Text>
+          <View style={styles.loyaltyBody}>
+            <View style={styles.loyaltyProgress}>
+              <View style={styles.progressBar}>
+                <View style={[styles.progress, { width: `${(ordersCompleted / 50) * 100}%` }]} />
               </View>
-            ))}
+            </View>
+            <Text style={styles.ordersCompleted}>{ordersCompleted} Orders Completed</Text>
           </View>
-        )}
+        </View>
 
-        {/* Contact Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Need Help?</Text>
-          <View style={styles.contactGrid}>
-            <TouchableOpacity 
-              style={styles.contactCard}
-              onPress={() => NativeIntegrations.makePhoneCall()}
-            >
-              <Ionicons name="call-outline" size={24} color="#0b5ed7" />
-              <Text style={styles.contactCardTitle}>Call Us</Text>
-              <Text style={styles.contactCardSubtitle}>+233 201 022 153</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.contactCard}
-              onPress={() => NativeIntegrations.openWhatsApp()}
-            >
-              <Ionicons name="logo-whatsapp" size={24} color="#10b981" />
-              <Text style={styles.contactCardTitle}>WhatsApp</Text>
-              <Text style={styles.contactCardSubtitle}>Fastest response</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.quickAccessGrid}>
+          <TouchableOpacity style={styles.quickAccessCard} onPress={() => navigation.navigate('Products')}>
+            <View style={styles.cardIconContainer}>
+              <Ionicons name="flame" size={40} color="#FF6F00" />
+            </View>
+            <Text style={styles.cardTitle}>Order Gas</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.quickAccessCard} onPress={() => navigation.navigate('Orders')}>
+            <View style={styles.cardIconContainer}>
+              <Ionicons name="car" size={40} color="#0A2540" />
+            </View>
+            <Text style={styles.cardTitle}>Track Delivery</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <View style={styles.quickActions}>
+          <TouchableOpacity style={styles.quickActionCard} onPress={() => navigation.navigate('RefillPlans')}>
+            <Ionicons name="flame" size={24} color="#FF6F00" />
+            <Text style={styles.quickActionText}>Refill Plans</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.quickActionCard} onPress={() => navigation.navigate('Support')}>
+            <Ionicons name="help-buoy" size={24} color="#0A2540" />
+            <Text style={styles.quickActionText}>Support</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -241,248 +101,126 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fbff',
+    backgroundColor: '#F4F7FA',
+  },
+  content: {
+    paddingHorizontal: 24,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    paddingVertical: 20,
   },
-  brand: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  greeting: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#0A2540',
   },
-  logo: {
+  avatar: {
     width: 48,
     height: 48,
-    borderRadius: 12,
-    backgroundColor: '#0b5ed7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+    borderRadius: 24,
   },
-  logoText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  brandTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  brandSubtitle: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  cartButton: {
-    position: 'relative',
-    padding: 8,
-  },
-  cartBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    backgroundColor: '#ef4444',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cartBadgeText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  content: {
-    flex: 1,
-  },
-  hero: {
-    margin: 20,
+  loyaltyCard: {
+    backgroundColor: '#0A2540',
+    borderRadius: 20,
     padding: 24,
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
+    marginBottom: 24,
+  },
+  loyaltyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  levelText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  pointsText: {
+    fontSize: 16,
+    color: '#B2C7DD',
+  },
+  loyaltyBody: {
+    alignItems: 'flex-end',
+  },
+  loyaltyProgress: {
+    width: '100%',
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 5,
+  },
+  progress: {
+    height: 10,
+    backgroundColor: '#FFC107',
+    borderRadius: 5,
+  },
+  ordersCompleted: {
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  quickAccessGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  quickAccessCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    width: '48%',
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 5,
   },
-  heroContent: {
+  cardIconContainer: {
+    width: 80,
+    height: 80,
+    justifyContent: 'center',
     alignItems: 'center',
-  },
-  heroTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#0f172a',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  heroSubtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  heroActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  primaryButton: {
-    backgroundColor: '#0b5ed7',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  secondaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  secondaryButtonText: {
-    color: '#374151',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  section: {
-    margin: 20,
-    marginTop: 0,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 4,
-  },
-  sectionSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
     marginBottom: 16,
   },
-  quickOrderGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  quickOrderCard: {
-    flex: 1,
-    minWidth: 100,
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cylinderIcon: {
-    marginBottom: 8,
-  },
-  quickOrderName: {
-    fontSize: 14,
+  cardTitle: {
+    fontSize: 18,
     fontWeight: '600',
-    color: '#0f172a',
-    textAlign: 'center',
-    marginBottom: 4,
+    color: '#0A2540',
   },
-  quickOrderDescription: {
-    fontSize: 12,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 8,
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#0A2540',
+    marginBottom: 16,
   },
-  quickOrderPrice: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0b5ed7',
-  },
-  orderCard: {
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  orderHeader: {
+  quickActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
   },
-  orderId: {
+  quickActionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    width: '48%',
+    alignItems: 'center',
+    flexDirection: 'row',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  quickActionText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#0f172a',
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  statusText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  orderTotal: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0b5ed7',
-    marginBottom: 4,
-  },
-  orderDate: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  contactGrid: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  contactCard: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  contactCardTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0f172a',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  contactCardSubtitle: {
-    fontSize: 12,
-    color: '#6b7280',
-    textAlign: 'center',
+    color: '#0A2540',
+    marginLeft: 12,
   },
 });
 

@@ -1,248 +1,160 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Image,
+  StatusBar,
   Alert,
-  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StorageService } from '../utils/storage';
-import { Product, CartItem } from '../types';
+import { useNavigation } from '@react-navigation/native';
+import { useCart } from '../context/CartContext';
+import Toast from '../components/Toast';
 
-// Products data based on the original g8.html
-const PRODUCTS: Product[] = [
-  {
-    id: '6kg',
-    name: '6kg Cylinder',
-    description: 'Portable & safe for small households',
-    price: 120,
-    category: 'Cylinders',
+// Product definitions
+const products = [
+  { 
+    id: '6kg', 
+    name: '6kg Gas Cylinder', 
+    description: 'Perfect for small households',
+    price: 80, 
+    category: 'gas-cylinder',
+    image: '' 
   },
-  {
-    id: '12.5kg',
-    name: '12.5kg Cylinder',
-    description: 'Standard household size',
-    price: 220,
-    category: 'Cylinders',
+  { 
+    id: '12kg', 
+    name: '12.5kg Gas Cylinder', 
+    description: 'Most popular size for families',
+    price: 150, 
+    category: 'gas-cylinder',
+    image: '' 
   },
-  {
-    id: '37kg',
-    name: '37kg Cylinder',
-    description: 'Commercial use for restaurants',
-    price: 680,
-    category: 'Cylinders',
-  },
-  {
-    id: 'regulator',
-    name: 'Gas Regulator',
-    description: 'High-quality pressure regulator',
-    price: 45,
-    category: 'Accessories',
-  },
-  {
-    id: 'hose',
-    name: 'Gas Hose',
-    description: 'Flexible connection hose - 1.5m',
-    price: 25,
-    category: 'Accessories',
-  },
-  {
-    id: 'detector',
-    name: 'Gas Leak Detector',
-    description: 'Digital gas leak detection device',
-    price: 75,
-    category: 'Safety',
+  { 
+    id: '15kg', 
+    name: '15kg Gas Cylinder', 
+    description: 'Large size for heavy usage',
+    price: 180, 
+    category: 'gas-cylinder',
+    image: '' 
   },
 ];
 
-const CATEGORIES = ['All', 'Cylinders', 'Accessories', 'Safety'];
-
 const ProductsScreen: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>(PRODUCTS);
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [cartCount, setCartCount] = useState(0);
+  const navigation = useNavigation();
+  const { addToCart } = useCart();
+  const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
 
-  useEffect(() => {
-    loadCartCount();
-    filterProducts();
-  }, [selectedCategory, searchQuery]);
-
-  const loadCartCount = async () => {
-    try {
-      const cart = await StorageService.loadCart();
-      setCartCount(cart.reduce((sum, item) => sum + item.qty, 0));
-    } catch (error) {
-      console.error('Error loading cart count:', error);
-    }
+  const handleSelectSize = (size: string) => {
+    setSelectedSize(size);
   };
 
-  const filterProducts = () => {
-    let filtered = PRODUCTS;
-
-    // Filter by category
-    if (selectedCategory !== 'All') {
-      filtered = filtered.filter(product => product.category === selectedCategory);
+  const handleOrderNow = () => {
+    if (!selectedSize) {
+      setToast({ visible: true, message: 'Please select a cylinder size', type: 'error' });
+      return;
     }
 
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(product =>
-        product.name.toLowerCase().includes(query) ||
-        product.description.toLowerCase().includes(query)
-      );
+    const product = products.find(p => p.id === selectedSize);
+    if (product) {
+      addToCart(product, 1);
+      setToast({ visible: true, message: `${product.name} added to cart!`, type: 'success' });
+      
+      // Navigate to cart/checkout after a short delay
+      setTimeout(() => {
+        (navigation as any).navigate('Cart');
+      }, 1000);
     }
-
-    setProducts(filtered);
-  };
-
-  const addToCart = async (product: Product) => {
-    try {
-      const cart = await StorageService.loadCart();
-      const existingItem = cart.find(item => item.id === product.id);
-
-      if (existingItem) {
-        existingItem.qty += 1;
-      } else {
-        const newItem: CartItem = {
-          id: product.id,
-          name: product.name,
-          price: product.price,
-          qty: 1,
-        };
-        cart.push(newItem);
-      }
-
-      await StorageService.saveCart(cart);
-      setCartCount(cart.reduce((sum, item) => sum + item.qty, 0));
-      Alert.alert('Success', `${product.name} added to cart`);
-    } catch (error) {
-      console.error('Error adding to cart:', error);
-      Alert.alert('Error', 'Failed to add item to cart');
-    }
-  };
-
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'Cylinders': return 'cellular-outline';
-      case 'Accessories': return 'construct-outline';
-      case 'Safety': return 'shield-checkmark-outline';
-      default: return 'grid-outline';
-    }
-  };
-
-  const getProductIcon = (productId: string) => {
-    if (productId.includes('kg')) return 'cellular-outline';
-    if (productId === 'regulator') return 'settings-outline';
-    if (productId === 'hose') return 'git-branch-outline';
-    if (productId === 'detector') return 'warning-outline';
-    return 'cube-outline';
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
+      <Toast 
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={() => setToast({ ...toast, visible: false })}
+      />
+      <StatusBar barStyle="dark-content" backgroundColor="#F4F7FA" />
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Products</Text>
-        <View style={styles.cartIcon}>
-          <Ionicons name="basket-outline" size={24} color="#0b5ed7" />
-          {cartCount > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{cartCount}</Text>
-            </View>
-          )}
-        </View>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color="#0A2540" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Choose Your Gas Cylinder</Text>
+        <View style={{ width: 24 }} />
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={20} color="#6b7280" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search products..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
-      </View>
-
-      {/* Category Filter */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoryContainer}
-        contentContainerStyle={styles.categoryContent}
-      >
-        {CATEGORIES.map((category) => (
-          <TouchableOpacity
-            key={category}
-            style={[
-              styles.categoryChip,
-              selectedCategory === category && styles.categoryChipActive
-            ]}
-            onPress={() => setSelectedCategory(category)}
-          >
-            <Ionicons
-              name={getCategoryIcon(category)}
-              size={16}
-              color={selectedCategory === category ? '#ffffff' : '#6b7280'}
-            />
-            <Text
-              style={[
-                styles.categoryText,
-                selectedCategory === category && styles.categoryTextActive
-              ]}
-            >
-              {category}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* Products Grid */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.productsGrid}>
-          {products.map((product) => (
-            <View key={product.id} style={styles.productCard}>
-              <View style={styles.productIcon}>
-                <Ionicons
-                  name={getProductIcon(product.id)}
-                  size={40}
-                  color="#0b5ed7"
-                />
-              </View>
-              
-              <Text style={styles.productName}>{product.name}</Text>
-              <Text style={styles.productDescription}>{product.description}</Text>
-              <Text style={styles.productPrice}>₵{product.price}</Text>
-              
-              <TouchableOpacity
-                style={styles.addToCartButton}
-                onPress={() => addToCart(product)}
-              >
-                <Ionicons name="add" size={20} color="#ffffff" />
-                <Text style={styles.addToCartText}>Add to Cart</Text>
-              </TouchableOpacity>
+        <View style={styles.sizeGrid}>
+          <TouchableOpacity
+            style={[
+              styles.sizeCard,
+              styles.sizeCardBlue,
+              selectedSize === '6kg' && styles.selectedCard,
+            ]}
+            onPress={() => handleSelectSize('6kg')}
+          >
+            <View style={styles.cylinderIconContainer}>
+              <Ionicons name="water" size={60} color="#0A2540" />
             </View>
-          ))}
+            <Text style={styles.sizeText}>6kg</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.sizeCard,
+              styles.sizeCardOrange,
+              selectedSize === '12kg' && styles.selectedCard,
+            ]}
+            onPress={() => handleSelectSize('12kg')}
+          >
+            <View style={styles.cylinderIconContainer}>
+              <Ionicons name="water" size={80} color="#FF6F00" />
+            </View>
+            <Text style={styles.sizeText}>12kg</Text>
+          </TouchableOpacity>
         </View>
 
-        {products.length === 0 && (
-          <View style={styles.emptyState}>
-            <Ionicons name="search-outline" size={64} color="#d1d5db" />
-            <Text style={styles.emptyStateTitle}>No products found</Text>
-            <Text style={styles.emptyStateText}>
-              Try adjusting your search or category filter
-            </Text>
+        <Text style={styles.sectionTitle}>Cylinder Sizes</Text>
+
+        <View style={styles.bottomGrid}>
+          <TouchableOpacity
+            style={[
+              styles.sizeCardLarge,
+              styles.sizeCardYellow,
+              selectedSize === '15kg' && styles.selectedCard,
+            ]}
+            onPress={() => handleSelectSize('15kg')}
+          >
+            <View style={styles.cylinderIconContainerLarge}>
+              <Ionicons name="water" size={100} color="#FFC107" />
+            </View>
+            <Text style={styles.sizeText}>15kg</Text>
+          </TouchableOpacity>
+
+          <View style={styles.optionsContainer}>
+            <TouchableOpacity style={styles.optionCard}>
+              <Ionicons name="calendar-outline" size={32} color="#0A2540" />
+              <Text style={styles.optionText}>Schedule Refill</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.optionCard}>
+              <Text style={styles.priceText}>
+                ₵{selectedSize === '6kg' ? '80' : selectedSize === '12.5kg' ? '150' : '180'}
+              </Text>
+              <Text style={styles.optionText}>Price</Text>
+            </TouchableOpacity>
           </View>
-        )}
+        </View>
       </ScrollView>
+
+      <View style={styles.footer}>
+        <TouchableOpacity style={styles.orderButton} onPress={handleOrderNow}>
+          <Text style={styles.orderButtonText}>Order Now</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
@@ -250,173 +162,147 @@ const ProductsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fbff',
+    backgroundColor: '#F4F7FA',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  cartIcon: {
-    position: 'relative',
-  },
-  cartBadge: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: '#ef4444',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cartBadgeText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  searchContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#ffffff',
-  },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 16,
-    color: '#374151',
-  },
-  categoryContainer: {
-    backgroundColor: '#ffffff',
-    paddingBottom: 16,
-  },
-  categoryContent: {
-    paddingHorizontal: 20,
-    gap: 8,
-  },
-  categoryChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#ffffff',
-  },
-  categoryChipActive: {
-    backgroundColor: '#0b5ed7',
-    borderColor: '#0b5ed7',
-  },
-  categoryText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6b7280',
-  },
-  categoryTextActive: {
-    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#0A2540',
   },
   content: {
-    flex: 1,
+    paddingHorizontal: 24,
   },
-  productsGrid: {
+  sizeGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 20,
-    gap: 16,
+    justifyContent: 'space-between',
+    marginBottom: 24,
   },
-  productCard: {
-    width: '47%',
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
+  sizeCard: {
+    width: '48%',
+    borderRadius: 20,
+    padding: 20,
     alignItems: 'center',
+    height: 180,
+    justifyContent: 'center',
+  },
+  sizeCardBlue: {
+    backgroundColor: '#4A90E2',
+  },
+  sizeCardOrange: {
+    backgroundColor: '#FF6F00',
+  },
+  selectedCard: {
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  cylinderImage: {
+    width: 100,
+    height: 100,
+    resizeMode: 'contain',
+    marginBottom: 12,
+  },
+  cylinderIconContainer: {
+    width: 100,
+    height: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sizeText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#0A2540',
+    marginBottom: 16,
+  },
+  bottomGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  sizeCardLarge: {
+    width: '48%',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    height: 220,
+    justifyContent: 'center',
+  },
+  sizeCardYellow: {
+    backgroundColor: '#FFC107',
+  },
+  cylinderImageLarge: {
+    width: 120,
+    height: 120,
+    resizeMode: 'contain',
+    marginBottom: 12,
+  },
+  cylinderIconContainerLarge: {
+    width: 120,
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  optionsContainer: {
+    width: '48%',
+    justifyContent: 'space-between',
+  },
+  optionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 5,
   },
-  productIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#f1f5f9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  productName: {
+  optionText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#0f172a',
-    textAlign: 'center',
-    marginBottom: 4,
+    color: '#0A2540',
+    marginTop: 8,
   },
-  productDescription: {
-    fontSize: 12,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 12,
+  priceText: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#0A2540',
   },
-  productPrice: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0b5ed7',
-    marginBottom: 12,
+  footer: {
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
   },
-  addToCartButton: {
-    flexDirection: 'row',
+  orderButton: {
+    backgroundColor: '#FF6F00',
+    borderRadius: 12,
+    paddingVertical: 16,
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#0b5ed7',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
   },
-  addToCartText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyStateTitle: {
+  orderButtonText: {
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
-    color: '#374151',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    paddingHorizontal: 32,
   },
 });
 

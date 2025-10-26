@@ -5,515 +5,263 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
+  RefreshControl,
   Switch,
-  Modal,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StorageService } from '../utils/storage';
-import { apiService } from '../services/api';
-import { PickupRequest, Rider, Commission } from '../types';
-import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getRiderDashboard, updateRiderStatus, DashboardData } from '../services/riderApi';
+import { useRiderUpdates } from '../context/WebSocketContext';
+import Loading from '../components/Loading';
+import ErrorDisplay from '../components/ErrorDisplay';
 
 const RiderDashboard: React.FC = () => {
-  const [rider, setRider] = useState<Rider | null>(null);
-  const [availableJobs, setAvailableJobs] = useState<PickupRequest[]>([]);
-  const [activeJob, setActiveJob] = useState<PickupRequest | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [isAvailable, setIsAvailable] = useState(false);
-  const [todayEarnings, setTodayEarnings] = useState(0);
-  const [weeklyEarnings, setWeeklyEarnings] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [showJobModal, setShowJobModal] = useState(false);
-  const [selectedJob, setSelectedJob] = useState<PickupRequest | null>(null);
-  const [showPhotoModal, setShowPhotoModal] = useState(false);
-  const [photoType, setPhotoType] = useState<'pickup' | 'refill'>('pickup');
+  const [statusUpdating, setStatusUpdating] = useState(false);
+
+  // Subscribe to real-time updates
+  useRiderUpdates({
+    onNewOrder: (data) => {
+      console.log('🔔 New order assigned:', data);
+      // Refresh dashboard to show updated stats
+      loadDashboard();
+    },
+    onOrderStatusUpdate: (data) => {
+      console.log('📦 Order status updated:', data);
+      // Refresh dashboard to show updated stats
+      loadDashboard();
+    },
+    onEarningsUpdate: (data) => {
+      console.log('💰 Earnings updated:', data);
+      // Update earnings in real-time if data contains the new amount
+      if (data.today_earnings !== undefined && dashboardData) {
+        setDashboardData({
+          ...dashboardData,
+          today_earnings: data.today_earnings,
+          total_earnings: data.total_earnings || dashboardData.total_earnings,
+        });
+      } else {
+        // Otherwise, refresh entire dashboard
+        loadDashboard();
+      }
+    },
+  });
 
   useEffect(() => {
-    loadRiderData();
-    loadAvailableJobs();
-    loadEarnings();
+    loadDashboard();
   }, []);
 
-  const loadRiderData = async () => {
-    try {
-      const user = await StorageService.getUser();
-      if (user) {
-        // Mock rider data - in real app, fetch from API
-        const riderData: Rider = {
-          id: user.id,
-          user_id: user.id,
-          name: user.username,
-          email: user.email,
-          phone: user.phone || '',
-          vehicle_type: 'Motorcycle',
-          vehicle_number: 'GR-1234-AB',
-          license_number: 'DL-567890',
-          status: 'active',
-          rating: 4.8,
-          total_pickups: 156,
-          total_earnings: 2450.50,
-          wallet_balance: 650.25,
-          commission_rate: 15,
-          created_at: '2023-01-15',
-          is_available: false,
-        };
-        setRider(riderData);
-        setIsAvailable(riderData.is_available);
-      }
-    } catch (error) {
-      console.error('Error loading rider data:', error);
-    }
-  };
-
-  const loadAvailableJobs = async () => {
-    try {
-      // Mock data - in real app, fetch from API
-      const jobs: PickupRequest[] = [
-        {
-          id: 'pickup-001',
-          customer_id: 1,
-          customer_name: 'John Doe',
-          customer_phone: '+233241234567',
-          pickup_address: '123 Airport Residential Area, Accra',
-          delivery_address: '123 Airport Residential Area, Accra',
-          cylinder_type: '12.5kg',
-          cylinder_count: 2,
-          status: 'pending',
-          total_cost: 340,
-          commission_amount: 51,
-          payment_status: 'completed',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        {
-          id: 'pickup-002',
-          customer_id: 2,
-          customer_name: 'Mary Asante',
-          customer_phone: '+233241234568',
-          pickup_address: '45 East Legon, Accra',
-          delivery_address: '45 East Legon, Accra',
-          cylinder_type: '6kg',
-          cylinder_count: 1,
-          status: 'pending',
-          total_cost: 95,
-          commission_amount: 14.25,
-          payment_status: 'completed',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ];
-      setAvailableJobs(jobs);
-    } catch (error) {
-      console.error('Error loading available jobs:', error);
-    }
-  };
-
-  const loadEarnings = async () => {
-    try {
-      // Mock earnings data
-      setTodayEarnings(125.50);
-      setWeeklyEarnings(856.75);
-    } catch (error) {
-      console.error('Error loading earnings:', error);
-    }
-  };
-
-  const toggleAvailability = async () => {
+  const loadDashboard = async () => {
     try {
       setLoading(true);
-      const newStatus = !isAvailable;
-      
-      // Update availability in API
-      // await ApiService.updateRiderAvailability(rider!.id, newStatus);
-      
-      setIsAvailable(newStatus);
-      
-      if (rider) {
-        setRider({ ...rider, is_available: newStatus });
-      }
-      
-      Alert.alert(
-        'Status Updated',
-        `You are now ${newStatus ? 'available' : 'unavailable'} for pickup jobs`
-      );
-    } catch (error) {
-      console.error('Error updating availability:', error);
-      Alert.alert('Error', 'Failed to update availability status');
+      setError(null);
+
+      // Debug: Check token before API call
+      const token = await AsyncStorage.getItem('token');
+      const userRole = await AsyncStorage.getItem('userRole');
+      console.log('🔍 Dashboard loading - Token:', token ? 'Present' : 'Missing', 'Role:', userRole);
+
+      const data = await getRiderDashboard();
+      setDashboardData(data);
+      setIsAvailable(data.status === 'available');
+      console.log('✅ Dashboard loaded:', data);
+    } catch (err: any) {
+      console.error('❌ Error loading dashboard:', err);
+      setError(err.message || 'Failed to load dashboard');
     } finally {
       setLoading(false);
     }
   };
 
-  const acceptJob = async (job: PickupRequest) => {
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadDashboard();
+    setRefreshing(false);
+  };
+
+  const handleStatusToggle = async (value: boolean) => {
     try {
-      setLoading(true);
+      setStatusUpdating(true);
+      const newStatus = value ? 'available' : 'offline';
       
-      // Update job status in API
-      // await ApiService.acceptPickupJob(job.id, rider!.id);
+      await updateRiderStatus(newStatus);
+      setIsAvailable(value);
       
-      setActiveJob({ ...job, status: 'accepted', rider_id: rider!.id });
-      setAvailableJobs(availableJobs.filter(j => j.id !== job.id));
-      setShowJobModal(false);
-      
-      Alert.alert('Job Accepted', 'Head to the pickup location to start the job');
-    } catch (error) {
-      console.error('Error accepting job:', error);
-      Alert.alert('Error', 'Failed to accept job');
+      console.log('✅ Status updated to:', newStatus);
+    } catch (err: any) {
+      console.error('❌ Error updating status:', err);
+      setError(err.message || 'Failed to update status');
+      // Revert toggle on error
+      setIsAvailable(!value);
     } finally {
-      setLoading(false);
+      setStatusUpdating(false);
     }
   };
 
-  const updateJobStatus = async (status: string) => {
-    if (!activeJob) return;
+  if (loading) {
+    return <Loading message="Loading dashboard..." />;
+  }
 
-    try {
-      setLoading(true);
-      
-      // Update job status in API
-      // await ApiService.updatePickupJobStatus(activeJob.id, status);
-      
-      setActiveJob({ ...activeJob, status: status as any });
-      
-      let message = '';
-      switch (status) {
-        case 'picked_up':
-          message = 'Pickup confirmed! Head to the refill center.';
-          break;
-        case 'at_refill_center':
-          message = 'Arrived at refill center. Please confirm refill completion.';
-          break;
-        case 'refilled':
-          message = 'Refill confirmed! Head to delivery location.';
-          break;
-        case 'delivered':
-          message = 'Job completed successfully! Commission has been added to your wallet.';
-          setActiveJob(null);
-          loadEarnings(); // Refresh earnings
-          break;
-      }
-      
-      if (message) {
-        Alert.alert('Status Updated', message);
-      }
-    } catch (error) {
-      console.error('Error updating job status:', error);
-      Alert.alert('Error', 'Failed to update job status');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const takePhoto = async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Camera permission is needed to take photos');
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        const photoUri = result.assets[0].uri;
-        
-        // Upload photo and update job
-        if (photoType === 'pickup') {
-          setActiveJob(prev => prev ? { ...prev, pickup_photo: photoUri } : null);
-          updateJobStatus('picked_up');
-        } else {
-          setActiveJob(prev => prev ? { ...prev, refill_confirmation_photo: photoUri } : null);
-          updateJobStatus('refilled');
-        }
-        
-        setShowPhotoModal(false);
-      }
-    } catch (error) {
-      console.error('Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo');
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return '#f59e0b';
-      case 'accepted': return '#3b82f6';
-      case 'picked_up': return '#8b5cf6';
-      case 'at_refill_center': return '#06b6d4';
-      case 'refilled': return '#10b981';
-      case 'delivered': return '#22c55e';
-      default: return '#6b7280';
-    }
-  };
-
-  if (!rider) {
+  if (error && !dashboardData) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text>Loading...</Text>
+        <ErrorDisplay message={error} onRetry={loadDashboard} retryText="Retry" />
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.welcomeText}>Welcome back,</Text>
-          <Text style={styles.riderName}>{rider.name}</Text>
+        <View style={styles.headerContent}>
+          <View style={styles.titleSection}>
+            <Text style={styles.headerTitle}>Dashboard</Text>
+            <Text style={styles.headerSubtitle}>Rider Overview</Text>
+          </View>
+          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+            <View style={styles.refreshIcon}>
+              <Ionicons name="refresh" size={20} color="#10b981" />
+            </View>
+          </TouchableOpacity>
         </View>
-        <View style={styles.availabilityToggle}>
-          <Text style={styles.toggleLabel}>Available</Text>
+
+        {/* Status Toggle */}
+        <View style={styles.statusContainer}>
+          <View style={styles.statusInfo}>
+            <Ionicons 
+              name={isAvailable ? 'checkmark-circle' : 'close-circle'} 
+              size={24} 
+              color={isAvailable ? '#10b981' : '#ef4444'} 
+            />
+            <Text style={styles.statusLabel}>
+              {isAvailable ? 'Available for orders' : 'Offline'}
+            </Text>
+          </View>
           <Switch
             value={isAvailable}
-            onValueChange={toggleAvailability}
-            trackColor={{ false: '#e5e7eb', true: '#10b981' }}
-            thumbColor={isAvailable ? '#ffffff' : '#f3f4f6'}
+            onValueChange={handleStatusToggle}
+            disabled={statusUpdating}
+            trackColor={{ false: '#d1d5db', true: '#86efac' }}
+            thumbColor={isAvailable ? '#10b981' : '#f3f4f6'}
           />
         </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Stats Cards */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>₵{todayEarnings.toFixed(2)}</Text>
-            <Text style={styles.statLabel}>Today's Earnings</Text>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#10b981']} tintColor="#10b981" />
+        }
+      >
+        {/* Today's Earnings */}
+        <View style={styles.earningsCard}>
+          <View style={styles.earningsHeader}>
+            <Ionicons name="cash-outline" size={28} color="#10b981" />
+            <Text style={styles.earningsLabel}>Today's Earnings</Text>
           </View>
+          <Text style={styles.earningsAmount}>
+            ₵{dashboardData?.today_earnings?.toFixed(2) || '0.00'}
+          </Text>
+        </View>
+
+        {/* Stats Grid */}
+        <View style={styles.statsGrid}>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>₵{weeklyEarnings.toFixed(2)}</Text>
-            <Text style={styles.statLabel}>This Week</Text>
+            <View style={[styles.statIcon, { backgroundColor: '#dbeafe' }]}>
+              <Ionicons name="bicycle" size={24} color="#3b82f6" />
+            </View>
+            <Text style={styles.statValue}>{dashboardData?.active_orders || 0}</Text>
+            <Text style={styles.statLabel}>Active Orders</Text>
           </View>
+
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{rider.rating.toFixed(1)}</Text>
+            <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
+              <Ionicons name="star" size={24} color="#f59e0b" />
+            </View>
+            <Text style={styles.statValue}>{dashboardData?.rating?.toFixed(1) || '0.0'}</Text>
             <Text style={styles.statLabel}>Rating</Text>
           </View>
+
+          <View style={styles.statCard}>
+            <View style={[styles.statIcon, { backgroundColor: '#d1fae5' }]}>
+              <Ionicons name="wallet-outline" size={24} color="#10b981" />
+            </View>
+            <Text style={styles.statValue}>₵{dashboardData?.total_earnings?.toFixed(0) || '0'}</Text>
+            <Text style={styles.statLabel}>Total Earnings</Text>
+          </View>
+
+          <View style={styles.statCard}>
+            <View style={[styles.statIcon, { backgroundColor: '#e0e7ff' }]}>
+              <Ionicons name="checkmark-done" size={24} color="#6366f1" />
+            </View>
+            <Text style={styles.statValue}>{dashboardData?.total_deliveries || 0}</Text>
+            <Text style={styles.statLabel}>Total Deliveries</Text>
+          </View>
         </View>
 
-        {/* Active Job */}
-        {activeJob && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Active Job</Text>
-            <View style={styles.jobCard}>
-              <View style={styles.jobHeader}>
-                <Text style={styles.jobId}>#{activeJob.id}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(activeJob.status) }]}>
-                  <Text style={styles.statusText}>{activeJob.status.replace('_', ' ').toUpperCase()}</Text>
-                </View>
-              </View>
-              
-              <Text style={styles.customerName}>{activeJob.customer_name}</Text>
-              <Text style={styles.jobDetails}>
-                {activeJob.cylinder_count}x {activeJob.cylinder_type} • ₵{activeJob.commission_amount} commission
-              </Text>
-              <Text style={styles.address}>{activeJob.pickup_address}</Text>
-
-              <View style={styles.jobActions}>
-                {activeJob.status === 'accepted' && (
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.primaryButton]}
-                    onPress={() => {
-                      setPhotoType('pickup');
-                      setShowPhotoModal(true);
-                    }}
-                  >
-                    <Ionicons name="camera" size={18} color="#ffffff" />
-                    <Text style={styles.actionButtonText}>Confirm Pickup</Text>
-                  </TouchableOpacity>
-                )}
-                
-                {activeJob.status === 'picked_up' && (
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.primaryButton]}
-                    onPress={() => updateJobStatus('at_refill_center')}
-                  >
-                    <Ionicons name="location" size={18} color="#ffffff" />
-                    <Text style={styles.actionButtonText}>At Refill Center</Text>
-                  </TouchableOpacity>
-                )}
-                
-                {activeJob.status === 'at_refill_center' && (
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.primaryButton]}
-                    onPress={() => {
-                      setPhotoType('refill');
-                      setShowPhotoModal(true);
-                    }}
-                  >
-                    <Ionicons name="camera" size={18} color="#ffffff" />
-                    <Text style={styles.actionButtonText}>Confirm Refill</Text>
-                  </TouchableOpacity>
-                )}
-                
-                {activeJob.status === 'refilled' && (
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.primaryButton]}
-                    onPress={() => updateJobStatus('delivered')}
-                  >
-                    <Ionicons name="checkmark-circle" size={18} color="#ffffff" />
-                    <Text style={styles.actionButtonText}>Mark Delivered</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+        {/* Performance Section */}
+        <View style={styles.performanceCard}>
+          <Text style={styles.sectionTitle}>Today's Performance</Text>
+          
+          <View style={styles.performanceRow}>
+            <View style={styles.performanceItem}>
+              <Ionicons name="checkmark-circle-outline" size={20} color="#10b981" />
+              <Text style={styles.performanceLabel}>Completed</Text>
+              <Text style={styles.performanceValue}>{dashboardData?.completed_today || 0}</Text>
+            </View>
+            
+            <View style={styles.performanceDivider} />
+            
+            <View style={styles.performanceItem}>
+              <Ionicons name="time-outline" size={20} color="#f59e0b" />
+              <Text style={styles.performanceLabel}>Pending</Text>
+              <Text style={styles.performanceValue}>{dashboardData?.active_orders || 0}</Text>
+            </View>
+            
+            <View style={styles.performanceDivider} />
+            
+            <View style={styles.performanceItem}>
+              <Ionicons name="trending-up-outline" size={20} color="#3b82f6" />
+              <Text style={styles.performanceLabel}>Earnings</Text>
+              <Text style={styles.performanceValue}>₵{dashboardData?.today_earnings?.toFixed(0) || '0'}</Text>
             </View>
           </View>
-        )}
+        </View>
 
-        {/* Available Jobs */}
-        {isAvailable && !activeJob && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Available Jobs ({availableJobs.length})</Text>
-            {availableJobs.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Ionicons name="time-outline" size={48} color="#d1d5db" />
-                <Text style={styles.emptyStateText}>No jobs available right now</Text>
-              </View>
-            ) : (
-              availableJobs.map((job) => (
-                <TouchableOpacity
-                  key={job.id}
-                  style={styles.jobCard}
-                  onPress={() => {
-                    setSelectedJob(job);
-                    setShowJobModal(true);
-                  }}
-                >
-                  <View style={styles.jobHeader}>
-                    <Text style={styles.jobId}>#{job.id}</Text>
-                    <Text style={styles.commission}>₵{job.commission_amount}</Text>
-                  </View>
-                  
-                  <Text style={styles.customerName}>{job.customer_name}</Text>
-                  <Text style={styles.jobDetails}>
-                    {job.cylinder_count}x {job.cylinder_type}
-                  </Text>
-                  <Text style={styles.address}>{job.pickup_address}</Text>
-                  
-                  <View style={styles.jobFooter}>
-                    <Text style={styles.distance}>2.3 km away</Text>
-                    <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
-                  </View>
-                </TouchableOpacity>
-              ))
-            )}
-          </View>
-        )}
-
-        {/* Wallet Balance */}
-        <View style={styles.section}>
-          <View style={styles.walletCard}>
-            <View style={styles.walletHeader}>
-              <Text style={styles.walletTitle}>Wallet Balance</Text>
-              <TouchableOpacity>
-                <Ionicons name="card-outline" size={20} color="#0b5ed7" />
-              </TouchableOpacity>
+        {/* Quick Actions */}
+        <View style={styles.actionsSection}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          
+          <TouchableOpacity style={styles.actionButton}>
+            <View style={styles.actionIcon}>
+              <Ionicons name="list-outline" size={24} color="#10b981" />
             </View>
-            <Text style={styles.walletBalance}>₵{rider.wallet_balance.toFixed(2)}</Text>
-            <TouchableOpacity style={styles.withdrawButton}>
-              <Text style={styles.withdrawButtonText}>Withdraw</Text>
-            </TouchableOpacity>
-          </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>View Available Orders</Text>
+              <Text style={styles.actionSubtitle}>Find new delivery jobs</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#9ca3af" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.actionButton}>
+            <View style={styles.actionIcon}>
+              <Ionicons name="cash-outline" size={24} color="#10b981" />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>View Earnings</Text>
+              <Text style={styles.actionSubtitle}>Check payment history</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#9ca3af" />
+          </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Job Details Modal */}
-      <Modal
-        visible={showJobModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Job Details</Text>
-            <TouchableOpacity onPress={() => setShowJobModal(false)}>
-              <Ionicons name="close" size={24} color="#6b7280" />
-            </TouchableOpacity>
-          </View>
-          
-          {selectedJob && (
-            <ScrollView style={styles.modalContent}>
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>Customer</Text>
-                <Text style={styles.modalText}>{selectedJob.customer_name}</Text>
-                <Text style={styles.modalSubtext}>{selectedJob.customer_phone}</Text>
-              </View>
-              
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>Job Details</Text>
-                <Text style={styles.modalText}>
-                  {selectedJob.cylinder_count}x {selectedJob.cylinder_type} Cylinder
-                </Text>
-                <Text style={styles.modalSubtext}>Total: ₵{selectedJob.total_cost}</Text>
-              </View>
-              
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>Pickup Address</Text>
-                <Text style={styles.modalText}>{selectedJob.pickup_address}</Text>
-              </View>
-              
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>Commission</Text>
-                <Text style={[styles.modalText, { color: '#10b981', fontSize: 20, fontWeight: '700' }]}>
-                  ₵{selectedJob.commission_amount}
-                </Text>
-              </View>
-              
-              <TouchableOpacity
-                style={styles.acceptButton}
-                onPress={() => acceptJob(selectedJob)}
-                disabled={loading}
-              >
-                <Text style={styles.acceptButtonText}>
-                  {loading ? 'Accepting...' : 'Accept Job'}
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
-          )}
-        </SafeAreaView>
-      </Modal>
-
-      {/* Photo Modal */}
-      <Modal
-        visible={showPhotoModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {photoType === 'pickup' ? 'Confirm Pickup' : 'Confirm Refill'}
-            </Text>
-            <TouchableOpacity onPress={() => setShowPhotoModal(false)}>
-              <Ionicons name="close" size={24} color="#6b7280" />
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.photoModalContent}>
-            <Ionicons name="camera" size={64} color="#d1d5db" />
-            <Text style={styles.photoModalTitle}>
-              Take a photo to confirm {photoType === 'pickup' ? 'pickup' : 'refill completion'}
-            </Text>
-            <Text style={styles.photoModalSubtext}>
-              {photoType === 'pickup' 
-                ? 'Take a clear photo of the cylinders you picked up'
-                : 'Take a photo of the refilled cylinders or QR code'
-              }
-            </Text>
-            
-            <TouchableOpacity style={styles.cameraButton} onPress={takePhoto}>
-              <Ionicons name="camera" size={24} color="#ffffff" />
-              <Text style={styles.cameraButtonText}>Take Photo</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -521,60 +269,132 @@ const RiderDashboard: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fbff',
+    backgroundColor: '#f8f9fa',
   },
   header: {
+    backgroundColor: '#10b981',
+    paddingTop: 50,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    marginBottom: 20,
   },
-  welcomeText: {
-    fontSize: 14,
-    color: '#6b7280',
+  titleSection: {
+    flex: 1,
   },
-  riderName: {
-    fontSize: 20,
+  headerTitle: {
+    fontSize: 28,
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#ffffff',
+    marginBottom: 4,
   },
-  availabilityToggle: {
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
+  },
+  refreshButton: {
+    padding: 8,
+  },
+  refreshIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  toggleLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginBottom: 4,
+  statusContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    padding: 16,
+    borderRadius: 12,
+  },
+  statusInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statusLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
   },
   content: {
     flex: 1,
     padding: 20,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    marginBottom: 24,
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
+  earningsCard: {
     backgroundColor: '#ffffff',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
   },
-  statValue: {
-    fontSize: 18,
+  earningsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  earningsLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  earningsAmount: {
+    fontSize: 42,
     fontWeight: '700',
-    color: '#0b5ed7',
+    color: '#10b981',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 20,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: '47%',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
     marginBottom: 4,
   },
   statLabel: {
@@ -582,16 +402,54 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     textAlign: 'center',
   },
-  section: {
-    marginBottom: 24,
+  performanceCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 12,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 16,
   },
-  jobCard: {
+  performanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  performanceItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  performanceDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#e5e7eb',
+  },
+  performanceLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  performanceValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  actionsSection: {
+    marginBottom: 20,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#ffffff',
     padding: 16,
     borderRadius: 12,
@@ -599,208 +457,30 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  jobHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  jobId: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6b7280',
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  statusText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  commission: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#10b981',
-  },
-  customerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 4,
-  },
-  jobDetails: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 8,
-  },
-  address: {
-    fontSize: 14,
-    color: '#374151',
-    marginBottom: 12,
-  },
-  jobActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 6,
-  },
-  primaryButton: {
-    backgroundColor: '#0b5ed7',
-  },
-  actionButtonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  jobFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  distance: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 8,
-  },
-  walletCard: {
-    backgroundColor: '#0b5ed7',
-    padding: 20,
-    borderRadius: 12,
-  },
-  walletHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  walletTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-  walletBalance: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 16,
-  },
-  withdrawButton: {
-    backgroundColor: '#ffffff',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  withdrawButtonText: {
-    color: '#0b5ed7',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  modalContent: {
-    flex: 1,
-    padding: 20,
-  },
-  modalSection: {
-    marginBottom: 24,
-  },
-  modalSectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6b7280',
-    marginBottom: 8,
-  },
-  modalText: {
-    fontSize: 16,
-    color: '#374151',
-    marginBottom: 4,
-  },
-  modalSubtext: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  acceptButton: {
-    backgroundColor: '#10b981',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  acceptButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  photoModalContent: {
-    flex: 1,
+  actionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#d1fae5',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    marginRight: 16,
   },
-  photoModalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
-    textAlign: 'center',
-    marginTop: 20,
-    marginBottom: 8,
+  actionContent: {
+    flex: 1,
   },
-  photoModalSubtext: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 40,
-  },
-  cameraButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0b5ed7',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
-  },
-  cameraButtonText: {
-    color: '#ffffff',
+  actionTitle: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  actionSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
   },
 });
 

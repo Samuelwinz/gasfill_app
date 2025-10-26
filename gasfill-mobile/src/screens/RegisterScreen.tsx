@@ -9,11 +9,11 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { apiService } from '../services/api';
-import { StorageService } from '../utils/storage';
+import { useAuth } from '../context/AuthContext';
 import { RegisterRequest } from '../types';
 
 interface RegisterScreenProps {
@@ -21,6 +21,7 @@ interface RegisterScreenProps {
 }
 
 const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
+  const { register: registerUser, isLoading } = useAuth();
   const [formData, setFormData] = useState<RegisterRequest>({
     username: '',
     email: '',
@@ -29,7 +30,6 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
     address: '',
   });
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [role, setRole] = useState<'user' | 'rider'>('user');
@@ -83,57 +83,34 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
   const handleRegister = async () => {
     if (!validateForm()) return;
 
-    setLoading(true);
     try {
-      // Check if backend is available
-      const connected = await apiService.checkConnection();
-      
-      if (!connected) {
-        // Mock registration for development
-        const mockUser = {
-          id: Date.now(),
-          username: formData.username,
-          email: formData.email,
-          phone: formData.phone,
-          address: formData.address,
-          role: role,
-        };
-        
-        const mockToken = `mock_token_${Date.now()}`;
-        
-        await StorageService.saveUser(mockUser);
-        await StorageService.saveToken(mockToken);
-        
-        Alert.alert(
-          'Success',
-          'Account created successfully! (Demo mode)',
-          [{ text: 'OK', onPress: () => navigation.replace('MainApp') }]
-        );
-        return;
-      }
-
-      // Real registration
-      const response = await apiService.register({
+      console.log('📱 Register button pressed');
+      const success = await registerUser({
         ...formData,
         role,
       } as any);
 
-      await StorageService.saveUser(response.user);
-      await StorageService.saveToken(response.token);
+      console.log('Registration result:', success);
 
+      if (success) {
+        console.log('✅ Registration successful, navigating to MainApp');
+        // Navigate immediately without alert for better UX
+        navigation.replace('MainApp');
+      } else {
+        console.log('❌ Registration failed');
+        Alert.alert(
+          'Registration Failed',
+          'Unable to create account. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error: any) {
+      console.error('❌ Registration error caught in screen:', error);
       Alert.alert(
-        'Success',
-        'Account created successfully!',
-        [{ text: 'OK', onPress: () => navigation.replace('MainApp') }]
+        'Registration Error',
+        error.message || 'Unable to create account. Please try again.',
+        [{ text: 'OK' }]
       );
-    } catch (error) {
-      console.error('Registration error:', error);
-      Alert.alert(
-        'Registration Failed',
-        'Unable to create account. Please try again.'
-      );
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -323,13 +300,15 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
 
             {/* Register Button */}
             <TouchableOpacity
-              style={[styles.registerButton, loading && styles.buttonDisabled]}
+              style={[styles.registerButton, isLoading && styles.buttonDisabled]}
               onPress={handleRegister}
-              disabled={loading}
+              disabled={isLoading}
             >
-              <Text style={styles.registerButtonText}>
-                {loading ? 'Creating Account...' : 'Create Account'}
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.registerButtonText}>Create Account</Text>
+              )}
             </TouchableOpacity>
 
             {/* Login Link */}

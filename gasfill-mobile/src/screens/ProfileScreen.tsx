@@ -5,94 +5,25 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
-  Alert,
   Image,
-  Switch,
+  StatusBar,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StorageService } from '../utils/storage';
-import { apiService } from '../services/api';
-import { User } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface ProfileScreenProps {
-  navigation?: any;
+  navigation: any;
 }
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [editMode, setEditMode] = useState(false);
-  const [editedUser, setEditedUser] = useState<User | null>(null);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [locationEnabled, setLocationEnabled] = useState(true);
-
-  useEffect(() => {
-    loadUserData();
-  }, []);
-
-  const loadUserData = async () => {
-    try {
-      const userData = await StorageService.getUser();
-      if (userData) {
-        setUser(userData);
-        setEditedUser(userData);
-      }
-    } catch (error) {
-      console.error('Error loading user data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSaveProfile = async () => {
-    if (!editedUser) return;
-
-    try {
-      setLoading(true);
-      
-      // Validate form
-      if (!editedUser.username.trim()) {
-        Alert.alert('Error', 'Please enter your name');
-        return;
-      }
-      if (!editedUser.email.trim()) {
-        Alert.alert('Error', 'Please enter your email');
-        return;
-      }
-      if (!editedUser.phone?.trim()) {
-        Alert.alert('Error', 'Please enter your phone number');
-        return;
-      }
-
-      // Check if backend is available
-      const connected = await apiService.checkConnection();
-      
-      if (connected) {
-        // Try to update on backend
-        try {
-          const response = await apiService.getCurrentUser();
-          // Update user data with backend response
-          await StorageService.saveUser({ ...response, ...editedUser });
-        } catch (error) {
-          console.log('Backend update failed, saving locally');
-        }
-      }
-
-      // Save locally
-      await StorageService.saveUser(editedUser);
-      setUser(editedUser);
-      setEditMode(false);
-      
-      Alert.alert('Success', 'Profile updated successfully!');
-    } catch (error) {
-      console.error('Error saving profile:', error);
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { user, isAuthenticated, logout } = useAuth();
+  const [loyalty, setLoyalty] = useState({
+    level: 'Gold Member',
+    points: 42,
+    nextLevelPoints: 50,
+  });
 
   const handleLogout = () => {
     Alert.alert(
@@ -104,276 +35,110 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
-            await StorageService.logout();
-            // The AuthNavigation component will automatically detect the logout
-            // and redirect to login screen due to the auth state change
+            await logout();
+            navigation.replace('Welcome');
           },
         },
       ]
     );
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'Are you sure you want to delete your account? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert('Info', 'Account deletion will be available soon.');
-          },
-        },
-      ]
-    );
+  const handleLogin = () => {
+    navigation.navigate('Login');
   };
 
-  if (loading && !user) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading profile...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!user) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Ionicons name="person-circle" size={80} color="#d1d5db" />
-          <Text style={styles.errorTitle}>No Profile Data</Text>
-          <Text style={styles.errorText}>Please login to view your profile</Text>
-          {navigation && (
-            <TouchableOpacity
-              style={styles.loginButton}
-              onPress={() => navigation.navigate('Login')}
-            >
-              <Text style={styles.loginButtonText}>Login</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const menuItems = [
+    // Commented out screens that aren't implemented yet
+    // { icon: 'person-outline', name: 'Account Settings', screen: 'AccountSettings' },
+    // { icon: 'location-outline', name: 'Address Management', screen: 'AddressManagement' },
+    // { icon: 'notifications-outline', name: 'Notifications', screen: 'Notifications' },
+    // { icon: 'card-outline', name: 'Payment Methods', screen: 'PaymentMethods' },
+    // { icon: 'help-buoy-outline', name: 'Help & Support', screen: 'Support' },
+    // { icon: 'call-outline', name: 'Contact Us', screen: 'Contact' },
+    { icon: 'receipt-outline', name: 'Order History', screen: 'Orders' },
+  ];
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Profile</Text>
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => {
-              if (editMode) {
-                setEditedUser(user);
-              }
-              setEditMode(!editMode);
-            }}
-          >
-            <Ionicons 
-              name={editMode ? "close" : "create"} 
-              size={20} 
-              color={editMode ? "#ef4444" : "#0066cc"} 
-            />
-            <Text style={[styles.editButtonText, editMode && styles.editButtonTextCancel]}>
-              {editMode ? 'Cancel' : 'Edit'}
+      <StatusBar barStyle="dark-content" backgroundColor="#F4F7FA" />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color="#0A2540" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Profile & Settings</Text>
+        <View style={{ width: 24 }} />
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {isAuthenticated ? (
+          <>
+            <View style={styles.profileCard}>
+              <Image
+                source={{ uri: 'https://i.pravatar.cc/150?u=' + (user?.email || 'default') }}
+                style={styles.avatar}
+              />
+              <Text style={styles.userName}>{user?.username || 'User'}</Text>
+              <Text style={styles.userEmail}>{user?.email || ''}</Text>
+              <Text style={styles.userLevel}>{loyalty.level}</Text>
+              <View style={styles.progressContainer}>
+                <View style={styles.progressBar}>
+                  <View style={[styles.progress, { width: `${(loyalty.points / loyalty.nextLevelPoints) * 100}%` }]} />
+                </View>
+                <Text style={styles.progressText}>{loyalty.points}</Text>
+              </View>
+            </View>
+
+            <View style={styles.menuContainer}>
+              {menuItems.map((item, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.menuItem}
+                  onPress={() => navigation.navigate(item.screen)}
+                >
+                  <View style={styles.menuIcon}>
+                    <Ionicons name={item.icon as any} size={24} color="#0A2540" />
+                  </View>
+                  <Text style={styles.menuText}>{item.name}</Text>
+                  <Ionicons name="chevron-forward" size={20} color="#B2C7DD" />
+                </TouchableOpacity>
+              ))}
+
+              {/* Logout Button */}
+              <TouchableOpacity
+                style={[styles.menuItem, styles.logoutButton]}
+                onPress={handleLogout}
+              >
+                <View style={[styles.menuIcon, styles.logoutIcon]}>
+                  <Ionicons name="log-out-outline" size={24} color="#DC2626" />
+                </View>
+                <Text style={[styles.menuText, styles.logoutText]}>Logout</Text>
+                <Ionicons name="chevron-forward" size={20} color="#DC2626" />
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <View style={styles.notLoggedInContainer}>
+            <View style={styles.notLoggedInIcon}>
+              <Ionicons name="person-outline" size={60} color="#B2C7DD" />
+            </View>
+            <Text style={styles.notLoggedInTitle}>Not Logged In</Text>
+            <Text style={styles.notLoggedInText}>
+              Please login to access your profile and settings
             </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Profile Picture Section */}
-        <View style={styles.profilePictureSection}>
-          <View style={styles.profilePicture}>
-            <Ionicons name="person" size={60} color="#6b7280" />
-          </View>
-          <Text style={styles.userName}>{user.username}</Text>
-          <View style={styles.userRole}>
-            <Text style={styles.userRoleText}>
-              {user.role === 'rider' ? 'Rider' : user.role === 'admin' ? 'Admin' : 'Customer'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Profile Information */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personal Information</Text>
-          
-          {/* Full Name */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Full Name</Text>
-            {editMode ? (
-              <TextInput
-                style={styles.input}
-                value={editedUser?.username || ''}
-                onChangeText={(text) => 
-                  setEditedUser(prev => prev ? { ...prev, username: text } : null)
-                }
-                placeholder="Enter your full name"
-                autoCapitalize="words"
-              />
-            ) : (
-              <Text style={styles.valueText}>{user.username}</Text>
-            )}
-          </View>
-
-          {/* Email */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email Address</Text>
-            {editMode ? (
-              <TextInput
-                style={styles.input}
-                value={editedUser?.email || ''}
-                onChangeText={(text) => 
-                  setEditedUser(prev => prev ? { ...prev, email: text.toLowerCase() } : null)
-                }
-                placeholder="Enter your email"
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            ) : (
-              <Text style={styles.valueText}>{user.email}</Text>
-            )}
-          </View>
-
-          {/* Phone */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Phone Number</Text>
-            {editMode ? (
-              <TextInput
-                style={styles.input}
-                value={editedUser?.phone || ''}
-                onChangeText={(text) => 
-                  setEditedUser(prev => prev ? { ...prev, phone: text } : null)
-                }
-                placeholder="Enter your phone number"
-                keyboardType="phone-pad"
-              />
-            ) : (
-              <Text style={styles.valueText}>{user.phone || 'Not provided'}</Text>
-            )}
-          </View>
-
-          {/* Address */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Address</Text>
-            {editMode ? (
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={editedUser?.address || ''}
-                onChangeText={(text) => 
-                  setEditedUser(prev => prev ? { ...prev, address: text } : null)
-                }
-                placeholder="Enter your address"
-                multiline
-                numberOfLines={3}
-              />
-            ) : (
-              <Text style={styles.valueText}>{user.address || 'Not provided'}</Text>
-            )}
-          </View>
-
-          {editMode && (
             <TouchableOpacity
-              style={styles.saveButton}
-              onPress={handleSaveProfile}
-              disabled={loading}
+              style={styles.loginButton}
+              onPress={handleLogin}
             >
-              <Text style={styles.saveButtonText}>
-                {loading ? 'Saving...' : 'Save Changes'}
-              </Text>
+              <Text style={styles.loginButtonText}>Login</Text>
             </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Settings Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Settings</Text>
-          
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <Ionicons name="notifications" size={24} color="#0066cc" />
-              <View style={styles.settingText}>
-                <Text style={styles.settingTitle}>Push Notifications</Text>
-                <Text style={styles.settingSubtitle}>Receive order updates and promotions</Text>
-              </View>
-            </View>
-            <Switch
-              value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
-              trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
-              thumbColor={notificationsEnabled ? '#0066cc' : '#6b7280'}
-            />
+            <TouchableOpacity
+              style={styles.registerButton}
+              onPress={() => navigation.navigate('Register')}
+            >
+              <Text style={styles.registerButtonText}>Create Account</Text>
+            </TouchableOpacity>
           </View>
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <Ionicons name="location" size={24} color="#0066cc" />
-              <View style={styles.settingText}>
-                <Text style={styles.settingTitle}>Location Services</Text>
-                <Text style={styles.settingSubtitle}>Enable for better delivery experience</Text>
-              </View>
-            </View>
-            <Switch
-              value={locationEnabled}
-              onValueChange={setLocationEnabled}
-              trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
-              thumbColor={locationEnabled ? '#0066cc' : '#6b7280'}
-            />
-          </View>
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          
-          <TouchableOpacity style={styles.actionItem}>
-            <Ionicons name="card" size={24} color="#0066cc" />
-            <Text style={styles.actionText}>Payment Methods</Text>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.actionItem}>
-            <Ionicons name="receipt" size={24} color="#0066cc" />
-            <Text style={styles.actionText}>Order History</Text>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.actionItem}>
-            <Ionicons name="help-circle" size={24} color="#0066cc" />
-            <Text style={styles.actionText}>Help & Support</Text>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.actionItem}>
-            <Ionicons name="document-text" size={24} color="#0066cc" />
-            <Text style={styles.actionText}>Terms & Privacy</Text>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Danger Zone */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out" size={24} color="#ef4444" />
-            <Text style={styles.logoutText}>Logout</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
-            <Ionicons name="trash" size={24} color="#dc2626" />
-            <Text style={styles.deleteText}>Delete Account</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>GasFill App v1.0.0</Text>
-        </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -382,232 +147,173 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fbff',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#374151',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 24,
+    backgroundColor: '#F4F7FA',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#0f172a',
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#0A2540',
   },
-  editButton: {
-    flexDirection: 'row',
+  profileCard: {
+    backgroundColor: '#0A2540',
+    borderRadius: 20,
+    marginHorizontal: 24,
+    padding: 24,
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#f0f8ff',
-    gap: 4,
+    marginBottom: 24,
   },
-  editButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0066cc',
-  },
-  editButtonTextCancel: {
-    color: '#ef4444',
-  },
-  profilePictureSection: {
-    alignItems: 'center',
-    paddingVertical: 32,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  profilePicture: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
-    alignItems: 'center',
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
     marginBottom: 16,
   },
   userName: {
     fontSize: 24,
-    fontWeight: '700',
-    color: '#0f172a',
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 14,
+    color: '#B2C7DD',
     marginBottom: 8,
   },
-  userRole: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+  userLevel: {
+    fontSize: 16,
+    color: '#FFC107',
+    marginBottom: 16,
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  progressBar: {
+    flex: 1,
+    height: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 5,
+    marginRight: 12,
+  },
+  progress: {
+    height: 10,
+    backgroundColor: '#FFC107',
+    borderRadius: 5,
+  },
+  progressText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  menuContainer: {
+    paddingHorizontal: 24,
+  },
+  menuItem: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    backgroundColor: '#0066cc',
-  },
-  userRoleText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#ffffff',
-    textTransform: 'uppercase',
-  },
-  section: {
-    backgroundColor: '#ffffff',
-    marginTop: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 20,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6b7280',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#374151',
-    backgroundColor: '#ffffff',
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  valueText: {
-    fontSize: 16,
-    color: '#374151',
-    paddingVertical: 4,
-  },
-  saveButton: {
-    backgroundColor: '#0066cc',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  saveButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  settingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  settingLeft: {
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-    gap: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  settingText: {
-    flex: 1,
+  menuIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F4F7FA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
   },
-  settingTitle: {
+  menuText: {
+    flex: 1,
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
-  },
-  settingSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  actionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    gap: 12,
-  },
-  actionText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#374151',
+    color: '#0A2540',
   },
   logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    gap: 12,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    backgroundColor: '#FEF2F2',
+  },
+  logoutIcon: {
+    backgroundColor: '#FEE2E2',
   },
   logoutText: {
-    fontSize: 16,
-    color: '#ef4444',
-    fontWeight: '600',
+    color: '#DC2626',
   },
-  deleteButton: {
-    flexDirection: 'row',
+  notLoggedInContainer: {
+    flex: 1,
     alignItems: 'center',
-    paddingVertical: 16,
-    gap: 12,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 60,
   },
-  deleteText: {
+  notLoggedInIcon: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#F4F7FA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  notLoggedInTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#0A2540',
+    marginBottom: 12,
+  },
+  notLoggedInText: {
     fontSize: 16,
-    color: '#dc2626',
-    fontWeight: '600',
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
   },
   loginButton: {
-    backgroundColor: '#0066cc',
-    borderRadius: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    backgroundColor: '#0A2540',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    marginBottom: 16,
+    width: '100%',
+    alignItems: 'center',
   },
   loginButtonText: {
-    color: '#ffffff',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },
-  footer: {
+  registerButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderWidth: 2,
+    borderColor: '#0A2540',
+    width: '100%',
     alignItems: 'center',
-    paddingVertical: 24,
   },
-  footerText: {
-    fontSize: 14,
-    color: '#9ca3af',
+  registerButtonText: {
+    color: '#0A2540',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

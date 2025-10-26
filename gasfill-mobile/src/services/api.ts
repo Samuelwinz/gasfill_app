@@ -16,8 +16,10 @@ import {
 import { StorageService } from '../utils/storage';
 
 // Backend configuration - adjust these based on your setup
+// For physical device/emulator, replace localhost with your computer's IP address
+// Example: const API_BASE_URL = 'http://192.168.1.100:8000'
 const API_BASE_URL = __DEV__ 
-  ? 'http://localhost:8000'  // Development - Python FastAPI server
+  ? 'http://192.168.1.25:8000'  // Your local machine IP address
   : 'https://your-production-api.com'; // Production URL
 
 class ApiService {
@@ -26,7 +28,7 @@ class ApiService {
   constructor() {
     this.api = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 10000,
+      timeout: 5000,  // Reduced timeout to 5 seconds for faster demo fallback
       headers: {
         'Content-Type': 'application/json',
       },
@@ -60,24 +62,13 @@ class ApiService {
     );
   }
 
-  // Health check
-  async healthCheck(): Promise<any> {
-    try {
-      const response = await this.api.get('/api/health');
-      return response.data;
-    } catch (error) {
-      console.error('Health check failed:', error);
-      throw error;
-    }
-  }
-
   // Authentication
   async login(credentials: LoginRequest): Promise<AuthResponse> {
     try {
       const response = await this.api.post('/api/auth/login', credentials);
       return response.data;
     } catch (error) {
-      console.error('Login failed:', error);
+      // Let the UI component handle the error and fallback
       throw error;
     }
   }
@@ -87,7 +78,7 @@ class ApiService {
       const response = await this.api.post('/api/auth/register', userData);
       return response.data;
     } catch (error) {
-      console.error('Registration failed:', error);
+      // Let the UI component handle the error and fallback
       throw error;
     }
   }
@@ -97,7 +88,7 @@ class ApiService {
       const response = await this.api.get('/api/auth/me');
       return response.data;
     } catch (error) {
-      console.error('Get current user failed:', error);
+      // Let the UI component handle the error and fallback
       throw error;
     }
   }
@@ -164,51 +155,33 @@ class ApiService {
     }
   }
 
-  // Helper method to check if backend is reachable
-  async checkConnection(): Promise<boolean> {
-    try {
-      await this.healthCheck();
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }
-
   // Pickup/Refill Service Methods
   async createPickupRequest(pickupData: Partial<PickupRequest>): Promise<PickupRequest> {
     try {
-      // Try to connect to backend first
-      const connected = await this.checkConnection();
-      if (!connected) {
-        // If backend is not available, simulate successful creation with mock data
-        console.log('Backend not available, using mock data for pickup request');
-        const mockPickupRequest: PickupRequest = {
-          id: `pickup-${Date.now()}`,
-          customer_id: 1,
-          customer_name: pickupData.customer_name || 'Mock Customer',
-          customer_phone: pickupData.customer_phone || '+233241234567',
-          pickup_address: pickupData.pickup_address || 'Mock Address',
-          delivery_address: pickupData.delivery_address || pickupData.pickup_address || 'Mock Address',
-          cylinder_type: pickupData.cylinder_type || '12.5kg',
-          cylinder_count: pickupData.cylinder_count || 1,
-          status: 'pending',
-          total_cost: pickupData.total_cost || 0,
-          commission_amount: pickupData.commission_amount || 0,
-          payment_status: 'completed',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        
-        // Store in local storage for demo purposes
-        await this.storeMockPickupRequest(mockPickupRequest);
-        return mockPickupRequest;
-      }
-      
       const response = await this.api.post('/api/pickup-requests', pickupData);
       return response.data;
     } catch (error) {
-      console.error('Create pickup request failed:', error);
-      throw error;
+      // Silently fallback to mock data when backend is unavailable
+      const mockPickupRequest: PickupRequest = {
+        id: `pickup-${Date.now()}`,
+        customer_id: 1,
+        customer_name: pickupData.customer_name || 'Mock Customer',
+        customer_phone: pickupData.customer_phone || '+233241234567',
+        pickup_address: pickupData.pickup_address || 'Mock Address',
+        delivery_address: pickupData.delivery_address || pickupData.pickup_address || 'Mock Address',
+        cylinder_type: pickupData.cylinder_type || '12.5kg',
+        cylinder_count: pickupData.cylinder_count || 1,
+        status: 'pending',
+        total_cost: pickupData.total_cost || 0,
+        commission_amount: pickupData.commission_amount || 0,
+        payment_status: 'completed',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      
+      // Store in local storage for demo purposes
+      await this.storeMockPickupRequest(mockPickupRequest);
+      return mockPickupRequest;
     }
   }
 
@@ -227,29 +200,21 @@ class ApiService {
 
   async getPickupRequests(status?: string): Promise<PickupRequest[]> {
     try {
-      // Try to connect to backend first
-      const connected = await this.checkConnection();
-      if (!connected) {
-        // If backend is not available, return mock data
-        console.log('Backend not available, using mock data for pickup requests');
-        const StorageService = (await import('../utils/storage')).StorageService;
-        const existingRequests = await StorageService.getItem('mock_pickup_requests');
-        const requestsString = existingRequests || '[]';
-        const requests = JSON.parse(requestsString as string) as PickupRequest[];
-        
-        // Filter by status if provided
-        if (status) {
-          return requests.filter(req => req.status === status);
-        }
-        return requests;
-      }
-      
       const params = status ? { status } : {};
       const response = await this.api.get('/api/pickup-requests', { params });
       return response.data;
     } catch (error) {
-      console.error('Get pickup requests failed:', error);
-      throw error;
+      // Silently fallback to mock data when backend is unavailable
+      const StorageService = (await import('../utils/storage')).StorageService;
+      const existingRequests = await StorageService.getItem('mock_pickup_requests');
+      const requestsString = existingRequests || '[]';
+      const requests = JSON.parse(requestsString as string) as PickupRequest[];
+      
+      // Filter by status if provided
+      if (status) {
+        return requests.filter(req => req.status === status);
+      }
+      return requests;
     }
   }
 

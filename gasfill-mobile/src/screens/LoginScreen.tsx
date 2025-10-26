@@ -9,24 +9,26 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { apiService } from '../services/api';
-import { StorageService } from '../utils/storage';
+import { useAuth } from '../context/AuthContext';
 import { LoginRequest } from '../types';
+import Toast from '../components/Toast';
 
 interface LoginScreenProps {
   navigation: any;
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
+  const { login, riderLogin, isLoading } = useAuth();
   const [formData, setFormData] = useState<LoginRequest>({
     email: '',
     password: '',
   });
-  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
 
   const validateForm = (): boolean => {
     if (!formData.email.trim()) {
@@ -52,54 +54,52 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const handleLogin = async () => {
     if (!validateForm()) return;
 
-    setLoading(true);
     try {
-      // Check if backend is available
-      const connected = await apiService.checkConnection();
+      console.log('📱 Login button pressed');
       
-      if (!connected) {
-        // Mock login for development
-        const mockUser = {
-          id: 1,
-          username: 'Demo User',
-          email: formData.email,
-          phone: '+233241234567',
-          address: 'Demo Address',
-          role: 'user',
-        };
-        
-        const mockToken = `mock_token_${Date.now()}`;
-        
-        await StorageService.saveUser(mockUser);
-        await StorageService.saveToken(mockToken);
-        
-        Alert.alert(
-          'Success',
-          'Logged in successfully! (Demo mode)',
-          [{ text: 'OK', onPress: () => navigation.replace('MainApp') }]
-        );
-        return;
+      // Check if this might be a rider login (you can customize this logic)
+      const isRiderEmail = formData.email.toLowerCase().includes('rider');
+      
+      let success = false;
+      
+      if (isRiderEmail) {
+        console.log('🚴 Attempting rider login');
+        try {
+          success = await riderLogin(formData);
+        } catch (riderError: any) {
+          console.log('❌ Rider login failed, trying customer login');
+          // If rider login fails, try customer login as fallback
+          success = await login(formData);
+        }
+      } else {
+        console.log('👤 Attempting customer login');
+        try {
+          success = await login(formData);
+        } catch (customerError: any) {
+          console.log('❌ Customer login failed, trying rider login');
+          // If customer login fails, try rider login as fallback
+          success = await riderLogin(formData);
+        }
       }
-
-      // Real login
-      const response = await apiService.login(formData);
-
-      await StorageService.saveUser(response.user);
-      await StorageService.saveToken(response.token);
-
-      Alert.alert(
-        'Success',
-        'Logged in successfully!',
-        [{ text: 'OK', onPress: () => navigation.replace('MainApp') }]
-      );
-    } catch (error) {
-      console.error('Login error:', error);
-      Alert.alert(
-        'Login Failed',
-        'Invalid email or password. Please try again.'
-      );
-    } finally {
-      setLoading(false);
+      
+      console.log('Login result:', success);
+      
+      if (success) {
+        console.log('✅ Login successful, navigating to MainApp');
+        setToast({ visible: true, message: '✅ Login successful!', type: 'success' });
+        // Auth state will be checked automatically by AuthNavigation
+        // No need to manually navigate - the auth check interval will detect the token
+      } else {
+        console.log('❌ Login failed');
+        setToast({ visible: true, message: '❌ Invalid credentials', type: 'error' });
+      }
+    } catch (error: any) {
+      console.error('❌ Login error caught in screen:', error);
+      setToast({ 
+        visible: true, 
+        message: error.message || '❌ Login failed', 
+        type: 'error' 
+      });
     }
   };
 
@@ -117,6 +117,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <Toast 
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={() => setToast({ ...toast, visible: false })}
+      />
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoid}
@@ -196,13 +202,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
             {/* Login Button */}
             <TouchableOpacity
-              style={[styles.loginButton, loading && styles.buttonDisabled]}
+              style={[styles.loginButton, isLoading && styles.buttonDisabled]}
               onPress={handleLogin}
-              disabled={loading}
+              disabled={isLoading}
             >
-              <Text style={styles.loginButtonText}>
-                {loading ? 'Signing In...' : 'Sign In'}
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.loginButtonText}>Sign In</Text>
+              )}
             </TouchableOpacity>
 
             {/* Divider */}
@@ -214,25 +222,38 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
             {/* Demo Login Options */}
             <View style={styles.demoSection}>
-              <Text style={styles.demoTitle}>Quick Demo Access</Text>
+              <Text style={styles.demoTitle}>Quick Test Login</Text>
               <TouchableOpacity
                 style={styles.demoButton}
                 onPress={() => {
-                  setFormData({ email: 'customer@demo.com', password: 'demo123' });
+                  setFormData({ email: 'admin@gasfill.com', password: 'admin123' });
+                  setToast({ visible: true, message: 'Admin credentials loaded', type: 'info' });
                 }}
               >
-                <Ionicons name="person" size={20} color="#0066cc" />
-                <Text style={styles.demoButtonText}>Demo Customer</Text>
+                <Ionicons name="shield-checkmark" size={20} color="#0066cc" />
+                <Text style={styles.demoButtonText}>Admin Account</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
                 style={styles.demoButton}
                 onPress={() => {
-                  setFormData({ email: 'rider@demo.com', password: 'demo123' });
+                  setFormData({ email: 'rider1@gasfill.com', password: 'rider123' });
+                  setToast({ visible: true, message: 'Rider credentials loaded', type: 'info' });
                 }}
               >
                 <Ionicons name="bicycle" size={20} color="#0066cc" />
-                <Text style={styles.demoButtonText}>Demo Rider</Text>
+                <Text style={styles.demoButtonText}>Rider Account</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.demoButton}
+                onPress={() => {
+                  setFormData({ email: 'demo@test.com', password: 'demo123' });
+                  setToast({ visible: true, message: 'Demo mode enabled', type: 'info' });
+                }}
+              >
+                <Ionicons name="person" size={20} color="#0066cc" />
+                <Text style={styles.demoButtonText}>Demo Customer</Text>
               </TouchableOpacity>
             </View>
 

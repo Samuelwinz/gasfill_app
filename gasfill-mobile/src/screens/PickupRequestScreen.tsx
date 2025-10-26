@@ -13,6 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StorageService } from '../utils/storage';
 import { apiService } from '../services/api';
+import PaystackService from '../services/paystack';
+import PaymentStatus from '../components/PaymentStatus';
 import { PickupRequest, Location } from '../types';
 import * as ExpoLocation from 'expo-location';
 
@@ -39,6 +41,7 @@ const PickupRequestScreen: React.FC = () => {
   const [scheduledTime, setScheduledTime] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -55,6 +58,7 @@ const PickupRequestScreen: React.FC = () => {
       if (user) {
         setCustomerName(user.username || '');
         setCustomerPhone(user.phone || '');
+        setCustomerEmail(user.email || '');
       }
     } catch (error) {
       console.error('Error loading customer info:', error);
@@ -112,6 +116,14 @@ const PickupRequestScreen: React.FC = () => {
       Alert.alert('Error', 'Please enter your phone number');
       return false;
     }
+    if (!customerEmail.trim()) {
+      Alert.alert('Error', 'Please enter your email address');
+      return false;
+    }
+    if (!customerEmail.includes('@') || !customerEmail.includes('.')) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return false;
+    }
     if (!pickupAddress.trim()) {
       Alert.alert('Error', 'Please enter pickup address');
       return false;
@@ -151,7 +163,7 @@ const PickupRequestScreen: React.FC = () => {
     }
   };
 
-  const handlePaymentSuccess = async (paymentReference: string) => {
+  const handlePaymentSuccess = async (paymentReference: string, paymentData?: any) => {
     try {
       setLoading(true);
       
@@ -178,13 +190,56 @@ const PickupRequestScreen: React.FC = () => {
       
       Alert.alert(
         'Success!', 
-        'Your pickup request has been submitted. A rider will be assigned shortly.',
+        `Your pickup request has been submitted successfully. Payment reference: ${paymentReference}. A rider will be assigned shortly.`,
         [{ text: 'OK', onPress: () => resetForm() }]
       );
 
     } catch (error) {
       console.error('Error processing payment:', error);
-      Alert.alert('Error', 'Payment successful but failed to create pickup request. Please contact support.');
+      Alert.alert('Error', 'Payment successful but failed to create pickup request. Please contact support with your payment reference: ' + paymentReference);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePaystackPayment = async () => {
+    if (!customerEmail) {
+      Alert.alert('Error', 'Email address is required for payment');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Generate pickup ID for tracking
+      const pickupId = `pickup_${Date.now()}`;
+      const totalAmount = calculateTotal();
+
+      // Process payment with Paystack
+      const paymentResult = await PaystackService.processPickupPayment(
+        totalAmount,
+        customerEmail,
+        customerName,
+        pickupId,
+        customerPhone
+      );
+
+      if (paymentResult.success) {
+        await handlePaymentSuccess(paymentResult.reference, paymentResult.data);
+      } else {
+        Alert.alert(
+          'Payment Failed',
+          'Payment could not be processed. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Payment error:', error);
+      Alert.alert(
+        'Payment Error',
+        'An error occurred while processing your payment. Please try again.',
+        [{ text: 'OK' }]
+      );
     } finally {
       setLoading(false);
     }
@@ -196,6 +251,7 @@ const PickupRequestScreen: React.FC = () => {
     setPickupAddress('');
     setDeliveryAddress('');
     setScheduledTime('');
+    setCustomerEmail('');
     setNotes('');
   };
 
@@ -271,6 +327,15 @@ const PickupRequestScreen: React.FC = () => {
             value={customerPhone}
             onChangeText={setCustomerPhone}
             keyboardType="phone-pad"
+          />
+          
+          <TextInput
+            style={styles.input}
+            placeholder="Email Address"
+            value={customerEmail}
+            onChangeText={setCustomerEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
           />
         </View>
 
@@ -369,16 +434,21 @@ const PickupRequestScreen: React.FC = () => {
           </View>
           
           <View style={styles.paymentContent}>
+            <PaymentStatus />
+            
             <Text style={styles.paymentAmount}>₵{calculateTotal()}</Text>
             <Text style={styles.paymentDescription}>
               Pickup & refill for {cylinderCount}x {selectedCylinder?.name}
             </Text>
             
             <TouchableOpacity
-              style={styles.paymentButton}
-              onPress={() => handlePaymentSuccess('mock-payment-ref-' + Date.now())}
+              style={[styles.paymentButton, loading && styles.paymentButtonDisabled]}
+              onPress={handlePaystackPayment}
+              disabled={loading}
             >
-              <Text style={styles.paymentButtonText}>Pay with Paystack</Text>
+              <Text style={styles.paymentButtonText}>
+                {loading ? 'Processing...' : 'Pay with Paystack'}
+              </Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -604,6 +674,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     minWidth: 200,
     alignItems: 'center',
+  },
+  paymentButtonDisabled: {
+    backgroundColor: '#9ca3af',
+    opacity: 0.6,
   },
   paymentButtonText: {
     color: '#ffffff',

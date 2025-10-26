@@ -17,40 +17,55 @@ import { StorageService } from '../utils/storage';
 
 const Stack = createStackNavigator();
 
+const TOKEN_KEY = 'gasfill_token_v1';
+const USER_KEY = 'gasfill_user_v1';
+const RIDER_KEY = 'rider';
+
 export default function AuthNavigation() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    checkAuthStatus();
-    
-    // Set up a polling mechanism to check auth status periodically
-    const authCheckInterval = setInterval(checkAuthStatus, 1000);
-    
-    return () => clearInterval(authCheckInterval);
-  }, []);
 
   const checkAuthStatus = async () => {
     try {
       const token = await StorageService.getToken();
       const user = await StorageService.getUser();
-      const newAuthState = !!token && !!user;
+      const rider = await StorageService.getItem(RIDER_KEY);
       
-      // Only update state if it has changed to prevent unnecessary re-renders
-      if (newAuthState !== isAuthenticated) {
-        setIsAuthenticated(newAuthState);
-      }
+      // User is authenticated if they have a token and either user or rider data
+      const newAuthState = !!token && (!!user || !!rider);
+      
+      return newAuthState;
     } catch (error) {
       console.error('Error checking auth status:', error);
-      if (isAuthenticated !== false) {
-        setIsAuthenticated(false);
-      }
-    } finally {
-      if (loading) {
-        setLoading(false);
-      }
+      return false;
     }
   };
+
+  useEffect(() => {
+    const initAuth = async () => {
+      const authState = await checkAuthStatus();
+      setIsAuthenticated(authState);
+      setLoading(false);
+    };
+    
+    initAuth();
+    
+    // Set up a polling mechanism to check auth status periodically
+    // Use longer interval to reduce overhead
+    const authCheckInterval = setInterval(async () => {
+      const authState = await checkAuthStatus();
+      setIsAuthenticated(prevState => {
+        // Only update if actually changed
+        if (prevState !== authState) {
+          console.log('🔄 Auth state changed:', authState);
+          return authState;
+        }
+        return prevState;
+      });
+    }, 2000); // Increased to 2 seconds
+    
+    return () => clearInterval(authCheckInterval);
+  }, []); // Empty dependency array - only run once
 
   if (loading) {
     return (
