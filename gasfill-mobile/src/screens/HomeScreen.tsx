@@ -59,13 +59,26 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       <StatusBar barStyle="dark-content" backgroundColor="#F4F7FA" />
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.greeting}>Hi, {userName}!</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-            <Image
-              source={{ uri: 'https://i.pravatar.cc/150?u=akon' }} // Placeholder image
-              style={styles.avatar}
-            />
-          </TouchableOpacity>
+          <View>
+            <Text style={styles.greeting}>Hi, {userName}!</Text>
+          </View>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('Notifications')}
+              style={styles.notificationButton}
+            >
+              <Ionicons name="notifications-outline" size={24} color="#1F2937" />
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>3</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+              <Image
+                source={{ uri: 'https://i.pravatar.cc/150?u=akon' }} // Placeholder image
+                style={styles.avatar}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.loyaltyCard}>
@@ -378,6 +391,33 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#10b981',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  notificationButton: {
+    position: 'relative',
+    padding: 4,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#ef4444',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#F4F7FA',
+  },
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
   },
 });
 

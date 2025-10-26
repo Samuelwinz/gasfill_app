@@ -25,6 +25,8 @@ import RiderJobsScreen from '../screens/RiderJobsScreen';
 import RiderEarningsScreen from '../screens/RiderEarningsScreen';
 import AdminDashboard from '../screens/AdminDashboard';
 import AboutScreen from '../screens/AboutScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
+import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
 
 // Import services
 import { StorageService } from '../utils/storage';
@@ -342,6 +344,20 @@ function AppStack() {
       <Stack.Screen 
         name="About" 
         component={AboutScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="Notifications" 
+        component={NotificationsScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="NotificationSettings" 
+        component={NotificationSettingsScreen}
         options={{ 
           headerShown: false,
         }}

@@ -257,3 +257,43 @@ export interface AdminStats {
   pickups_today: number;
   average_rating: number;
 }
+
+export interface Notification {
+  id: string;
+  user_id: number;
+  type: NotificationType;
+  title: string;
+  message: string;
+  data?: any;
+  is_read: boolean;
+  created_at: string;
+  action_url?: string;
+  icon?: string;
+}
+
+export type NotificationType = 
+  | 'order_placed'
+  | 'order_assigned'
+  | 'order_picked_up'
+  | 'order_in_transit'
+  | 'order_delivered'
+  | 'order_cancelled'
+  | 'payment_received'
+  | 'payment_failed'
+  | 'rider_assigned'
+  | 'rider_arrived'
+  | 'promotion'
+  | 'system'
+  | 'earnings'
+  | 'new_job';
+
+export interface NotificationPreferences {
+  order_updates: boolean;
+  payment_updates: boolean;
+  promotional: boolean;
+  rider_updates: boolean;
+  earnings_updates: boolean;
+  push_enabled: boolean;
+  email_enabled: boolean;
+  sms_enabled: boolean;
+}

@@ -81,14 +81,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     { icon: 'receipt-outline', name: 'Order History', screen: 'Orders', description: 'View all your orders' },
     { icon: 'location-outline', name: 'Delivery Addresses', screen: null, description: 'Manage saved addresses' },
     { icon: 'card-outline', name: 'Payment Methods', screen: null, description: 'Manage payment options' },
-    { icon: 'notifications-outline', name: 'Notifications', screen: null, description: 'Notification preferences' },
+    { icon: 'notifications-outline', name: 'Notifications', screen: 'Notifications', description: 'Notification preferences' },
     { icon: 'help-circle-outline', name: 'Help & Support', screen: null, description: 'Get help and contact us' },
     { icon: 'information-circle-outline', name: 'About', screen: 'About', description: 'App version and info' },
   ];
 
   const riderMenuItems = [
     { icon: 'settings-outline', name: 'Account Settings', screen: null, description: 'Update your information' },
-    { icon: 'notifications-outline', name: 'Notifications', screen: null, description: 'Notification preferences' },
+    { icon: 'notifications-outline', name: 'Notifications', screen: 'Notifications', description: 'Notification preferences' },
     { icon: 'help-circle-outline', name: 'Help & Support', screen: null, description: 'Get help and contact us' },
     { icon: 'information-circle-outline', name: 'About', screen: 'About', description: 'App version and info' },
   ];
@@ -98,7 +98,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     { icon: 'analytics-outline', name: 'Analytics & Reports', screen: null, description: 'View detailed analytics' },
     { icon: 'settings-outline', name: 'System Settings', screen: null, description: 'Configure app settings' },
     { icon: 'shield-outline', name: 'Security', screen: null, description: 'Security and permissions' },
-    { icon: 'notifications-outline', name: 'Notifications', screen: null, description: 'Notification preferences' },
+    { icon: 'notifications-outline', name: 'Notifications', screen: 'Notifications', description: 'Notification preferences' },
     { icon: 'document-text-outline', name: 'Activity Logs', screen: null, description: 'View system activity' },
     { icon: 'help-circle-outline', name: 'Help & Support', screen: null, description: 'Get help and resources' },
     { icon: 'information-circle-outline', name: 'About', screen: 'About', description: 'App version and info' },

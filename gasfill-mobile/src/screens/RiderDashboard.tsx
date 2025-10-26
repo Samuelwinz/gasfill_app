@@ -147,11 +147,22 @@ const RiderDashboard: React.FC = () => {
             <Text style={styles.headerTitle}>Dashboard</Text>
             <Text style={styles.headerSubtitle}>Rider Overview</Text>
           </View>
-          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-            <View style={styles.refreshIcon}>
-              <Ionicons name="refresh" size={20} color="#10b981" />
-            </View>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={styles.notificationButton}
+              onPress={() => (navigation as any).navigate('Notifications')}
+            >
+              <Ionicons name="notifications-outline" size={22} color="#1F2937" />
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>2</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+              <View style={styles.refreshIcon}>
+                <Ionicons name="refresh" size={20} color="#10b981" />
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Status Toggle */}
@@ -510,6 +521,33 @@ const styles = StyleSheet.create({
   actionSubtitle: {
     fontSize: 14,
     color: '#6b7280',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  notificationButton: {
+    position: 'relative',
+    padding: 6,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    backgroundColor: '#ef4444',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#10b981',
+  },
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
   },
 });
 
