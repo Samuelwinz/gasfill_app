@@ -36,7 +36,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             await logout();
-            navigation.replace('Welcome');
+            // Navigation will be handled automatically by AuthNavigation
+            // No need to manually navigate after logout
           },
         },
       ]
