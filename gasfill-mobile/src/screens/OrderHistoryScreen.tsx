@@ -216,10 +216,10 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             </Text>
           </View>
         ) : (
-          filteredOrders.map((order) => {
+          filteredOrders.map((order, orderIndex) => {
             const statusStyle = getStatusStyle(order.status);
             return (
-              <View key={order.id} style={styles.orderCard}>
+              <View key={`${order.id}-${orderIndex}`} style={styles.orderCard}>
                 <View style={styles.orderHeader}>
                   <Text style={styles.orderId}>{order.id}</Text>
                   <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>

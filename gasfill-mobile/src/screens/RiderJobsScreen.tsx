@@ -204,7 +204,7 @@ const RiderJobsScreen: React.FC = () => {
           {job.distance && (
             <View style={styles.detailRow}>
               <Ionicons name="navigate-outline" size={16} color="#6b7280" />
-              <Text style={styles.detailText}>{job.distance.toFixed(1)} km away</Text>
+              <Text style={styles.detailText}>{(job.distance ?? 0).toFixed(1)} km away</Text>
             </View>
           )}
         </View>
@@ -344,12 +344,12 @@ const RiderJobsScreen: React.FC = () => {
                 {selectedOrder.items.map((item, index) => (
                   <View key={index} style={styles.itemRow}>
                     <Text style={styles.itemName}>{item.quantity}x {item.name}</Text>
-                    <Text style={styles.itemPrice}>₵{item.price.toFixed(2)}</Text>
+                    <Text style={styles.itemPrice}>₵{(item.price ?? 0).toFixed(2)}</Text>
                   </View>
                 ))}
                 <View style={[styles.itemRow, styles.totalRow]}>
                   <Text style={styles.totalLabel}>Total</Text>
-                  <Text style={styles.totalAmount}>₵{selectedOrder.total_amount.toFixed(2)}</Text>
+                  <Text style={styles.totalAmount}>₵{(selectedOrder.total_amount ?? 0).toFixed(2)}</Text>
                 </View>
               </View>
 
@@ -357,14 +357,14 @@ const RiderJobsScreen: React.FC = () => {
                 <Text style={styles.modalSectionTitle}>Delivery Address</Text>
                 <Text style={styles.modalText}>{selectedOrder.delivery_address}</Text>
                 {selectedOrder.distance && (
-                  <Text style={styles.modalSubtext}>{selectedOrder.distance.toFixed(1)} km away</Text>
+                  <Text style={styles.modalSubtext}>{(selectedOrder.distance ?? 0).toFixed(1)} km away</Text>
                 )}
               </View>
 
               <View style={styles.modalSection}>
                 <Text style={styles.modalSectionTitle}>Delivery Fee</Text>
                 <Text style={[styles.modalText, { color: '#10b981', fontSize: 24, fontWeight: '700' }]}>
-                  ₵{selectedOrder.delivery_fee.toFixed(2)}
+                  ₵{(selectedOrder.delivery_fee ?? 0).toFixed(2)}
                 </Text>
               </View>
 
