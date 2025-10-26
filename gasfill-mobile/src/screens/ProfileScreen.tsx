@@ -18,12 +18,18 @@ interface ProfileScreenProps {
 }
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, rider, isAuthenticated, userRole, logout } = useAuth();
   const [loyalty, setLoyalty] = useState({
     level: 'Gold Member',
     points: 42,
     nextLevelPoints: 50,
   });
+
+  // Determine display data based on user role
+  const displayName = rider?.username || user?.username || 'User';
+  const displayEmail = rider?.email || user?.email || '';
+  const displayPhone = rider?.phone || '';
+  const isRider = userRole === 'rider';
 
   const handleLogout = () => {
     Alert.alert(
@@ -75,19 +81,103 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           <>
             <View style={styles.profileCard}>
               <Image
-                source={{ uri: 'https://i.pravatar.cc/150?u=' + (user?.email || 'default') }}
+                source={{ uri: 'https://i.pravatar.cc/150?u=' + displayEmail }}
                 style={styles.avatar}
               />
-              <Text style={styles.userName}>{user?.username || 'User'}</Text>
-              <Text style={styles.userEmail}>{user?.email || ''}</Text>
-              <Text style={styles.userLevel}>{loyalty.level}</Text>
-              <View style={styles.progressContainer}>
-                <View style={styles.progressBar}>
-                  <View style={[styles.progress, { width: `${(loyalty.points / loyalty.nextLevelPoints) * 100}%` }]} />
+              <Text style={styles.userName}>{displayName}</Text>
+              <Text style={styles.userEmail}>{displayEmail}</Text>
+              {displayPhone && <Text style={styles.userPhone}>{displayPhone}</Text>}
+              
+              {isRider ? (
+                <View style={styles.riderBadgeContainer}>
+                  <View style={[
+                    styles.riderBadge,
+                    { backgroundColor: rider?.status === 'available' ? '#d1fae5' : rider?.status === 'busy' ? '#fef3c7' : '#f3f4f6' }
+                  ]}>
+                    <Ionicons 
+                      name="bicycle" 
+                      size={16} 
+                      color={rider?.status === 'available' ? '#065f46' : rider?.status === 'busy' ? '#92400e' : '#6b7280'} 
+                    />
+                    <Text style={[
+                      styles.riderBadgeText,
+                      { color: rider?.status === 'available' ? '#065f46' : rider?.status === 'busy' ? '#92400e' : '#6b7280' }
+                    ]}>
+                      {rider?.status?.toUpperCase() || 'OFFLINE'} RIDER
+                    </Text>
+                  </View>
+                  {rider?.is_verified && (
+                    <View style={styles.verifiedBadge}>
+                      <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                      <Text style={styles.verifiedText}>Verified</Text>
+                    </View>
+                  )}
                 </View>
-                <Text style={styles.progressText}>{loyalty.points}</Text>
-              </View>
+              ) : (
+                <Text style={styles.userLevel}>{loyalty.level}</Text>
+              )}
+              
+              {isRider && rider && (
+                <View style={styles.riderStatsContainer}>
+                  <View style={styles.riderStat}>
+                    <Ionicons name="star" size={20} color="#FFC107" />
+                    <Text style={styles.riderStatValue}>{(rider.rating ?? 0).toFixed(1)}</Text>
+                    <Text style={styles.riderStatLabel}>Rating</Text>
+                  </View>
+                  <View style={styles.riderStatDivider} />
+                  <View style={styles.riderStat}>
+                    <Ionicons name="checkmark-done" size={20} color="#10b981" />
+                    <Text style={styles.riderStatValue}>{rider.total_deliveries ?? 0}</Text>
+                    <Text style={styles.riderStatLabel}>Deliveries</Text>
+                  </View>
+                  <View style={styles.riderStatDivider} />
+                  <View style={styles.riderStat}>
+                    <Ionicons name="wallet" size={20} color="#3b82f6" />
+                    <Text style={styles.riderStatValue}>₵{(rider.earnings ?? 0).toFixed(0)}</Text>
+                    <Text style={styles.riderStatLabel}>Earnings</Text>
+                  </View>
+                </View>
+              )}
+              
+              {!isRider && (
+                <View style={styles.progressContainer}>
+                  <View style={styles.progressBar}>
+                    <View style={[styles.progress, { width: `${(loyalty.points / loyalty.nextLevelPoints) * 100}%` }]} />
+                  </View>
+                  <Text style={styles.progressText}>{loyalty.points}</Text>
+                </View>
+              )}
             </View>
+
+            {isRider && rider && (
+              <View style={styles.riderInfoCard}>
+                <Text style={styles.riderInfoTitle}>Rider Information</Text>
+                
+                <View style={styles.infoRow}>
+                  <Ionicons name="car-outline" size={20} color="#6b7280" />
+                  <Text style={styles.infoLabel}>Vehicle:</Text>
+                  <Text style={styles.infoValue}>{rider.vehicle_type} - {rider.vehicle_number}</Text>
+                </View>
+                
+                <View style={styles.infoRow}>
+                  <Ionicons name="card-outline" size={20} color="#6b7280" />
+                  <Text style={styles.infoLabel}>License:</Text>
+                  <Text style={styles.infoValue}>{rider.license_number}</Text>
+                </View>
+                
+                <View style={styles.infoRow}>
+                  <Ionicons name="location-outline" size={20} color="#6b7280" />
+                  <Text style={styles.infoLabel}>Coverage:</Text>
+                  <Text style={styles.infoValue}>{rider.area_coverage}</Text>
+                </View>
+                
+                <View style={styles.infoRow}>
+                  <Ionicons name="call-outline" size={20} color="#6b7280" />
+                  <Text style={styles.infoLabel}>Emergency:</Text>
+                  <Text style={styles.infoValue}>{rider.emergency_contact}</Text>
+                </View>
+              </View>
+            )}
 
             <View style={styles.menuContainer}>
               {menuItems.map((item, index) => (
@@ -189,10 +279,116 @@ const styles = StyleSheet.create({
     color: '#B2C7DD',
     marginBottom: 8,
   },
+  userPhone: {
+    fontSize: 13,
+    color: '#B2C7DD',
+    marginBottom: 12,
+  },
   userLevel: {
     fontSize: 16,
     color: '#FFC107',
     marginBottom: 16,
+  },
+  riderBadgeContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  riderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+  },
+  riderBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
+  },
+  verifiedText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#065f46',
+  },
+  riderStatsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  riderStat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  riderStatDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  riderStatValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginTop: 4,
+  },
+  riderStatLabel: {
+    fontSize: 11,
+    color: '#B2C7DD',
+    marginTop: 2,
+  },
+  riderInfoCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    marginHorizontal: 24,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  riderInfoTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0A2540',
+    marginBottom: 16,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  infoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginLeft: 12,
+    width: 90,
+  },
+  infoValue: {
+    fontSize: 14,
+    color: '#111827',
+    flex: 1,
   },
   progressContainer: {
     flexDirection: 'row',

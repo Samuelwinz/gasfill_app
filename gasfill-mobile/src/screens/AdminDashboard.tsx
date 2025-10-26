@@ -103,17 +103,13 @@ const AdminDashboard: React.FC = () => {
 
   const loadRiders = async () => {
     try {
-      console.log('👥 Loading riders/users...');
-      const data = await adminApi.getUsers();
-      console.log('✅ Users loaded:', data);
+      console.log('� Loading riders...');
+      const data = await adminApi.getRiders();
+      console.log('✅ Riders loaded:', data);
       
-      // Filter for riders if the data has role field
-      const allUsers = Array.isArray(data) ? data : (data.users || []);
-      setUsers(allUsers);
-      
-      // If there's a specific endpoint for riders in the future, use it
-      // For now, show all users
-      setRiders([]);
+      // Handle response structure - could be array or object with riders property
+      const ridersList = Array.isArray(data) ? data : (data.riders || []);
+      setRiders(ridersList);
     } catch (error) {
       console.error('❌ Error loading riders:', error);
       throw error;
@@ -339,37 +335,44 @@ const AdminDashboard: React.FC = () => {
       }
     >
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Users ({users.length})</Text>
+        <Text style={styles.sectionTitle}>Riders ({riders.length})</Text>
       </View>
       
-      {users.length === 0 ? (
+      {riders.length === 0 ? (
         <View style={styles.emptyState}>
-          <Ionicons name="people-outline" size={64} color="#d1d5db" />
-          <Text style={styles.emptyStateText}>No users found</Text>
+          <Ionicons name="bicycle-outline" size={64} color="#d1d5db" />
+          <Text style={styles.emptyStateText}>No riders found</Text>
         </View>
       ) : (
-        users.map((user: any, index: number) => (
+        riders.map((rider: any, index: number) => (
           <View
-            key={`user-${user.id || index}`}
+            key={`rider-${rider.id || index}`}
             style={styles.listItem}
           >
             <View style={styles.listItemContent}>
-              <View>
-                <Text style={styles.listItemTitle}>{user.username || user.email}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.listItemTitle}>{rider.username || rider.email}</Text>
                 <Text style={styles.listItemSubtitle}>
-                  {user.email}
+                  {rider.email}
                 </Text>
                 <Text style={styles.listItemDetails}>
-                  Role: {user.role || 'user'} • Phone: {user.phone || 'N/A'}
+                  Vehicle: {rider.vehicle_type || 'N/A'} {rider.vehicle_number || ''} • Phone: {rider.phone || 'N/A'}
+                </Text>
+                <Text style={styles.listItemDetails}>
+                  Deliveries: {rider.total_deliveries || 0} • Rating: {rider.rating ? rider.rating.toFixed(1) : 'N/A'} ⭐
                 </Text>
               </View>
               <View style={styles.listItemActions}>
                 <View style={[
                   styles.statusBadge,
-                  { backgroundColor: user.is_active ? '#10b981' : '#ef4444' }
+                  { backgroundColor: 
+                    rider.status === 'available' ? '#10b981' : 
+                    rider.status === 'busy' ? '#f59e0b' : 
+                    '#6b7280' 
+                  }
                 ]}>
                   <Text style={styles.statusText}>
-                    {user.is_active ? 'ACTIVE' : 'INACTIVE'}
+                    {rider.status?.toUpperCase() || 'OFFLINE'}
                   </Text>
                 </View>
               </View>

@@ -54,6 +54,12 @@ class AdminApiService {
     return response.data;
   }
 
+  // Get all riders
+  async getRiders() {
+    const response = await this.api.get('/api/admin/riders');
+    return response.data;
+  }
+
   // Get all orders
   async getOrders() {
     const response = await this.api.get('/api/admin/orders');

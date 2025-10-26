@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getRiderDashboard, updateRiderStatus, DashboardData } from '../services/riderApi';
 import { useRiderUpdates } from '../context/WebSocketContext';
@@ -17,6 +18,7 @@ import Loading from '../components/Loading';
 import ErrorDisplay from '../components/ErrorDisplay';
 
 const RiderDashboard: React.FC = () => {
+  const navigation = useNavigation();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -260,7 +262,10 @@ const RiderDashboard: React.FC = () => {
         <View style={styles.actionsSection}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('Jobs' as never)}
+          >
             <View style={styles.actionIcon}>
               <Ionicons name="list-outline" size={24} color="#10b981" />
             </View>
@@ -271,7 +276,10 @@ const RiderDashboard: React.FC = () => {
             <Ionicons name="chevron-forward" size={24} color="#9ca3af" />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('Earnings' as never)}
+          >
             <View style={styles.actionIcon}>
               <Ionicons name="cash-outline" size={24} color="#10b981" />
             </View>
