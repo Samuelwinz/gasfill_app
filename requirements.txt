@@ -21,6 +21,9 @@ pydantic[email]==2.10.5
 # Optional: WebSocket support
 websockets==12.0
 
+# HTTP client for push notifications
+httpx==0.25.2
+
 # Development dependencies
 # pytest==7.4.3
 # pytest-asyncio==0.21.1

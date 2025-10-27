@@ -11,9 +11,12 @@ import {
   StatusBar,
   Image,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { useAuth } from '../context/AuthContext';
 import { ChatMessage, ChatParticipant } from '../types';
 import chatService from '../services/chat';
@@ -206,6 +209,172 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
     }
   };
 
+  // Handle image picker
+  const handlePickImage = async () => {
+    try {
+      // Request permissions
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant camera roll permissions to share images');
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.7,
+        base64: false,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await uploadAndSendImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('[ChatScreen] Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  // Upload image and send as message
+  const uploadAndSendImage = async (imageUri: string) => {
+    try {
+      setIsSending(true);
+
+      // Create form data
+      const formData = new FormData();
+      const filename = imageUri.split('/').pop() || 'image.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+      formData.append('file', {
+        uri: imageUri,
+        name: filename,
+        type,
+      } as any);
+
+      // Upload image
+      const response = await chatService.uploadImage(formData);
+      const imageUrl = response.image_url;
+
+      // Send image message
+      const newMessage: ChatMessage = {
+        id: `temp_${Date.now()}`,
+        chat_room_id: chatRoomId,
+        sender_id: currentUserId || 0,
+        sender_type: currentUserType,
+        sender_name: currentUserName || 'You',
+        message: 'Sent an image',
+        message_type: 'image',
+        image_url: imageUrl,
+        is_read: false,
+        is_delivered: false,
+        created_at: new Date().toISOString(),
+      };
+
+      setMessages(prev => [...prev, newMessage]);
+
+      // Send via WebSocket or HTTP
+      if (isConnected) {
+        sendWebSocketMessage('Sent an image', 'image', imageUrl);
+      } else {
+        await chatService.sendMessage({
+          chat_room_id: chatRoomId,
+          sender_id: currentUserId || 0,
+          sender_type: currentUserType,
+          sender_name: currentUserName || 'You',
+          message: 'Sent an image',
+          message_type: 'image',
+          is_read: false,
+        }, imageUrl);
+      }
+
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+
+    } catch (error) {
+      console.error('[ChatScreen] Error uploading image:', error);
+      Alert.alert('Error', 'Failed to send image');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // Handle location sharing
+  const handleShareLocation = async () => {
+    try {
+      // Request permissions
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant location permissions to share your location');
+        return;
+      }
+
+      setIsSending(true);
+
+      // Get current location
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const { latitude, longitude } = location.coords;
+      const locationData = {
+        latitude,
+        longitude,
+        accuracy: location.coords.accuracy || 0,
+      };
+
+      // Send location message
+      const newMessage: ChatMessage = {
+        id: `temp_${Date.now()}`,
+        chat_room_id: chatRoomId,
+        sender_id: currentUserId || 0,
+        sender_type: currentUserType,
+        sender_name: currentUserName || 'You',
+        message: `Shared location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+        message_type: 'location',
+        location_data: locationData,
+        is_read: false,
+        is_delivered: false,
+        created_at: new Date().toISOString(),
+      };
+
+      setMessages(prev => [...prev, newMessage]);
+
+      // Send via WebSocket or HTTP
+      if (isConnected) {
+        sendWebSocketMessage(
+          `Shared location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+          'location',
+          undefined
+        );
+      } else {
+        await chatService.sendMessage({
+          chat_room_id: chatRoomId,
+          sender_id: currentUserId || 0,
+          sender_type: currentUserType,
+          sender_name: currentUserName || 'You',
+          message: `Shared location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+          message_type: 'location',
+          is_read: false,
+        }, undefined, locationData);
+      }
+
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+
+    } catch (error) {
+      console.error('[ChatScreen] Error sharing location:', error);
+      Alert.alert('Error', 'Failed to share location');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -230,9 +399,9 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
               <Ionicons 
-                name={otherParticipant.user_type === 'rider' ? 'bicycle' : 'person'} 
+                name={otherParticipant.type === 'rider' ? 'bicycle' : 'person'} 
                 size={20} 
-                color="#ffffff" 
+                color="#6b7280" 
               />
             </View>
           </View>
@@ -245,12 +414,60 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
           {!isMyMessage && (
             <Text style={styles.senderName}>{item.sender_name}</Text>
           )}
-          <Text style={[
-            styles.messageText,
-            isMyMessage ? styles.myMessageText : styles.theirMessageText,
-          ]}>
-            {item.message}
-          </Text>
+          
+          {/* Render image message */}
+          {item.message_type === 'image' && item.image_url && (
+            <TouchableOpacity onPress={() => {
+              // Could open full-screen image viewer
+              Alert.alert('Image', 'Full image viewer coming soon');
+            }}>
+              <Image 
+                source={{ uri: item.image_url }}
+                style={styles.messageImage}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          )}
+
+          {/* Render location message */}
+          {item.message_type === 'location' && item.location_data && (
+            <TouchableOpacity onPress={() => {
+              if (!item.location_data) return;
+              const { latitude, longitude } = item.location_data;
+              const url = Platform.select({
+                ios: `maps:0,0?q=${latitude},${longitude}`,
+                android: `geo:0,0?q=${latitude},${longitude}`,
+              });
+              Alert.alert('Open in Maps', `Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+            }}>
+              <View style={styles.locationContainer}>
+                <Ionicons name="location" size={40} color={isMyMessage ? '#fff' : '#3b82f6'} />
+                <Text style={[
+                  styles.locationText,
+                  isMyMessage ? styles.myMessageText : styles.theirMessageText,
+                ]}>
+                  📍 Location Shared
+                </Text>
+                <Text style={[
+                  styles.locationCoords,
+                  isMyMessage ? styles.myMessageTime : styles.theirMessageTime,
+                ]}>
+                  {item.location_data.latitude.toFixed(6)}, {item.location_data.longitude.toFixed(6)}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {/* Render text message */}
+          {item.message_type === 'text' && (
+            <Text style={[
+              styles.messageText,
+              isMyMessage ? styles.myMessageText : styles.theirMessageText,
+            ]}>
+              {item.message}
+            </Text>
+          )}
+
           <View style={styles.messageFooter}>
             <Text style={[
               styles.messageTime,
@@ -339,8 +556,20 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.attachButton}>
-            <Ionicons name="add-circle-outline" size={28} color="#6b7280" />
+          <TouchableOpacity 
+            style={styles.attachButton}
+            onPress={handlePickImage}
+            disabled={isSending}
+          >
+            <Ionicons name="image-outline" size={26} color="#6b7280" />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.attachButton}
+            onPress={handleShareLocation}
+            disabled={isSending}
+          >
+            <Ionicons name="location-outline" size={26} color="#6b7280" />
           </TouchableOpacity>
           
           <TextInput
@@ -554,6 +783,25 @@ const styles = StyleSheet.create({
   sendButtonDisabled: {
     backgroundColor: '#9ca3af',
     opacity: 0.5,
+  },
+  messageImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  locationContainer: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  locationText: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  locationCoords: {
+    fontSize: 11,
+    marginTop: 2,
   },
 });
 

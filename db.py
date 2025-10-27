@@ -78,7 +78,10 @@ def init_db():
             created_at TEXT,
             updated_at TEXT,
             rider_id INTEGER,
-            tracking_info TEXT
+            tracking_info TEXT,
+            status_history TEXT,
+            tracking_updates TEXT,
+            estimated_delivery TEXT
         )
     ''')
     
@@ -139,12 +142,43 @@ def init_db():
     cur.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_created ON chat_messages(created_at)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_chat_participants_room ON chat_participants(chat_room_id)')
     
+    # Migration: Add new columns to orders table if they don't exist
+    try:
+        cur.execute("SELECT status_history FROM orders LIMIT 1")
+    except:
+        cur.execute("ALTER TABLE orders ADD COLUMN status_history TEXT")
+    
+    try:
+        cur.execute("SELECT tracking_updates FROM orders LIMIT 1")
+    except:
+        cur.execute("ALTER TABLE orders ADD COLUMN tracking_updates TEXT")
+    
+    try:
+        cur.execute("SELECT estimated_delivery FROM orders LIMIT 1")
+    except:
+        cur.execute("ALTER TABLE orders ADD COLUMN estimated_delivery TEXT")
+    
+    try:
+        cur.execute("SELECT rating FROM orders LIMIT 1")
+    except:
+        cur.execute("ALTER TABLE orders ADD COLUMN rating INTEGER")
+    
+    try:
+        cur.execute("SELECT rating_comment FROM orders LIMIT 1")
+    except:
+        cur.execute("ALTER TABLE orders ADD COLUMN rating_comment TEXT")
+    
+    try:
+        cur.execute("SELECT rated_at FROM orders LIMIT 1")
+    except:
+        cur.execute("ALTER TABLE orders ADD COLUMN rated_at TEXT")
+    
     conn.commit()
     conn.close()
 
 def _row_to_order(row: sqlite3.Row) -> Dict[str, Any]:
     """Convert SQLite row to order dict"""
-    return {
+    order_dict = {
         'id': row['id'],
         'items': json.loads(row['items']) if row['items'] else [],
         'total': row['total'],
@@ -161,6 +195,39 @@ def _row_to_order(row: sqlite3.Row) -> Dict[str, Any]:
         'rider_id': row['rider_id'],
         'tracking_info': json.loads(row['tracking_info']) if row['tracking_info'] else None
     }
+    
+    # Add new fields if they exist
+    try:
+        order_dict['status_history'] = json.loads(row['status_history']) if row['status_history'] else []
+    except (KeyError, IndexError):
+        order_dict['status_history'] = []
+    
+    try:
+        order_dict['tracking_updates'] = json.loads(row['tracking_updates']) if row['tracking_updates'] else []
+    except (KeyError, IndexError):
+        order_dict['tracking_updates'] = []
+    
+    try:
+        order_dict['estimated_delivery'] = row['estimated_delivery']
+    except (KeyError, IndexError):
+        order_dict['estimated_delivery'] = None
+    
+    try:
+        order_dict['rating'] = row['rating']
+    except (KeyError, IndexError):
+        order_dict['rating'] = None
+    
+    try:
+        order_dict['rating_comment'] = row['rating_comment']
+    except (KeyError, IndexError):
+        order_dict['rating_comment'] = None
+    
+    try:
+        order_dict['rated_at'] = row['rated_at']
+    except (KeyError, IndexError):
+        order_dict['rated_at'] = None
+    
+    return order_dict
 
 def create_order(order: Dict[str, Any]) -> Dict[str, Any]:
     """Create or update an order in the database"""
@@ -229,9 +296,34 @@ def update_order_status(order_id: str, status: str, tracking_info: Optional[Dict
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     updated_at = datetime.now(UTC).isoformat()
+    
+    # Get current order to build status history
+    cur.execute('SELECT status_history FROM orders WHERE id=?', (order_id,))
+    row = cur.fetchone()
+    
+    # Get existing status history or create new
+    status_history = []
+    if row and row['status_history']:
+        try:
+            status_history = json.loads(row['status_history'])
+        except:
+            status_history = []
+    
+    # Add new status to history
+    status_history.append({
+        "status": status,
+        "timestamp": updated_at,
+        "note": f"Status updated to {status}"
+    })
+    
+    # Update order with new status and history
     tracking_json = json.dumps(tracking_info) if tracking_info else None
-    cur.execute('UPDATE orders SET status=?, updated_at=?, tracking_info=? WHERE id=?', 
-                (status, updated_at, tracking_json, order_id))
+    status_history_json = json.dumps(status_history)
+    
+    cur.execute('''UPDATE orders 
+                   SET status=?, updated_at=?, tracking_info=?, status_history=? 
+                   WHERE id=?''', 
+                (status, updated_at, tracking_json, status_history_json, order_id))
     conn.commit()
     cur.execute('SELECT * FROM orders WHERE id=?', (order_id,))
     row = cur.fetchone()

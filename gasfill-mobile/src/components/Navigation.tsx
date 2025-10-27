@@ -33,6 +33,7 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
 import ChatScreen from '../screens/ChatScreen';
 import CustomerChatListScreen from '../screens/CustomerChatListScreen';
+import OrderTrackingScreen from '../screens/OrderTrackingScreen';
 
 // Import services
 import { StorageService } from '../utils/storage';
@@ -380,6 +381,13 @@ function AppStack() {
       <Stack.Screen 
         name="Chat" 
         component={ChatScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="OrderTracking" 
+        component={OrderTrackingScreen}
         options={{ 
           headerShown: false,
         }}

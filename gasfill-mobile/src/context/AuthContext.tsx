@@ -9,6 +9,7 @@ import {
   RiderRegisterData,
   RiderProfile 
 } from '../services/riderApi';
+// import notificationService from '../services/notificationService';
 
 interface AuthContextType {
   user: User | null;
@@ -96,6 +97,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(response.user);
       setUserRole(role);
       await StorageService.setItem('userRole', role);
+
+      // TEMPORARILY DISABLED: Push notifications
+      // Register push token after successful login
+      /*
+      try {
+        const pushToken = notificationService.getPushToken();
+        if (pushToken) {
+          await notificationService.savePushToken(pushToken);
+          console.log('✅ Push token registered with backend');
+        }
+      } catch (error) {
+        console.error('⚠️  Failed to register push token:', error);
+      }
+      */
 
       console.log('✅ Login successful for:', response.user.email, 'Role:', role);
       return true;

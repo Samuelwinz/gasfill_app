@@ -364,6 +364,12 @@ export interface ChatMessage {
     longitude: number;
     address?: string;
   };
+  location_data?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    address?: string;
+  };
   is_read: boolean;
   is_delivered: boolean;
   created_at: string;
@@ -393,6 +399,7 @@ export interface ChatParticipant {
   name: string;
   avatar?: string;
   user_type: 'customer' | 'rider' | 'support';
+  type: 'customer' | 'rider' | 'support'; // Alias for user_type
   is_online: boolean;
   is_typing?: boolean;
   last_seen?: string;

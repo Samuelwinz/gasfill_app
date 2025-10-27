@@ -31,6 +31,7 @@ const CheckoutScreen: React.FC = () => {
   
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [orderPlaced, setOrderPlaced] = useState(false); // Track if order was successfully placed
   
   // Form fields
   const [customerName, setCustomerName] = useState('');
@@ -54,14 +55,14 @@ const CheckoutScreen: React.FC = () => {
   };
 
   useEffect(() => {
-    // Check if cart is empty
-    if (cart.length === 0) {
+    // Check if cart is empty (but not after successful order placement)
+    if (cart.length === 0 && !orderPlaced) {
       Alert.alert('Empty Cart', 'Your cart is empty. Add some products first.', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     }
     loadUserData();
-  }, [cart]);
+  }, [cart, orderPlaced]);
 
   const loadUserData = () => {
     if (user) {
@@ -162,6 +163,9 @@ const CheckoutScreen: React.FC = () => {
         // Save order locally
         await StorageService.addOrder(order);
         
+        // Mark order as placed BEFORE clearing cart to prevent empty cart alert
+        setOrderPlaced(true);
+        
         // Clear cart
         await clearCart();
         
@@ -211,6 +215,10 @@ const CheckoutScreen: React.FC = () => {
         };
         
         await StorageService.addOrder(localOrder);
+        
+        // Mark order as placed BEFORE clearing cart to prevent empty cart alert
+        setOrderPlaced(true);
+        
         await clearCart();
         
         setToast({

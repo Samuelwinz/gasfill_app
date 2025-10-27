@@ -779,7 +779,7 @@ async def get_order(order_id: str, credentials: HTTPAuthorizationCredentials = D
 
 @app.patch("/api/orders/{order_id}/status")
 async def update_order_status(order_id: str, status_update: OrderStatusUpdate):
-    """Update order status"""
+    """Update order status and send push notification"""
     order = db.update_order_status(order_id, status_update.status)
     
     if not order:
@@ -788,6 +788,41 @@ async def update_order_status(order_id: str, status_update: OrderStatusUpdate):
             detail="Order not found"
         )
     
+    # Send push notification to customer about status change
+    try:
+        # Get customer user ID from email
+        customer = db.get_user_by_email(order["customer_email"])
+        if customer:
+            status_messages = {
+                "pending": "Your order has been received and is being processed",
+                "assigned": "A rider has been assigned to your order",
+                "pickup": "Your rider is on the way to pick up your order",
+                "in_transit": "Your order is on its way",
+                "delivered": "Your order has been delivered",
+                "cancelled": "Your order has been cancelled"
+            }
+            
+            message_body = status_messages.get(
+                status_update.status,
+                f"Order status updated to {status_update.status}"
+            )
+            
+            # Import the send function (will be defined later in the file)
+            if 'send_push_notification' in globals():
+                await send_push_notification(
+                    customer["id"],
+                    f"Order {order_id} Update",
+                    message_body,
+                    {
+                        "type": "order_update",
+                        "order_id": order_id,
+                        "status": status_update.status,
+                        "channel": "orders"
+                    }
+                )
+    except Exception as e:
+        print(f"⚠️  Failed to send push notification: {e}")
+    
     return order
 
 @app.delete("/api/orders/{order_id}")
@@ -795,6 +830,221 @@ async def delete_order(order_id: str):
     """Delete an order"""
     db.delete_order(order_id)
     return {"message": "Order deleted successfully"}
+
+@app.get("/api/order/tracking/{order_id}")
+async def get_order_tracking(order_id: str):
+    """Get real-time order tracking information"""
+    order = db.get_order_by_id(order_id)
+    
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail="Order not found"
+        )
+    
+    # Get rider information if assigned
+    rider_info = None
+    if order.get("rider_id"):
+        rider = db.get_rider_by_id(order["rider_id"])
+        if rider:
+            rider_info = {
+                "id": rider["id"],
+                "name": rider["username"],
+                "phone": rider["phone"],
+                "vehicle_type": rider["vehicle_type"],
+                "vehicle_number": rider["vehicle_number"],
+                "rating": rider["rating"],
+                "location": rider.get("location"),
+                "status": rider.get("status", "offline")
+            }
+    
+    # Get status history from order (if exists) or create from current status
+    status_history = order.get("status_history", [
+        {
+            "status": order["status"],
+            "timestamp": order.get("updated_at", order["created_at"]),
+            "note": "Current status"
+        }
+    ])
+    
+    # Build tracking response
+    tracking_data = {
+        "order_id": order["id"],
+        "status": order["status"],
+        "customer_name": order["customer_name"],
+        "delivery_address": order.get("delivery_address") or order.get("customer_address"),
+        "items": order["items"],
+        "total_amount": order.get("total_amount") or order.get("total", 0),
+        "payment_method": order.get("payment_method", "cash"),
+        "payment_status": order.get("payment_status", "pending"),
+        "created_at": order["created_at"],
+        "updated_at": order.get("updated_at", order["created_at"]),
+        "estimated_delivery": order.get("estimated_delivery"),
+        "rating": order.get("rating"),
+        "rating_comment": order.get("rating_comment"),
+        "rated_at": order.get("rated_at"),
+        "rider": rider_info,
+        "status_history": status_history,
+        "tracking_updates": order.get("tracking_updates", [])
+    }
+    
+    return tracking_data
+
+@app.put("/api/rider/location")
+async def update_rider_location(
+    location_data: dict,
+    current_rider: dict = Depends(get_current_rider)
+):
+    """Update rider's current location during delivery"""
+    rider_id = current_rider.get("id") or current_rider.get("rider_id")
+    
+    # Update rider's location in database
+    location = {
+        "latitude": location_data.get("latitude"),
+        "longitude": location_data.get("longitude"),
+        "accuracy": location_data.get("accuracy"),
+        "timestamp": utc_now().isoformat()
+    }
+    
+    # Update rider location using raw SQL
+    import sqlite3
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        UPDATE riders 
+        SET location = ?, updated_at = ?
+        WHERE id = ?
+    """, (json.dumps(location), utc_now().isoformat(), rider_id))
+    conn.commit()
+    conn.close()
+    
+    # If rider has an active order, add tracking update
+    active_order_id = location_data.get("order_id")
+    if active_order_id:
+        order = db.get_order_by_id(active_order_id)
+        if order and order.get("rider_id") == rider_id:
+            # Get existing tracking updates
+            tracking_updates = order.get("tracking_updates", [])
+            if isinstance(tracking_updates, str):
+                try:
+                    tracking_updates = json.loads(tracking_updates)
+                except:
+                    tracking_updates = []
+            
+            # Add new location update
+            tracking_updates.append({
+                "latitude": location["latitude"],
+                "longitude": location["longitude"],
+                "timestamp": location["timestamp"],
+                "accuracy": location.get("accuracy")
+            })
+            
+            # Keep only last 50 updates to avoid bloat
+            if len(tracking_updates) > 50:
+                tracking_updates = tracking_updates[-50:]
+            
+            # Update order with new tracking data
+            conn = sqlite3.connect(db.DB_PATH)
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE orders 
+                SET tracking_updates = ?
+                WHERE id = ?
+            """, (json.dumps(tracking_updates), active_order_id))
+            conn.commit()
+            conn.close()
+    
+    return {
+        "success": True,
+        "location": location,
+        "message": "Location updated successfully"
+    }
+
+@app.post("/api/orders/{order_id}/rating")
+async def rate_order(
+    order_id: str,
+    rating_data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Submit rating for a completed order"""
+    order = db.get_order_by_id(order_id)
+    
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail="Order not found"
+        )
+    
+    # Verify order belongs to user
+    if order.get("customer_email") != current_user.get("email"):
+        raise HTTPException(
+            status_code=403,
+            detail="You can only rate your own orders"
+        )
+    
+    # Verify order is delivered
+    if order.get("status") != "delivered":
+        raise HTTPException(
+            status_code=400,
+            detail="Can only rate delivered orders"
+        )
+    
+    rating = rating_data.get("rating")
+    comment = rating_data.get("comment", "")
+    
+    if not rating or rating < 1 or rating > 5:
+        raise HTTPException(
+            status_code=400,
+            detail="Rating must be between 1 and 5"
+        )
+    
+    # Update order with rating
+    import sqlite3
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    
+    rating_info = {
+        "rating": rating,
+        "comment": comment,
+        "rated_at": utc_now().isoformat(),
+        "rated_by": current_user.get("id")
+    }
+    
+    cur.execute("""
+        UPDATE orders 
+        SET rating = ?, rating_comment = ?, rated_at = ?
+        WHERE id = ?
+    """, (rating, comment, rating_info["rated_at"], order_id))
+    
+    # Update rider's average rating if rider exists
+    if order.get("rider_id"):
+        rider = db.get_rider_by_id(order["rider_id"])
+        if rider:
+            # Get all ratings for this rider
+            cur.execute("""
+                SELECT rating FROM orders 
+                WHERE rider_id = ? AND rating IS NOT NULL
+            """, (order["rider_id"],))
+            
+            ratings = cur.fetchall()
+            if ratings:
+                avg_rating = sum(r[0] for r in ratings) / len(ratings)
+                
+                # Update rider's rating
+                cur.execute("""
+                    UPDATE riders 
+                    SET rating = ?, total_deliveries = ?
+                    WHERE id = ?
+                """, (avg_rating, len(ratings), order["rider_id"]))
+    
+    conn.commit()
+    conn.close()
+    
+    return {
+        "success": True,
+        "rating": rating_info,
+        "message": "Thank you for your rating!"
+    }
 
 @app.get("/api/stats")
 async def get_stats():
@@ -2888,6 +3138,95 @@ try:
                 self.disconnect(conn)
 
     manager = ConnectionManager()
+
+    # ============================================
+    # PUSH NOTIFICATION ENDPOINTS
+    # ============================================
+
+    # Store push tokens in memory (should be in database for production)
+    push_tokens_db = {}  # Format: {user_id: {token: str, device_type: str, user_type: str}}
+
+    @app.post("/api/notifications/register-token")
+    async def register_push_token(token_data: dict, current_user: dict = Depends(get_current_user)):
+        """Register user's push notification token"""
+        try:
+            user_id = current_user.get("id")
+            user_type = current_user.get("role", "customer")
+            
+            push_tokens_db[user_id] = {
+                "token": token_data.get("push_token"),
+                "device_type": token_data.get("device_type", "unknown"),
+                "user_type": user_type,
+                "user_id": user_id,
+                "registered_at": utc_now().isoformat()
+            }
+            
+            print(f"✅ Push token registered for {user_type} user {user_id}")
+            return {"success": True, "message": "Push token registered successfully"}
+        except Exception as e:
+            print(f"❌ Error registering push token: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/api/notifications/remove-token")
+    async def remove_push_token(token_data: dict, current_user: dict = Depends(get_current_user)):
+        """Remove user's push notification token"""
+        try:
+            user_id = current_user.get("id")
+            
+            if user_id in push_tokens_db:
+                del push_tokens_db[user_id]
+                print(f"✅ Push token removed for user {user_id}")
+            
+            return {"success": True, "message": "Push token removed successfully"}
+        except Exception as e:
+            print(f"❌ Error removing push token: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def send_push_notification(user_id: int, title: str, body: str, data: dict = None):
+        """Send push notification to a specific user"""
+        try:
+            if user_id not in push_tokens_db:
+                print(f"⚠️  No push token found for user {user_id}")
+                return False
+            
+            token_info = push_tokens_db[user_id]
+            push_token = token_info["token"]
+            
+            # Prepare Expo push notification
+            message = {
+                "to": push_token,
+                "sound": "default",
+                "title": title,
+                "body": body,
+                "data": data or {},
+                "priority": "high",
+                "channelId": data.get("channel", "default") if data else "default"
+            }
+            
+            # Send to Expo push notification service
+            import httpx
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://exp.host/--/api/v2/push/send",
+                    json=message,
+                    headers={
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                    },
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    print(f"✅ Push notification sent to user {user_id}: {title}")
+                    return True
+                else:
+                    print(f"❌ Failed to send push notification: {response.status_code}")
+                    return False
+                    
+        except Exception as e:
+            print(f"❌ Error sending push notification: {e}")
+            return False
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):

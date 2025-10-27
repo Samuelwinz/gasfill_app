@@ -360,7 +360,7 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
                   <View style={styles.riderRatingContainer}>
                     <Ionicons name="star" size={18} color="#fbbf24" />
                     <Text style={styles.riderRating}>
-                      {trackingData.rider_rating.toFixed(1)}
+                      {trackingData.rider_rating?.toFixed(1) || 'N/A'}
                     </Text>
                     <Text style={styles.riderRatingText}> (Excellent)</Text>
                   </View>
@@ -434,14 +434,14 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
                     {item.quantity}x {item.name}
                   </Text>
                   <Text style={styles.itemPrice}>
-                    ₵{(item.price * item.quantity).toFixed(2)}
+                    ₵{((item.price || 0) * (item.quantity || 0)).toFixed(2)}
                   </Text>
                 </View>
               ))}
               <View style={styles.divider} />
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>₵{trackingData.total.toFixed(2)}</Text>
+                <Text style={styles.totalValue}>₵{(trackingData.total || 0).toFixed(2)}</Text>
               </View>
             </>
           )}
