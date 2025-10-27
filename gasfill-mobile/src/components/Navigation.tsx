@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,16 +8,29 @@ import { View, Text, ActivityIndicator } from 'react-native';
 import HomeScreen from '../screens/HomeScreen';
 import ProductsScreen from '../screens/ProductsScreen';
 import CartScreen from '../screens/CartScreen';
-import OrdersScreen from '../screens/OrdersScreen';
+import OrderHistoryScreen from '../screens/OrderHistoryScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import OrderDetailsScreen from '../screens/OrderDetailsScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
 
+// Import new feature screens
+import RefillPlanScreen from '../screens/RefillPlanScreen';
+import RefillPlanBookingScreen from '../screens/RefillPlanBookingScreen';
+import SubscriptionManagementScreen from '../screens/SubscriptionManagementScreen';
+import RewardLoyaltyScreen from '../screens/RewardLoyaltyScreen';
+
 // Import new pickup/refill service screens
 import PickupRequestScreen from '../screens/PickupRequestScreen';
-import PickupTrackingScreen from '../screens/PickupTrackingScreen';
+import DeliveryTrackingScreen from '../screens/DeliveryTrackingScreen';
 import RiderDashboard from '../screens/RiderDashboard';
+import RiderJobsScreen from '../screens/RiderJobsScreen';
+import RiderEarningsScreen from '../screens/RiderEarningsScreen';
 import AdminDashboard from '../screens/AdminDashboard';
+import AboutScreen from '../screens/AboutScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
+import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
+import ChatScreen from '../screens/ChatScreen';
+import CustomerChatListScreen from '../screens/CustomerChatListScreen';
 
 // Import services
 import { StorageService } from '../utils/storage';
@@ -45,8 +57,8 @@ function CustomerTabs() {
             case 'Pickup':
               iconName = focused ? 'car' : 'car-outline';
               break;
-            case 'Track':
-              iconName = focused ? 'location' : 'location-outline';
+            case 'Messages':
+              iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
               break;
             case 'Orders':
               iconName = focused ? 'receipt' : 'receipt-outline';
@@ -83,11 +95,11 @@ function CustomerTabs() {
         options={{ title: 'Request Pickup' }}
       />
       <Tab.Screen 
-        name="Track" 
-        component={PickupTrackingScreen}
-        options={{ title: 'Track Orders' }}
+        name="Messages" 
+        component={CustomerChatListScreen}
+        options={{ title: 'Messages' }}
       />
-      <Tab.Screen name="Orders" component={OrdersScreen} />
+      <Tab.Screen name="Orders" component={OrderHistoryScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
@@ -142,12 +154,12 @@ function RiderTabs() {
       />
       <Tab.Screen 
         name="Jobs" 
-        component={RiderDashboard} // Could be a separate RiderJobsScreen
+        component={RiderJobsScreen}
         options={{ title: 'Jobs' }}
       />
       <Tab.Screen 
         name="Earnings" 
-        component={RiderDashboard} // Could be a separate RiderEarningsScreen
+        component={RiderEarningsScreen}
         options={{ title: 'Earnings' }}
       />
       <Tab.Screen name="Profile" component={ProfileScreen} />
@@ -228,11 +240,22 @@ function AppStack() {
 
   const loadUserRole = async () => {
     try {
-      const user = await StorageService.getUser();
-      setUserRole(user?.role || 'user'); // Default to 'user' role
+      // Check for explicit userRole first (set during rider/customer login)
+      const storedRole = await StorageService.getItem('userRole');
+      
+      if (storedRole && typeof storedRole === 'string') {
+        console.log('📱 User role from storage:', storedRole);
+        setUserRole(storedRole);
+      } else {
+        // Fallback: check user object role
+        const user = await StorageService.getUser();
+        const role = user?.role || 'customer';
+        console.log('📱 User role from user object:', role);
+        setUserRole(role);
+      }
     } catch (error) {
       console.error('Error loading user role:', error);
-      setUserRole('user'); // Default fallback
+      setUserRole('customer'); // Default fallback
     } finally {
       setLoading(false);
     }
@@ -251,13 +274,18 @@ function AppStack() {
 
   // Route to appropriate navigation based on user role
   const getNavigationComponent = () => {
+    console.log('🚦 Routing based on role:', userRole);
     switch (userRole) {
       case 'rider':
+        console.log('✅ Loading Rider Navigation');
         return RiderTabs;
       case 'admin':
+        console.log('✅ Loading Admin Navigation');
         return AdminTabs;
+      case 'customer':
       case 'user':
       default:
+        console.log('✅ Loading Customer Navigation');
         return CustomerTabs;
     }
   };
@@ -267,6 +295,13 @@ function AppStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={MainComponent} />
+      <Stack.Screen 
+        name="DeliveryTracking" 
+        component={DeliveryTrackingScreen as any}
+        options={{ 
+          headerShown: false,
+        }}
+      />
       <Stack.Screen 
         name="OrderDetails" 
         component={OrderDetailsScreen}
@@ -291,15 +326,67 @@ function AppStack() {
           title: 'Shopping Cart',
         }}
       />
+      <Stack.Screen 
+        name="RefillPlans" 
+        component={RefillPlanScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="RefillPlanBooking" 
+        component={RefillPlanBookingScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="SubscriptionManagement" 
+        component={SubscriptionManagementScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="Rewards" 
+        component={RewardLoyaltyScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="About" 
+        component={AboutScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="Notifications" 
+        component={NotificationsScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="NotificationSettings" 
+        component={NotificationSettingsScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="Chat" 
+        component={ChatScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
     </Stack.Navigator>
   );
 }
 
-// Root Navigator
-export default function Navigation() {
-  return (
-    <NavigationContainer>
-      <AppStack />
-    </NavigationContainer>
-  );
+// Root Navigator - now just returns the AppStack
+export default function MainNavigation() {
+  return <AppStack />;
 }

@@ -6,35 +6,53 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  SafeAreaView,
   Modal,
   TextInput,
   Switch,
+  RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/api';
+import adminApi from '../services/adminApi';
 import { Rider, RefillOutlet, Commission, AdminStats, Payout } from '../types';
+import Loading from '../components/Loading';
+import ErrorDisplay from '../components/ErrorDisplay';
 
 const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'riders' | 'outlets' | 'commissions' | 'payouts'>('overview');
-  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [stats, setStats] = useState<any | null>(null);
   const [riders, setRiders] = useState<Rider[]>([]);
   const [outlets, setOutlets] = useState<RefillOutlet[]>([]);
   const [commissions, setCommissions] = useState<Commission[]>([]);
-  const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [payouts, setPayouts] = useState<any[]>([]);
+  const [earningsOverview, setEarningsOverview] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showRiderModal, setShowRiderModal] = useState(false);
   const [showOutletModal, setShowOutletModal] = useState(false);
   const [selectedRider, setSelectedRider] = useState<Rider | null>(null);
   const [selectedOutlet, setSelectedOutlet] = useState<RefillOutlet | null>(null);
+  
+  // Outlet form fields
+  const [outletName, setOutletName] = useState('');
+  const [outletAddress, setOutletAddress] = useState('');
+  const [outletPhone, setOutletPhone] = useState('');
+  const [outletHours, setOutletHours] = useState('');
+  const [outletCommission, setOutletCommission] = useState('15');
+  const [outletActive, setOutletActive] = useState(true);
 
   useEffect(() => {
     loadData();
   }, [activeTab]);
 
-  const loadData = async () => {
+  const loadData = async (isRefreshing = false) => {
     try {
-      setLoading(true);
+      if (!isRefreshing) setLoading(true);
+      setError(null);
       
       if (activeTab === 'overview') {
         await loadStats();
@@ -47,149 +65,202 @@ const AdminDashboard: React.FC = () => {
       } else if (activeTab === 'payouts') {
         await loadPayouts();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading data:', error);
+      setError(error.message || 'Failed to load data');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadData(true);
+  };
+
   const loadStats = async () => {
-    // Mock data - in real app, fetch from API
-    const mockStats: AdminStats = {
-      total_pickups: 1247,
-      active_riders: 23,
-      total_revenue: 45680.50,
-      pending_payouts: 8750.25,
-      pickups_today: 15,
-      average_rating: 4.7,
-    };
-    setStats(mockStats);
+    try {
+      console.log('📊 Loading admin dashboard stats...');
+      const data = await adminApi.getDashboard();
+      console.log('✅ Admin dashboard data:', data);
+      
+      // Transform backend data to match our stats structure
+      setStats({
+        total_orders: data.orders?.total || 0,
+        pending_orders: data.orders?.pending || 0,
+        completed_orders: data.orders?.completed || 0,
+        total_users: data.users?.total || 0,
+        active_users: data.users?.active || 0,
+        new_users_this_month: data.users?.new_this_month || 0,
+        total_revenue: data.revenue?.total || 0,
+        monthly_revenue: data.revenue?.monthly || 0,
+        total_services: data.services?.total || 0,
+        pending_services: data.services?.pending || 0,
+      });
+      
+      // Store recent activity
+      if (data.recent_activity) {
+        setOrders(data.recent_activity.recent_orders || []);
+      }
+    } catch (error) {
+      console.error('❌ Error loading admin stats:', error);
+      throw error;
+    }
   };
 
   const loadRiders = async () => {
-    // Mock data - in real app, fetch from API
-    const mockRiders: Rider[] = [
-      {
-        id: 1,
-        user_id: 101,
-        name: 'Kwame Asante',
-        email: 'kwame@example.com',
-        phone: '+233241234567',
-        vehicle_type: 'Motorcycle',
-        vehicle_number: 'GR-1234-AB',
-        license_number: 'DL-567890',
-        status: 'active',
-        rating: 4.8,
-        total_pickups: 156,
-        total_earnings: 2450.50,
-        wallet_balance: 650.25,
-        commission_rate: 15,
-        created_at: '2023-01-15',
-        is_available: true,
-      },
-      {
-        id: 2,
-        user_id: 102,
-        name: 'Akosua Mensah',
-        email: 'akosua@example.com',
-        phone: '+233241234568',
-        vehicle_type: 'Bicycle',
-        vehicle_number: 'GR-5678-CD',
-        license_number: 'DL-123456',
-        status: 'active',
-        rating: 4.9,
-        total_pickups: 203,
-        total_earnings: 3125.75,
-        wallet_balance: 892.30,
-        commission_rate: 15,
-        created_at: '2023-02-10',
-        is_available: false,
-      },
-    ];
-    setRiders(mockRiders);
+    try {
+      console.log('� Loading riders...');
+      const data = await adminApi.getRiders();
+      console.log('✅ Riders loaded:', data);
+      
+      // Handle response structure - could be array or object with riders property
+      const ridersList = Array.isArray(data) ? data : (data.riders || []);
+      setRiders(ridersList);
+    } catch (error) {
+      console.error('❌ Error loading riders:', error);
+      throw error;
+    }
   };
 
   const loadOutlets = async () => {
-    // Mock data - in real app, fetch from API
-    const mockOutlets: RefillOutlet[] = [
-      {
-        id: 1,
-        name: 'Total Gas Station - Airport',
-        address: '123 Airport Road, Accra',
-        phone: '+233302123456',
-        location: { latitude: 5.6037, longitude: -0.1870 },
-        operating_hours: '6:00 AM - 10:00 PM',
-        commission_rate: 5,
-        cylinder_types: ['6kg', '12.5kg', '14.5kg'],
-        is_active: true,
-      },
-      {
-        id: 2,
-        name: 'Shell Gas Center - East Legon',
-        address: '45 East Legon Road, Accra',
-        phone: '+233302123457',
-        location: { latitude: 5.6500, longitude: -0.1500 },
-        operating_hours: '24 Hours',
-        commission_rate: 8,
-        cylinder_types: ['6kg', '12.5kg', '14.5kg', '50kg'],
-        is_active: true,
-      },
-    ];
-    setOutlets(mockOutlets);
+    try {
+      console.log('🏪 Loading outlets...');
+      // Mock data until backend endpoint is ready
+      const mockOutlets: RefillOutlet[] = [
+        {
+          id: 1,
+          name: 'Shell Gas Station - Airport',
+          address: 'Airport Residential Area, Accra',
+          phone: '+233302123456',
+          location: { latitude: 5.6037, longitude: -0.1870 },
+          operating_hours: '6:00 AM - 10:00 PM',
+          commission_rate: 15,
+          cylinder_types: ['6kg', '12.5kg', '14.5kg'],
+          is_active: true,
+        },
+        {
+          id: 2,
+          name: 'Total Gas - East Legon',
+          address: 'American House, East Legon, Accra',
+          phone: '+233302234567',
+          location: { latitude: 5.6437, longitude: -0.1562 },
+          operating_hours: '24/7',
+          commission_rate: 12,
+          cylinder_types: ['12.5kg', '14.5kg'],
+          is_active: true,
+        },
+        {
+          id: 3,
+          name: 'Goil Station - Tema',
+          address: 'Community 1, Tema',
+          phone: '+233303345678',
+          location: { latitude: 5.6698, longitude: -0.0166 },
+          operating_hours: '7:00 AM - 9:00 PM',
+          commission_rate: 10,
+          cylinder_types: ['6kg', '12.5kg'],
+          is_active: false,
+        },
+      ];
+      
+      setOutlets(mockOutlets);
+      console.log('✅ Outlets loaded:', mockOutlets.length);
+    } catch (error) {
+      console.error('❌ Error loading outlets:', error);
+      throw error;
+    }
   };
 
   const loadCommissions = async () => {
-    // Mock data - in real app, fetch from API
-    const mockCommissions: Commission[] = [
-      {
-        id: 1,
-        rider_id: 1,
-        pickup_request_id: 'pickup-001',
-        amount: 51.00,
-        percentage: 15,
-        status: 'paid',
-        created_at: '2024-01-20T10:30:00Z',
-        paid_at: '2024-01-20T18:45:00Z',
-      },
-      {
-        id: 2,
-        rider_id: 2,
-        pickup_request_id: 'pickup-002',
-        amount: 28.50,
-        percentage: 15,
-        status: 'pending',
-        created_at: '2024-01-21T14:15:00Z',
-      },
-    ];
-    setCommissions(mockCommissions);
+    try {
+      console.log('💰 Loading earnings overview...');
+      const data = await adminApi.getEarningsOverview();
+      console.log('✅ Earnings data:', data);
+      setEarningsOverview(data);
+      setCommissions([]);
+    } catch (error) {
+      console.error('❌ Error loading commissions:', error);
+      throw error;
+    }
   };
 
   const loadPayouts = async () => {
-    // Mock data - in real app, fetch from API
-    const mockPayouts: Payout[] = [
+    try {
+      console.log('💸 Loading payment requests...');
+      const data = await adminApi.getPaymentRequests();
+      console.log('✅ Payment requests:', data);
+      
+      // Also load earnings overview for stats
+      const earningsData = await adminApi.getEarningsOverview();
+      setEarningsOverview(earningsData);
+      
+      setPayouts(Array.isArray(data) ? data : (data.requests || []));
+    } catch (error) {
+      console.error('❌ Error loading payouts:', error);
+      throw error;
+    }
+  };
+
+  const handleAddOutlet = async () => {
+    try {
+      // Validate form
+      if (!outletName.trim()) {
+        Alert.alert('Validation Error', 'Please enter outlet name');
+        return;
+      }
+      if (!outletAddress.trim()) {
+        Alert.alert('Validation Error', 'Please enter outlet address');
+        return;
+      }
+      if (!outletPhone.trim()) {
+        Alert.alert('Validation Error', 'Please enter phone number');
+        return;
+      }
+
+      console.log('🏪 Adding new outlet...');
+      
+      // For now, add to local state (backend integration pending)
+      const newOutlet: RefillOutlet = {
+        id: outlets.length + 1,
+        name: outletName,
+        address: outletAddress,
+        phone: outletPhone,
+        location: { latitude: 5.6037, longitude: -0.1870 }, // Default location
+        operating_hours: outletHours || '8:00 AM - 6:00 PM',
+        commission_rate: parseFloat(outletCommission) || 15,
+        cylinder_types: ['6kg', '12.5kg', '14.5kg'],
+        is_active: outletActive,
+      };
+
+      setOutlets([...outlets, newOutlet]);
+      
+      // Reset form
+      setOutletName('');
+      setOutletAddress('');
+      setOutletPhone('');
+      setOutletHours('');
+      setOutletCommission('15');
+      setOutletActive(true);
+      setShowOutletModal(false);
+      setSelectedOutlet(null);
+
+      Alert.alert('Success', 'Outlet added successfully!');
+      console.log('✅ Outlet added:', newOutlet);
+    } catch (error: any) {
+      console.error('❌ Error adding outlet:', error);
+      Alert.alert('Error', error.message || 'Failed to add outlet');
+    }
+  };
+
+  const handleApproveRider = (riderId: number) => {
+    Alert.alert('Approve Rider', 'Are you sure you want to approve this rider?', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        id: 1,
-        rider_id: 1,
-        amount: 500.00,
-        method: 'mobile_money',
-        account_details: '+233241234567',
-        status: 'completed',
-        transaction_id: 'TXN-123456',
-        created_at: '2024-01-20T09:00:00Z',
-        processed_at: '2024-01-20T09:15:00Z',
+        text: 'Approve',
+        onPress: () => updateRiderStatus(riderId, 'active'),
       },
-      {
-        id: 2,
-        rider_id: 2,
-        amount: 750.00,
-        method: 'bank_transfer',
-        account_details: 'GTB-1234567890',
-        status: 'pending',
-        created_at: '2024-01-21T16:30:00Z',
-      },
-    ];
-    setPayouts(mockPayouts);
+    ]);
   };
 
   const updateRiderStatus = async (riderId: number, status: string) => {
@@ -248,101 +319,168 @@ const AdminDashboard: React.FC = () => {
     </TouchableOpacity>
   );
 
-  const renderOverview = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <View style={styles.statsGrid}>
-        <View style={styles.statCard}>
-          <View style={styles.statHeader}>
-            <Ionicons name="receipt-outline" size={24} color="#0b5ed7" />
-            <Text style={styles.statValue}>{stats?.total_pickups}</Text>
+  const renderOverview = () => {
+    if (!stats) return null;
+
+    const safeStats = {
+      total_orders: stats.total_orders ?? 0,
+      pending_orders: stats.pending_orders ?? 0,
+      completed_orders: stats.completed_orders ?? 0,
+      total_users: stats.total_users ?? 0,
+      active_users: stats.active_users ?? 0,
+      new_users_this_month: stats.new_users_this_month ?? 0,
+      total_revenue: stats.total_revenue ?? 0,
+      monthly_revenue: stats.monthly_revenue ?? 0,
+      total_services: stats.total_services ?? 0,
+      pending_services: stats.pending_services ?? 0,
+    };
+
+    return (
+      <ScrollView 
+        style={styles.tabContent} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+      >
+        <View style={styles.statsGrid}>
+          <View style={styles.statCard}>
+            <View style={styles.statHeader}>
+              <Ionicons name="receipt-outline" size={24} color="#0b5ed7" />
+              <Text style={styles.statValue}>{safeStats.total_orders}</Text>
+            </View>
+            <Text style={styles.statLabel}>Total Orders</Text>
           </View>
-          <Text style={styles.statLabel}>Total Pickups</Text>
-        </View>
-        
-        <View style={styles.statCard}>
-          <View style={styles.statHeader}>
-            <Ionicons name="people-outline" size={24} color="#10b981" />
-            <Text style={styles.statValue}>{stats?.active_riders}</Text>
+          
+          <View style={styles.statCard}>
+            <View style={styles.statHeader}>
+              <Ionicons name="people-outline" size={24} color="#10b981" />
+              <Text style={styles.statValue}>{safeStats.total_users}</Text>
+            </View>
+            <Text style={styles.statLabel}>Total Users</Text>
           </View>
-          <Text style={styles.statLabel}>Active Riders</Text>
-        </View>
-        
-        <View style={styles.statCard}>
-          <View style={styles.statHeader}>
-            <Ionicons name="cash-outline" size={24} color="#f59e0b" />
-            <Text style={styles.statValue}>₵{stats?.total_revenue.toFixed(2)}</Text>
+          
+          <View style={styles.statCard}>
+            <View style={styles.statHeader}>
+              <Ionicons name="cash-outline" size={24} color="#f59e0b" />
+              <Text style={styles.statValue}>₵{safeStats.total_revenue.toFixed(2)}</Text>
+            </View>
+            <Text style={styles.statLabel}>Total Revenue</Text>
           </View>
-          <Text style={styles.statLabel}>Total Revenue</Text>
-        </View>
-        
-        <View style={styles.statCard}>
-          <View style={styles.statHeader}>
-            <Ionicons name="wallet-outline" size={24} color="#ef4444" />
-            <Text style={styles.statValue}>₵{stats?.pending_payouts.toFixed(2)}</Text>
+          
+          <View style={styles.statCard}>
+            <View style={styles.statHeader}>
+              <Ionicons name="wallet-outline" size={24} color="#8b5cf6" />
+              <Text style={styles.statValue}>₵{safeStats.monthly_revenue.toFixed(2)}</Text>
+            </View>
+            <Text style={styles.statLabel}>Monthly Revenue</Text>
           </View>
-          <Text style={styles.statLabel}>Pending Payouts</Text>
-        </View>
-        
-        <View style={styles.statCard}>
-          <View style={styles.statHeader}>
-            <Ionicons name="today-outline" size={24} color="#8b5cf6" />
-            <Text style={styles.statValue}>{stats?.pickups_today}</Text>
+          
+          <View style={styles.statCard}>
+            <View style={styles.statHeader}>
+              <Ionicons name="hourglass-outline" size={24} color="#ef4444" />
+              <Text style={styles.statValue}>{safeStats.pending_orders}</Text>
+            </View>
+            <Text style={styles.statLabel}>Pending Orders</Text>
           </View>
-          <Text style={styles.statLabel}>Today's Pickups</Text>
-        </View>
-        
-        <View style={styles.statCard}>
-          <View style={styles.statHeader}>
-            <Ionicons name="star-outline" size={24} color="#06b6d4" />
-            <Text style={styles.statValue}>{stats?.average_rating.toFixed(1)}</Text>
+          
+          <View style={styles.statCard}>
+            <View style={styles.statHeader}>
+              <Ionicons name="checkmark-circle-outline" size={24} color="#10b981" />
+              <Text style={styles.statValue}>{safeStats.completed_orders}</Text>
+            </View>
+            <Text style={styles.statLabel}>Completed Orders</Text>
           </View>
-          <Text style={styles.statLabel}>Average Rating</Text>
+
+          <View style={styles.statCard}>
+            <View style={styles.statHeader}>
+              <Ionicons name="person-add-outline" size={24} color="#06b6d4" />
+              <Text style={styles.statValue}>{safeStats.new_users_this_month}</Text>
+            </View>
+            <Text style={styles.statLabel}>New Users (Month)</Text>
+          </View>
+
+          <View style={styles.statCard}>
+            <View style={styles.statHeader}>
+              <Ionicons name="construct-outline" size={24} color="#f59e0b" />
+              <Text style={styles.statValue}>{safeStats.total_services}</Text>
+            </View>
+            <Text style={styles.statLabel}>Total Services</Text>
+          </View>
         </View>
-      </View>
-    </ScrollView>
-  );
+
+        {/* Recent Activity */}
+        {orders && orders.length > 0 && (
+          <View style={styles.recentActivity}>
+            <Text style={styles.sectionTitle}>Recent Orders</Text>
+            {orders.slice(0, 5).map((order: any, index: number) => (
+              <View key={`order-${order.id || index}`} style={styles.activityItem}>
+                <Text style={styles.activityText}>
+                  Order {order.id} - ₵{(order.total ?? 0).toFixed(2)}
+                </Text>
+                <Text style={styles.activitySubtext}>{order.status}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    );
+  };
 
   const renderRiders = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+    <ScrollView 
+      style={styles.tabContent} 
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+      }
+    >
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Riders ({riders.length})</Text>
-        <TouchableOpacity style={styles.addButton}>
-          <Ionicons name="add" size={20} color="#ffffff" />
-          <Text style={styles.addButtonText}>Add Rider</Text>
-        </TouchableOpacity>
       </View>
       
-      {riders.map((rider) => (
-        <TouchableOpacity
-          key={rider.id}
-          style={styles.listItem}
-          onPress={() => {
-            setSelectedRider(rider);
-            setShowRiderModal(true);
-          }}
-        >
-          <View style={styles.listItemContent}>
-            <View>
-              <Text style={styles.listItemTitle}>{rider.name}</Text>
-              <Text style={styles.listItemSubtitle}>
-                {rider.vehicle_type} • {rider.total_pickups} pickups
-              </Text>
-              <Text style={styles.listItemDetails}>
-                Rating: {rider.rating.toFixed(1)} • Balance: ₵{rider.wallet_balance.toFixed(2)}
-              </Text>
-            </View>
-            <View style={styles.listItemActions}>
-              <View style={[
-                styles.statusBadge,
-                { backgroundColor: rider.status === 'active' ? '#10b981' : '#ef4444' }
-              ]}>
-                <Text style={styles.statusText}>{rider.status.toUpperCase()}</Text>
+      {riders.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="bicycle-outline" size={64} color="#d1d5db" />
+          <Text style={styles.emptyStateText}>No riders found</Text>
+        </View>
+      ) : (
+        riders.map((rider: any, index: number) => (
+          <View
+            key={`rider-${rider.id || index}`}
+            style={styles.listItem}
+          >
+            <View style={styles.listItemContent}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.listItemTitle}>{rider.username || rider.email}</Text>
+                <Text style={styles.listItemSubtitle}>
+                  {rider.email}
+                </Text>
+                <Text style={styles.listItemDetails}>
+                  Vehicle: {rider.vehicle_type || 'N/A'} {rider.vehicle_number || ''} • Phone: {rider.phone || 'N/A'}
+                </Text>
+                <Text style={styles.listItemDetails}>
+                  Deliveries: {rider.total_deliveries || 0} • Rating: {rider.rating ? rider.rating.toFixed(1) : 'N/A'} ⭐
+                </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+              <View style={styles.listItemActions}>
+                <View style={[
+                  styles.statusBadge,
+                  { backgroundColor: 
+                    rider.status === 'available' ? '#10b981' : 
+                    rider.status === 'busy' ? '#f59e0b' : 
+                    '#6b7280' 
+                  }
+                ]}>
+                  <Text style={styles.statusText}>
+                    {rider.status?.toUpperCase() || 'OFFLINE'}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
-        </TouchableOpacity>
-      ))}
+        ))
+      )}
     </ScrollView>
   );
 
@@ -350,7 +488,19 @@ const AdminDashboard: React.FC = () => {
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Gas Outlets ({outlets.length})</Text>
-        <TouchableOpacity style={styles.addButton}>
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => {
+            setSelectedOutlet(null);
+            setOutletName('');
+            setOutletAddress('');
+            setOutletPhone('');
+            setOutletHours('');
+            setOutletCommission('15');
+            setOutletActive(true);
+            setShowOutletModal(true);
+          }}
+        >
           <Ionicons name="add" size={20} color="#ffffff" />
           <Text style={styles.addButtonText}>Add Outlet</Text>
         </TouchableOpacity>
@@ -429,54 +579,198 @@ const AdminDashboard: React.FC = () => {
   );
 
   const renderPayouts = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Rider Payouts</Text>
-      </View>
-      
-      {payouts.map((payout) => {
-        const rider = riders.find(r => r.id === payout.rider_id);
-        return (
-          <View key={payout.id} style={styles.listItem}>
-            <View style={styles.listItemContent}>
-              <View>
-                <Text style={styles.listItemTitle}>
-                  {rider?.name || 'Unknown Rider'}
-                </Text>
-                <Text style={styles.listItemSubtitle}>
-                  {payout.method.replace('_', ' ').toUpperCase()} • {payout.account_details}
-                </Text>
-                <Text style={styles.listItemDetails}>
-                  {new Date(payout.created_at).toLocaleDateString()}
-                </Text>
-              </View>
-              <View style={styles.listItemActions}>
-                <Text style={styles.payoutAmount}>₵{payout.amount.toFixed(2)}</Text>
-                <View style={[
-                  styles.statusBadge,
-                  { 
-                    backgroundColor: 
-                      payout.status === 'completed' ? '#10b981' :
-                      payout.status === 'processing' ? '#f59e0b' : '#6b7280'
-                  }
-                ]}>
-                  <Text style={styles.statusText}>{payout.status.toUpperCase()}</Text>
-                </View>
-                {payout.status === 'pending' && (
-                  <TouchableOpacity
-                    style={styles.processButton}
-                    onPress={() => processPayout(payout.id)}
-                  >
-                    <Text style={styles.processButtonText}>Process</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+    <ScrollView 
+      style={styles.tabContent} 
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+      }
+    >
+      {/* Earnings Overview Card */}
+      {earningsOverview && (
+        <View style={styles.earningsOverviewCard}>
+          <Text style={styles.earningsTitle}>Commission Overview</Text>
+          <View style={styles.earningsGrid}>
+            <View style={styles.earningsStat}>
+              <Text style={styles.earningsLabel}>Today</Text>
+              <Text style={styles.earningsValue}>
+                ₵{(earningsOverview.today_earnings ?? 0).toFixed(2)}
+              </Text>
+            </View>
+            <View style={styles.earningsStat}>
+              <Text style={styles.earningsLabel}>This Week</Text>
+              <Text style={styles.earningsValue}>
+                ₵{(earningsOverview.week_earnings ?? 0).toFixed(2)}
+              </Text>
+            </View>
+            <View style={styles.earningsStat}>
+              <Text style={styles.earningsLabel}>This Month</Text>
+              <Text style={styles.earningsValue}>
+                ₵{(earningsOverview.month_earnings ?? 0).toFixed(2)}
+              </Text>
+            </View>
+            <View style={styles.earningsStat}>
+              <Text style={styles.earningsLabel}>Total Paid</Text>
+              <Text style={styles.earningsValue}>
+                ₵{(earningsOverview.total_earnings_paid ?? 0).toFixed(2)}
+              </Text>
             </View>
           </View>
-        );
-      })}
+          
+          {earningsOverview.pending_payments && (
+            <View style={styles.pendingSummary}>
+              <Ionicons name="hourglass-outline" size={20} color="#f59e0b" />
+              <Text style={styles.pendingSummaryText}>
+                {earningsOverview.pending_payments.count} pending requests • 
+                ₵{(earningsOverview.pending_payments.total_amount ?? 0).toFixed(2)}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Payment Requests ({payouts.length})</Text>
+        <View style={styles.statsRow}>
+          <View style={styles.miniStat}>
+            <Text style={styles.miniStatLabel}>Pending</Text>
+            <Text style={[styles.miniStatValue, { color: '#f59e0b' }]}>
+              {payouts.filter(p => p.status === 'pending').length}
+            </Text>
+          </View>
+          <View style={styles.miniStat}>
+            <Text style={styles.miniStatLabel}>Total Amount</Text>
+            <Text style={[styles.miniStatValue, { color: '#0b5ed7' }]}>
+              ₵{payouts.reduce((sum, p) => p.status === 'pending' ? sum + (p.amount || 0) : sum, 0).toFixed(2)}
+            </Text>
+          </View>
+        </View>
+      </View>
+      
+      {payouts.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="wallet-outline" size={64} color="#d1d5db" />
+          <Text style={styles.emptyStateText}>No payment requests</Text>
+        </View>
+      ) : (
+        payouts.map((payout: any, index: number) => (
+          <View key={`payout-${payout.id || index}`} style={styles.payoutCard}>
+            <View style={styles.payoutHeader}>
+              <View style={styles.payoutInfo}>
+                <Text style={styles.payoutRiderName}>
+                  Rider #{payout.rider_id}
+                </Text>
+                <Text style={styles.payoutDetails}>
+                  {payout.payment_method || 'Mobile Money'}
+                </Text>
+                <Text style={styles.payoutDate}>
+                  Requested: {new Date(payout.requested_at || Date.now()).toLocaleString()}
+                </Text>
+              </View>
+              <View style={styles.payoutAmountSection}>
+                <Text style={styles.payoutAmountLabel}>Amount</Text>
+                <Text style={styles.payoutAmount}>₵{(payout.amount || 0).toFixed(2)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.payoutStatus}>
+              <View style={[
+                styles.statusBadge,
+                { 
+                  backgroundColor: 
+                    payout.status === 'approved' ? '#10b981' :
+                    payout.status === 'rejected' ? '#ef4444' :
+                    payout.status === 'pending' ? '#f59e0b' : '#6b7280'
+                }
+              ]}>
+                <Text style={styles.statusText}>
+                  {(payout.status || 'pending').toUpperCase()}
+                </Text>
+              </View>
+
+              {payout.status === 'pending' && (
+                <View style={styles.payoutActions}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.approveButton]}
+                    onPress={() => handleProcessPayout(payout.id, 'approve')}
+                  >
+                    <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                    <Text style={styles.actionButtonText}>Approve</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.rejectButton]}
+                    onPress={() => handleProcessPayout(payout.id, 'reject')}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#fff" />
+                    <Text style={styles.actionButtonText}>Reject</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {payout.status !== 'pending' && payout.processed_at && (
+                <Text style={styles.processedInfo}>
+                  Processed: {new Date(payout.processed_at).toLocaleString()}
+                </Text>
+              )}
+            </View>
+          </View>
+        ))
+      )}
     </ScrollView>
   );
+
+  const handleProcessPayout = async (payoutId: number, action: 'approve' | 'reject') => {
+    const actionText = action === 'approve' ? 'approve' : 'reject';
+    
+    Alert.alert(
+      `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Payment`,
+      `Are you sure you want to ${actionText} this payment request?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: actionText.charAt(0).toUpperCase() + actionText.slice(1),
+          style: action === 'reject' ? 'destructive' : 'default',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const result = await adminApi.processPaymentRequest(payoutId, action);
+              
+              Alert.alert(
+                'Success',
+                result.message || `Payment ${action}d successfully`,
+                [{ text: 'OK', onPress: () => loadPayouts() }]
+              );
+            } catch (error: any) {
+              console.error(`Error ${action}ing payment:`, error);
+              Alert.alert('Error', error.response?.data?.detail || `Failed to ${action} payment`);
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  if (loading && !stats) {
+    return <Loading message="Loading admin dashboard..." />;
+  }
+
+  if (error && !stats) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Admin Dashboard</Text>
+        </View>
+        <ErrorDisplay 
+          message={error} 
+          onRetry={loadData}
+          retryText="Retry"
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -595,6 +889,107 @@ const AdminDashboard: React.FC = () => {
               </View>
             </ScrollView>
           )}
+        </SafeAreaView>
+      </Modal>
+
+      {/* Add/Edit Outlet Modal */}
+      <Modal
+        visible={showOutletModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {selectedOutlet ? 'Edit Outlet' : 'Add New Outlet'}
+            </Text>
+            <TouchableOpacity onPress={() => setShowOutletModal(false)}>
+              <Ionicons name="close" size={24} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Outlet Name *</Text>
+              <TextInput
+                style={styles.formInput}
+                value={outletName}
+                onChangeText={setOutletName}
+                placeholder="Enter outlet name"
+                placeholderTextColor="#9ca3af"
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Address *</Text>
+              <TextInput
+                style={[styles.formInput, styles.textArea]}
+                value={outletAddress}
+                onChangeText={setOutletAddress}
+                placeholder="Enter full address"
+                placeholderTextColor="#9ca3af"
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Phone Number *</Text>
+              <TextInput
+                style={styles.formInput}
+                value={outletPhone}
+                onChangeText={setOutletPhone}
+                placeholder="+233 XXX XXX XXX"
+                placeholderTextColor="#9ca3af"
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Operating Hours</Text>
+              <TextInput
+                style={styles.formInput}
+                value={outletHours}
+                onChangeText={setOutletHours}
+                placeholder="e.g., 8:00 AM - 6:00 PM"
+                placeholderTextColor="#9ca3af"
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Commission Rate (%)</Text>
+              <TextInput
+                style={styles.formInput}
+                value={outletCommission}
+                onChangeText={setOutletCommission}
+                placeholder="15"
+                placeholderTextColor="#9ca3af"
+                keyboardType="decimal-pad"
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <View style={styles.switchRow}>
+                <Text style={styles.formLabel}>Active Status</Text>
+                <Switch
+                  value={outletActive}
+                  onValueChange={setOutletActive}
+                  trackColor={{ false: '#d1d5db', true: '#86efac' }}
+                  thumbColor={outletActive ? '#10b981' : '#f3f4f6'}
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={handleAddOutlet}
+            >
+              <Ionicons name="checkmark-circle" size={20} color="#ffffff" />
+              <Text style={styles.submitButtonText}>
+                {selectedOutlet ? 'Update Outlet' : 'Add Outlet'}
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -827,6 +1222,227 @@ const styles = StyleSheet.create({
   statusButtonText: {
     color: '#ffffff',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  recentActivity: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+  },
+  activityItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  activityText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  activitySubtext: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#9ca3af',
+    marginTop: 12,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  miniStat: {
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 8,
+    flex: 1,
+  },
+  miniStatLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  miniStatValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  payoutCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  payoutHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  payoutInfo: {
+    flex: 1,
+  },
+  payoutRiderName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  payoutDetails: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 2,
+  },
+  payoutDate: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  payoutAmountSection: {
+    alignItems: 'flex-end',
+  },
+  payoutAmountLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  payoutStatus: {
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    paddingTop: 12,
+    gap: 8,
+  },
+  payoutActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 6,
+  },
+  approveButton: {
+    backgroundColor: '#10b981',
+  },
+  rejectButton: {
+    backgroundColor: '#ef4444',
+  },
+  actionButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  processedInfo: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontStyle: 'italic',
+  },
+  earningsOverviewCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  earningsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 16,
+  },
+  earningsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  earningsStat: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 8,
+  },
+  earningsLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  earningsValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0b5ed7',
+  },
+  pendingSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#fef3c7',
+    borderRadius: 8,
+  },
+  pendingSummaryText: {
+    fontSize: 14,
+    color: '#92400e',
+    fontWeight: '600',
+  },
+  // Form Styles
+  formSection: {
+    marginBottom: 20,
+  },
+  formLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  formInput: {
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#111827',
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  submitButton: {
+    flexDirection: 'row',
+    backgroundColor: '#0b5ed7',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    marginBottom: 20,
+    gap: 8,
+  },
+  submitButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
     fontWeight: '600',
   },
 });
