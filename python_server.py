@@ -739,7 +739,7 @@ async def get_customer_orders(credentials: HTTPAuthorizationCredentials = Depend
         # Add rider info if order has a rider assigned
         rider_id = order.get("rider_id")
         if rider_id:
-            rider = riders_db.get(rider_id)
+            rider = db.get_rider_by_id(rider_id)
             if rider:
                 enriched_order["rider_name"] = rider.get("username")
                 enriched_order["rider_phone"] = rider.get("phone")

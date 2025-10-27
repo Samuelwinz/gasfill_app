@@ -26,6 +26,8 @@ import RiderDashboard from '../screens/RiderDashboard';
 import RiderJobsScreen from '../screens/RiderJobsScreen';
 import RiderEarningsScreen from '../screens/RiderEarningsScreen';
 import AdminDashboard from '../screens/AdminDashboard';
+import AdminRidersScreen from '../screens/AdminRidersScreen';
+import RiderDetailsScreen from '../screens/RiderDetailsScreen';
 import AboutScreen from '../screens/AboutScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
@@ -180,7 +182,7 @@ function AdminTabs() {
               iconName = focused ? 'analytics' : 'analytics-outline';
               break;
             case 'Riders':
-              iconName = focused ? 'people' : 'people-outline';
+              iconName = focused ? 'bicycle' : 'bicycle-outline';
               break;
             case 'Orders':
               iconName = focused ? 'receipt' : 'receipt-outline';
@@ -212,7 +214,7 @@ function AdminTabs() {
       <Tab.Screen name="Dashboard" component={AdminDashboard} />
       <Tab.Screen 
         name="Riders" 
-        component={AdminDashboard} // Admin can switch tabs within
+        component={AdminRidersScreen}
         options={{ title: 'Riders' }}
       />
       <Tab.Screen 
@@ -378,6 +380,13 @@ function AppStack() {
       <Stack.Screen 
         name="Chat" 
         component={ChatScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="RiderDetails" 
+        component={RiderDetailsScreen}
         options={{ 
           headerShown: false,
         }}
