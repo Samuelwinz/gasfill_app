@@ -11,6 +11,7 @@ interface UseChatWebSocketProps {
   chatRoomId: string;
   userId: number;
   userType: 'customer' | 'rider';
+  userName?: string; // Add userName
   onNewMessage?: (message: ChatMessage) => void;
   onTypingStatus?: (isTyping: boolean, participantName: string) => void;
   onMessageRead?: (messageIds: string[]) => void;
@@ -22,6 +23,7 @@ export const useChatWebSocket = ({
   chatRoomId,
   userId,
   userType,
+  userName,
   onNewMessage,
   onTypingStatus,
   onMessageRead,
@@ -56,10 +58,16 @@ export const useChatWebSocket = ({
   useEffect(() => {
     if (!onNewMessage) return;
 
+    console.log('[useChatWebSocket] Subscribing to chat_message events for room:', chatRoomId);
+
     const unsubscribe = subscribe('chat_message', (data: ChatMessage) => {
+      console.log('[useChatWebSocket] Received chat_message event:', data);
+      console.log('[useChatWebSocket] Checking: data.chat_room_id =', data.chat_room_id, 'vs chatRoomId =', chatRoomId);
+      console.log('[useChatWebSocket] Checking: data.sender_id =', data.sender_id, 'vs userId =', userId);
+      
       // Only handle messages for this chat room from other participant
       if (data.chat_room_id === chatRoomId && data.sender_id !== userId) {
-        console.log('[useChatWebSocket] Received new message:', data);
+        console.log('[useChatWebSocket] ✅ Message accepted - calling onNewMessage');
         onNewMessage(data);
 
         // Send delivery receipt
@@ -68,6 +76,8 @@ export const useChatWebSocket = ({
           message_id: data.id,
           user_id: userId,
         });
+      } else {
+        console.log('[useChatWebSocket] ❌ Message rejected - not for this user/room');
       }
     });
 
@@ -146,10 +156,13 @@ export const useChatWebSocket = ({
         return;
       }
 
+      console.log('[useChatWebSocket] Sending message:', { message, messageType, userName, extraData });
+
       send('chat_send_message', {
         chat_room_id: chatRoomId,
         sender_id: userId,
         sender_type: userType,
+        sender_name: userName || 'User',
         message,
         message_type: messageType,
         ...extraData,
@@ -160,7 +173,7 @@ export const useChatWebSocket = ({
         stopTyping();
       }
     },
-    [isConnected, chatRoomId, userId, userType, send]
+    [isConnected, chatRoomId, userId, userType, userName, send]
   );
 
   /**

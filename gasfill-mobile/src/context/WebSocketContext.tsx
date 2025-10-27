@@ -146,9 +146,9 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         const token = await AsyncStorage.getItem(TOKEN_KEY);
         const userRole = await AsyncStorage.getItem(USER_ROLE_KEY);
         
-        // Only auto-connect for riders (they need real-time updates)
-        if (token && userRole === 'rider' && isMounted) {
-          console.log('[WebSocketContext] Auto-connecting for rider...');
+        // Auto-connect for both riders and customers (needed for chat)
+        if (token && isMounted) {
+          console.log(`[WebSocketContext] Auto-connecting for ${userRole || 'user'}...`);
           const service = await initWebSocket();
           await service.connect();
         }

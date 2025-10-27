@@ -3244,8 +3244,163 @@ try:
                     try:
                         data = json.loads(data_text)
                         event_type = data.get("type", "message")
+                        event_data = data.get("data", {})
                         
-                        if event_type == "message":
+                        print(f"[WebSocket] Received event: {event_type}")
+                        
+                        # Handle chat-specific events
+                        if event_type == "chat_send_message":
+                            # Save message to database and broadcast
+                            chat_room_id = event_data.get("chat_room_id")
+                            message_text = event_data.get("message")
+                            sender_id = event_data.get("sender_id")
+                            sender_type = event_data.get("sender_type")
+                            sender_name = event_data.get("sender_name", "User")
+                            message_type = event_data.get("message_type", "text")
+                            image_url = event_data.get("image_url")
+                            location_data = event_data.get("location_data")
+                            
+                            print(f"[WebSocket] Saving message from {sender_name} ({sender_id}) to database")
+                            
+                            # Prepare message data for database
+                            db_message_data = {
+                                "chat_room_id": chat_room_id,
+                                "sender_id": sender_id,
+                                "sender_type": sender_type,
+                                "sender_name": sender_name,
+                                "message": message_text,
+                                "message_type": message_type
+                            }
+                            
+                            # Add optional fields
+                            if image_url:
+                                db_message_data["image_url"] = image_url
+                            if location_data:
+                                db_message_data["location"] = location_data
+                            
+                            # Save to database - this returns the created message with generated ID
+                            saved_message = db.create_chat_message(db_message_data)
+                            
+                            print(f"[WebSocket] Message saved with ID: {saved_message['id']}")
+                            print(f"[WebSocket] Broadcasting message to room {chat_room_id}")
+                            
+                            # Broadcast the saved message to all clients
+                            message_data = {
+                                "id": saved_message["id"],
+                                "chat_room_id": saved_message["chat_room_id"],
+                                "sender_id": saved_message["sender_id"],
+                                "sender_type": saved_message["sender_type"],
+                                "sender_name": saved_message["sender_name"],
+                                "message": saved_message["message"],
+                                "message_type": saved_message["message_type"],
+                                "is_read": saved_message["is_read"],
+                                "is_delivered": saved_message["is_delivered"],
+                                "created_at": saved_message["created_at"]
+                            }
+                            
+                            # Add optional fields if present
+                            if saved_message.get("image_url"):
+                                message_data["image_url"] = saved_message["image_url"]
+                            if saved_message.get("location"):
+                                message_data["location_data"] = saved_message["location"]
+                            
+                            # Broadcast to all clients
+                            await manager.broadcast(json.dumps({
+                                "type": "chat_message",
+                                "data": message_data
+                            }))
+                            
+                        elif event_type == "chat_join_room":
+                            # User joined chat room
+                            chat_room_id = event_data.get("chat_room_id")
+                            user_id = event_data.get("user_id")
+                            print(f"[WebSocket] User {user_id} joined room {chat_room_id}")
+                            
+                            # Notify other users in the room
+                            await manager.broadcast(json.dumps({
+                                "type": "chat_user_status",
+                                "data": {
+                                    "chat_room_id": chat_room_id,
+                                    "user_id": user_id,
+                                    "is_online": True
+                                }
+                            }))
+                            
+                        elif event_type == "chat_leave_room":
+                            # User left chat room
+                            chat_room_id = event_data.get("chat_room_id")
+                            user_id = event_data.get("user_id")
+                            print(f"[WebSocket] User {user_id} left room {chat_room_id}")
+                            
+                            # Notify other users in the room
+                            await manager.broadcast(json.dumps({
+                                "type": "chat_user_status",
+                                "data": {
+                                    "chat_room_id": chat_room_id,
+                                    "user_id": user_id,
+                                    "is_online": False
+                                }
+                            }))
+                            
+                        elif event_type == "chat_typing_start":
+                            # User started typing
+                            chat_room_id = event_data.get("chat_room_id")
+                            user_id = event_data.get("user_id")
+                            
+                            await manager.broadcast(json.dumps({
+                                "type": "chat_typing",
+                                "data": {
+                                    "chat_room_id": chat_room_id,
+                                    "user_id": user_id,
+                                    "is_typing": True
+                                }
+                            }))
+                            
+                        elif event_type == "chat_typing_stop":
+                            # User stopped typing
+                            chat_room_id = event_data.get("chat_room_id")
+                            user_id = event_data.get("user_id")
+                            
+                            await manager.broadcast(json.dumps({
+                                "type": "chat_typing",
+                                "data": {
+                                    "chat_room_id": chat_room_id,
+                                    "user_id": user_id,
+                                    "is_typing": False
+                                }
+                            }))
+                            
+                        elif event_type == "chat_message_delivered":
+                            # Message delivered receipt
+                            message_id = event_data.get("message_id")
+                            
+                            await manager.broadcast(json.dumps({
+                                "type": "chat_messages_delivered",
+                                "data": {
+                                    "message_ids": [message_id]
+                                }
+                            }))
+                            
+                        elif event_type == "chat_mark_read":
+                            # Mark messages as read
+                            chat_room_id = event_data.get("chat_room_id")
+                            message_ids = event_data.get("message_ids", [])
+                            
+                            # Save to database
+                            if chat_room_id and message_ids:
+                                print(f"[WebSocket] Marking {len(message_ids)} messages as read in room {chat_room_id}")
+                                db.mark_messages_as_read(chat_room_id, message_ids)
+                            
+                            # Broadcast read receipt
+                            await manager.broadcast(json.dumps({
+                                "type": "chat_messages_read",
+                                "data": {
+                                    "message_ids": message_ids
+                                }
+                            }))
+                            
+                        # Legacy event types for backward compatibility
+                        elif event_type == "message":
                             # Broadcast new message to all connected clients
                             await manager.broadcast(json.dumps({
                                 "type": "message",
@@ -3274,6 +3429,10 @@ try:
                                 "message_ids": data.get("message_ids", []),
                                 "user_id": data.get("user_id")
                             }))
+                        elif event_type == "ping":
+                            # Respond to ping with pong
+                            await websocket.send_json({"type": "pong"})
+                            
                     except json.JSONDecodeError:
                         # Fallback to plain text for backward compatibility
                         await manager.broadcast(json.dumps({
