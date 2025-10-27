@@ -844,9 +844,25 @@ async def get_order_tracking(order_id: str):
     
     # Get rider information if assigned
     rider_info = None
+    rider_location = None
     if order.get("rider_id"):
         rider = db.get_rider_by_id(order["rider_id"])
         if rider:
+            # Parse rider location if it exists
+            rider_loc_data = rider.get("location")
+            if rider_loc_data:
+                if isinstance(rider_loc_data, str):
+                    try:
+                        rider_loc_data = json.loads(rider_loc_data)
+                    except:
+                        rider_loc_data = None
+                
+                if rider_loc_data and "latitude" in rider_loc_data and "longitude" in rider_loc_data:
+                    rider_location = {
+                        "lat": rider_loc_data["latitude"],
+                        "lng": rider_loc_data["longitude"]
+                    }
+            
             rider_info = {
                 "id": rider["id"],
                 "name": rider["username"],
@@ -867,23 +883,48 @@ async def get_order_tracking(order_id: str):
         }
     ])
     
+    # Parse customer location from order
+    customer_location = None
+    customer_loc_data = order.get("customer_location")
+    if customer_loc_data:
+        if isinstance(customer_loc_data, str):
+            try:
+                customer_loc_data = json.loads(customer_loc_data)
+            except:
+                customer_loc_data = None
+        
+        if customer_loc_data and "latitude" in customer_loc_data and "longitude" in customer_loc_data:
+            customer_location = {
+                "lat": customer_loc_data["latitude"],
+                "lng": customer_loc_data["longitude"]
+            }
+    
     # Build tracking response
     tracking_data = {
         "order_id": order["id"],
         "status": order["status"],
         "customer_name": order["customer_name"],
+        "customer_address": order.get("delivery_address") or order.get("customer_address"),
+        "customer_phone": order.get("customer_phone", ""),
         "delivery_address": order.get("delivery_address") or order.get("customer_address"),
         "items": order["items"],
         "total_amount": order.get("total_amount") or order.get("total", 0),
+        "total": order.get("total_amount") or order.get("total", 0),
         "payment_method": order.get("payment_method", "cash"),
         "payment_status": order.get("payment_status", "pending"),
         "created_at": order["created_at"],
         "updated_at": order.get("updated_at", order["created_at"]),
         "estimated_delivery": order.get("estimated_delivery"),
+        "estimated_arrival": order.get("estimated_delivery"),
         "rating": order.get("rating"),
         "rating_comment": order.get("rating_comment"),
         "rated_at": order.get("rated_at"),
         "rider": rider_info,
+        "rider_name": rider_info["name"] if rider_info else None,
+        "rider_phone": rider_info["phone"] if rider_info else None,
+        "rider_rating": rider_info["rating"] if rider_info else None,
+        "rider_location": rider_location,
+        "customer_location": customer_location,
         "status_history": status_history,
         "tracking_updates": order.get("tracking_updates", [])
     }
@@ -3429,6 +3470,34 @@ try:
                                 "message_ids": data.get("message_ids", []),
                                 "user_id": data.get("user_id")
                             }))
+                        
+                        elif event_type == "rider_location_update":
+                            # Rider sends location update
+                            rider_id = event_data.get("rider_id")
+                            order_id = event_data.get("order_id")
+                            latitude = event_data.get("latitude")
+                            longitude = event_data.get("longitude")
+                            accuracy = event_data.get("accuracy")
+                            speed = event_data.get("speed")
+                            heading = event_data.get("heading")
+                            
+                            print(f"[WebSocket] Rider {rider_id} location update for order {order_id}: ({latitude}, {longitude})")
+                            
+                            # Broadcast to all clients (customers can filter by order_id)
+                            await manager.broadcast(json.dumps({
+                                "type": "rider_location",
+                                "data": {
+                                    "rider_id": rider_id,
+                                    "order_id": order_id,
+                                    "latitude": latitude,
+                                    "longitude": longitude,
+                                    "accuracy": accuracy,
+                                    "speed": speed,
+                                    "heading": heading,
+                                    "timestamp": data.get("timestamp") or datetime.now().isoformat()
+                                }
+                            }))
+                        
                         elif event_type == "ping":
                             # Respond to ping with pong
                             await websocket.send_json({"type": "pong"})

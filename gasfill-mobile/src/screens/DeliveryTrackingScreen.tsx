@@ -14,6 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { apiService } from '../services/api';
+import { useWebSocketEvent } from '../context/WebSocketContext';
+import locationTrackingService from '../services/locationTracking';
 import Loading from '../components/Loading';
 import ErrorDisplay from '../components/ErrorDisplay';
 
@@ -63,9 +65,70 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [liveTracking, setLiveTracking] = useState(false); // Shows if receiving live updates
+  const [eta, setEta] = useState<string | null>(null);
+  const [distance, setDistance] = useState<string | null>(null);
   const mapRef = useRef<MapView>(null);
   const orderId = route.params?.orderId;
   const isLoadingRef = useRef(false);
+
+  // Subscribe to rider location updates via WebSocket
+  useWebSocketEvent('rider_location', (data) => {
+    console.log('[DeliveryTracking] Rider location update:', data);
+    
+    // Only update if this is for our order
+    if (data.order_id === orderId) {
+      console.log('[DeliveryTracking] ✅ Updating rider location for order:', orderId);
+      setLiveTracking(true);
+      
+      setTrackingData(prev => {
+        if (!prev) return prev;
+        
+        const newLocation = {
+          lat: data.latitude,
+          lng: data.longitude,
+        };
+        
+        console.log('[DeliveryTracking] 📍 New rider location:', newLocation);
+        
+        // Calculate distance and ETA if we have customer location
+        if (prev.customer_location) {
+          const distanceMeters = locationTrackingService.calculateDistance(
+            data.latitude,
+            data.longitude,
+            prev.customer_location.lat,
+            prev.customer_location.lng
+          );
+          
+          const etaMinutes = locationTrackingService.calculateETA(distanceMeters);
+          
+          setDistance(locationTrackingService.formatDistance(distanceMeters));
+          setEta(locationTrackingService.formatETA(etaMinutes));
+          
+          console.log('[DeliveryTracking] 📊 Distance:', distanceMeters, 'm, ETA:', etaMinutes, 'min');
+          
+          // Update map to show both locations
+          if (mapRef.current) {
+            mapRef.current.fitToCoordinates(
+              [
+                { latitude: data.latitude, longitude: data.longitude },
+                { latitude: prev.customer_location.lat, longitude: prev.customer_location.lng },
+              ],
+              {
+                edgePadding: { top: 100, right: 50, bottom: 350, left: 50 },
+                animated: true,
+              }
+            );
+          }
+        }
+        
+        return {
+          ...prev,
+          rider_location: newLocation,
+        };
+      });
+    }
+  });
 
   const loadTrackingData = useCallback(async (isRefreshing = false) => {
     // Prevent multiple simultaneous loads
@@ -85,12 +148,20 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
 
       console.log('📍 Loading tracking data for order:', orderId);
       const data = await apiService.getOrderTracking(orderId);
-      console.log('✅ Tracking data loaded:', data);
+      console.log('✅ Tracking data loaded:', {
+        order_id: data.order_id,
+        status: data.status,
+        has_rider_location: !!data.rider_location,
+        rider_location: data.rider_location,
+        has_customer_location: !!data.customer_location,
+        customer_location: data.customer_location,
+      });
       
       setTrackingData(data);
 
       // Fit map to show both locations
       if (data.rider_location && data.customer_location && mapRef.current) {
+        console.log('[DeliveryTracking] 🗺️ Fitting map to show rider and customer');
         setTimeout(() => {
           mapRef.current?.fitToCoordinates(
             [
@@ -244,13 +315,13 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
         </Marker>
 
         {/* Rider Location */}
-        {trackingData.rider_name && (
+        {trackingData.rider_location && (
           <Marker 
             coordinate={{
-              latitude: riderLocation.lat,
-              longitude: riderLocation.lng,
+              latitude: trackingData.rider_location.lat,
+              longitude: trackingData.rider_location.lng,
             }} 
-            title={trackingData.rider_name}
+            title={trackingData.rider_name || 'Rider'}
             description="Your rider"
           >
             <View style={styles.riderMarker}>
@@ -260,10 +331,10 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
         )}
 
         {/* Route Line */}
-        {trackingData.rider_name && (
+        {trackingData.rider_location && (
           <Polyline
             coordinates={[
-              { latitude: riderLocation.lat, longitude: riderLocation.lng },
+              { latitude: trackingData.rider_location.lat, longitude: trackingData.rider_location.lng },
               { latitude: customerLocation.lat, longitude: customerLocation.lng },
             ]}
             strokeColor="#3b82f6"
@@ -339,6 +410,39 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
             </View>
           ))}
         </View>
+
+        {/* Live Tracking Status & ETA */}
+        {liveTracking && (eta || distance) && (
+          <View style={styles.liveTrackingCard}>
+            <View style={styles.liveHeader}>
+              <View style={styles.liveIndicator}>
+                <View style={styles.livePulse} />
+                <Ionicons name="navigate" size={16} color="#10b981" />
+              </View>
+              <Text style={styles.liveText}>Live Tracking Active</Text>
+            </View>
+            <View style={styles.liveMetricsRow}>
+              {eta && (
+                <View style={styles.liveMetricCard}>
+                  <Ionicons name="time-outline" size={24} color="#3b82f6" />
+                  <View>
+                    <Text style={styles.liveMetricLabel}>ETA</Text>
+                    <Text style={styles.liveMetricValue}>{eta}</Text>
+                  </View>
+                </View>
+              )}
+              {distance && (
+                <View style={styles.liveMetricCard}>
+                  <Ionicons name="navigate-outline" size={24} color="#8b5cf6" />
+                  <View>
+                    <Text style={styles.liveMetricLabel}>Distance</Text>
+                    <Text style={styles.liveMetricValue}>{distance}</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Rider Info */}
         {trackingData.rider_name && (
@@ -812,6 +916,59 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#3b82f6',
+  },
+  liveTrackingCard: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#10b981',
+  },
+  liveHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  liveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  livePulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10b981',
+  },
+  liveText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#065f46',
+  },
+  liveMetricsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  liveMetricCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#ffffff',
+    padding: 12,
+    borderRadius: 12,
+  },
+  liveMetricLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  liveMetricValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
   },
 });
 

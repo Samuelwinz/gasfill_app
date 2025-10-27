@@ -19,7 +19,9 @@ import {
   AvailableOrder,
   ActiveOrder,
 } from '../services/riderApi';
-import { useRiderUpdates } from '../context/WebSocketContext';
+import { useRiderUpdates, useWebSocket } from '../context/WebSocketContext';
+import { useLocationTracking } from '../hooks/useLocationTracking';
+import { useAuth } from '../context/AuthContext';
 import Loading from '../components/Loading';
 import ErrorDisplay from '../components/ErrorDisplay';
 
@@ -28,6 +30,9 @@ interface RiderJobsScreenProps {
 }
 
 const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
+  const { rider } = useAuth();
+  const { send } = useWebSocket();
+  
   const [activeTab, setActiveTab] = useState<'available' | 'active'>('available');
   const [availableJobs, setAvailableJobs] = useState<AvailableOrder[]>([]);
   const [activeJobs, setActiveJobs] = useState<ActiveOrder[]>([]);
@@ -37,6 +42,36 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
   const [selectedOrder, setSelectedOrder] = useState<AvailableOrder | ActiveOrder | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Determine if rider should be tracking location (has active delivery orders)
+  const hasActiveDelivery = activeJobs.some(
+    order => order.status === 'pickup' || order.status === 'in_transit'
+  );
+
+  // Setup location tracking
+  const { currentLocation, isTracking } = useLocationTracking({
+    enabled: hasActiveDelivery,
+    intervalMs: 10000, // Update every 10 seconds
+    onLocationUpdate: (location) => {
+      console.log('[RiderJobs] Location update:', location);
+      
+      // Send location to server for each active delivery order
+      activeJobs.forEach(order => {
+        if (order.status === 'pickup' || order.status === 'in_transit') {
+          send('rider_location_update', {
+            rider_id: rider?.id,
+            order_id: order.id,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            accuracy: location.accuracy,
+            speed: location.speed,
+            heading: location.heading,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      });
+    },
+  });
 
   // Subscribe to real-time updates
   useRiderUpdates({
@@ -281,6 +316,16 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Location Tracking Indicator */}
+      {isTracking && (
+        <View style={styles.trackingBanner}>
+          <Ionicons name="navigate" size={16} color="#10b981" />
+          <Text style={styles.trackingText}>
+            📍 Location tracking active - Customer can see your live location
+          </Text>
+        </View>
+      )}
 
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
@@ -787,6 +832,22 @@ const styles = StyleSheet.create({
     color: '#3b82f6',
     fontSize: 16,
     fontWeight: '600',
+  },
+  trackingBanner: {
+    backgroundColor: '#d1fae5',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#10b981',
+  },
+  trackingText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#065f46',
+    fontWeight: '500',
   },
 });
 

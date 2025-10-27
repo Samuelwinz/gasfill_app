@@ -4,7 +4,24 @@
  */
 
 export interface WebSocketMessage {
-  type: 'new_order_assigned' | 'order_status_updated' | 'earnings_updated' | 'rider_location_updated' | 'ping' | 'pong';
+  type: 
+    | 'new_order_assigned' 
+    | 'order_status_updated' 
+    | 'earnings_updated' 
+    | 'rider_location_updated' 
+    | 'rider_location_update'  // Client -> Server
+    | 'rider_location'         // Server -> Client
+    | 'ping' 
+    | 'pong'
+    | 'chat_message'
+    | 'chat_typing'
+    | 'chat_join_room'
+    | 'chat_leave_room'
+    | 'chat_mark_read'
+    | 'chat_message_delivered'
+    | 'chat_typing_start'
+    | 'chat_typing_stop'
+    | 'chat_send_message';
   data?: any;
   timestamp?: string;
 }
