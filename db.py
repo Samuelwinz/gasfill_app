@@ -373,21 +373,37 @@ def get_chat_messages(chat_room_id: str, limit: int = 50, offset: int = 0) -> Li
     rows = cur.fetchall()
     conn.close()
     
-    return [{
-        'id': row['id'],
-        'chat_room_id': row['chat_room_id'],
-        'sender_id': row['sender_id'],
-        'sender_type': row['sender_type'],
-        'sender_name': row['sender_name'],
-        'message': row['message'],
-        'message_type': row['message_type'],
-        'image_url': row['image_url'],
-        'location': json.loads(row['location_data']) if row['location_data'] else None,
-        'is_read': bool(row['is_read']),
-        'is_delivered': bool(row['is_delivered']),
-        'created_at': row['created_at'],
-        'read_at': row['read_at']
-    } for row in rows]
+    messages = []
+    for row in rows:
+        try:
+            # Safely parse location_data JSON
+            location = None
+            if row['location_data']:
+                try:
+                    location = json.loads(row['location_data'])
+                except (json.JSONDecodeError, TypeError):
+                    location = None
+            
+            messages.append({
+                'id': row['id'],
+                'chat_room_id': row['chat_room_id'],
+                'sender_id': row['sender_id'],
+                'sender_type': row['sender_type'],
+                'sender_name': row['sender_name'],
+                'message': row['message'],
+                'message_type': row['message_type'],
+                'image_url': row['image_url'],
+                'location_data': location,
+                'is_read': bool(row['is_read']),
+                'is_delivered': bool(row['is_delivered']),
+                'created_at': row['created_at'],
+                'read_at': row['read_at']
+            })
+        except Exception as e:
+            print(f"Error parsing message {row.get('id', 'unknown')}: {e}")
+            continue
+    
+    return messages
 
 def create_chat_message(message_data: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new chat message"""

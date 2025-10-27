@@ -17,6 +17,7 @@ import hashlib
 import secrets
 import hmac
 import requests
+import asyncio
 from datetime import datetime, timedelta, UTC
 import json
 import os
@@ -1708,6 +1709,37 @@ async def delete_user(user_id: int, current_admin: dict = Depends(get_current_ad
     return {"message": "User deleted successfully"}
 
 # ==========================================
+# PUBLIC RIDER API ENDPOINTS
+# ==========================================
+
+@app.get("/api/riders/{rider_id}")
+async def get_rider_by_id(rider_id: int):
+    """Get public rider information by ID (for order tracking, etc.)"""
+    rider = db.get_rider_by_id(rider_id)
+    
+    if not rider:
+        raise HTTPException(
+            status_code=404,
+            detail="Rider not found"
+        )
+    
+    # Return only public information (no sensitive data like password)
+    return {
+        "id": rider["id"],
+        "username": rider["username"],
+        "phone": rider["phone"],
+        "vehicle_type": rider["vehicle_type"],
+        "vehicle_number": rider["vehicle_number"],
+        "area_coverage": rider["area_coverage"],
+        "status": rider["status"],
+        "location": rider.get("location"),
+        "rating": rider["rating"],
+        "total_deliveries": rider["total_deliveries"],
+        "is_verified": rider["is_verified"],
+        "is_active": rider["is_active"]
+    }
+
+# ==========================================
 # RIDER API ENDPOINTS
 # ==========================================
 
@@ -2829,17 +2861,28 @@ try:
             self.active_connections.append(websocket)
 
         def disconnect(self, websocket: WebSocket):
-            self.active_connections.remove(websocket)
+            if websocket in self.active_connections:
+                self.active_connections.remove(websocket)
 
         async def send_personal_message(self, message: str, websocket: WebSocket):
-            await websocket.send_text(message)
+            try:
+                await websocket.send_text(message)
+            except Exception as e:
+                print(f"Error sending personal message: {e}")
+                self.disconnect(websocket)
 
         async def broadcast(self, message: str):
+            disconnected = []
             for connection in self.active_connections:
                 try:
                     await connection.send_text(message)
-                except:
-                    self.disconnect(connection)
+                except Exception as e:
+                    print(f"Error broadcasting to connection: {e}")
+                    disconnected.append(connection)
+            
+            # Clean up disconnected connections
+            for conn in disconnected:
+                self.disconnect(conn)
 
     manager = ConnectionManager()
 
@@ -2848,48 +2891,65 @@ try:
         await manager.connect(websocket)
         try:
             while True:
-                # Receive JSON data instead of plain text
-                data_text = await websocket.receive_text()
                 try:
-                    data = json.loads(data_text)
-                    event_type = data.get("type", "message")
+                    # Receive JSON data instead of plain text
+                    # Add timeout to prevent hanging on Windows
+                    data_text = await asyncio.wait_for(
+                        websocket.receive_text(), 
+                        timeout=300  # 5 minutes timeout
+                    )
                     
-                    if event_type == "message":
-                        # Broadcast new message to all connected clients
+                    try:
+                        data = json.loads(data_text)
+                        event_type = data.get("type", "message")
+                        
+                        if event_type == "message":
+                            # Broadcast new message to all connected clients
+                            await manager.broadcast(json.dumps({
+                                "type": "message",
+                                "chat_room_id": data.get("chat_room_id"),
+                                "message": data.get("message"),
+                                "sender_id": data.get("sender_id"),
+                                "sender_type": data.get("sender_type"),
+                                "sender_name": data.get("sender_name"),
+                                "message_type": data.get("message_type", "text"),
+                                "timestamp": data.get("timestamp")
+                            }))
+                        elif event_type == "typing":
+                            # Broadcast typing indicator
+                            await manager.broadcast(json.dumps({
+                                "type": "typing",
+                                "chat_room_id": data.get("chat_room_id"),
+                                "user_id": data.get("user_id"),
+                                "user_name": data.get("user_name"),
+                                "is_typing": data.get("is_typing", True)
+                            }))
+                        elif event_type == "read":
+                            # Broadcast read receipt
+                            await manager.broadcast(json.dumps({
+                                "type": "read",
+                                "chat_room_id": data.get("chat_room_id"),
+                                "message_ids": data.get("message_ids", []),
+                                "user_id": data.get("user_id")
+                            }))
+                    except json.JSONDecodeError:
+                        # Fallback to plain text for backward compatibility
                         await manager.broadcast(json.dumps({
                             "type": "message",
-                            "chat_room_id": data.get("chat_room_id"),
-                            "message": data.get("message"),
-                            "sender_id": data.get("sender_id"),
-                            "sender_type": data.get("sender_type"),
-                            "sender_name": data.get("sender_name"),
-                            "message_type": data.get("message_type", "text"),
-                            "timestamp": data.get("timestamp")
+                            "message": data_text
                         }))
-                    elif event_type == "typing":
-                        # Broadcast typing indicator
-                        await manager.broadcast(json.dumps({
-                            "type": "typing",
-                            "chat_room_id": data.get("chat_room_id"),
-                            "user_id": data.get("user_id"),
-                            "user_name": data.get("user_name"),
-                            "is_typing": data.get("is_typing", True)
-                        }))
-                    elif event_type == "read":
-                        # Broadcast read receipt
-                        await manager.broadcast(json.dumps({
-                            "type": "read",
-                            "chat_room_id": data.get("chat_room_id"),
-                            "message_ids": data.get("message_ids", []),
-                            "user_id": data.get("user_id")
-                        }))
-                except json.JSONDecodeError:
-                    # Fallback to plain text for backward compatibility
-                    await manager.broadcast(json.dumps({
-                        "type": "message",
-                        "message": data_text
-                    }))
-        except WebSocketDisconnect:
+                except asyncio.TimeoutError:
+                    # Send ping to keep connection alive
+                    try:
+                        await websocket.send_json({"type": "ping"})
+                    except:
+                        break
+                except (WebSocketDisconnect, OSError, RuntimeError) as e:
+                    print(f"WebSocket connection error: {e}")
+                    break
+        except Exception as e:
+            print(f"WebSocket error: {e}")
+        finally:
             manager.disconnect(websocket)
             
 except ImportError:
@@ -3075,21 +3135,14 @@ class MarkAsReadRequest(BaseModel):
 async def create_or_get_chat_room(data: ChatRoomCreate, credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Create or get existing chat room for an order"""
     try:
-        # Verify token
-        payload = decode_token(credentials.credentials)
+        # Verify authentication
+        current_user = get_current_user(credentials)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
         
-        # Get user info from token
-        user_email = payload.get("sub")
-        
-        # Get customer/rider name from database
-        if data.user_type == "customer":
-            user = users_db.get(user_email, {})
-            user_name = user.get("name", "Customer")
-        elif data.user_type == "rider":
-            rider = riders_db.get(user_email, {})
-            user_name = rider.get("username", "Rider")
-        else:
-            user_name = "User"
+        # Get user info
+        user_email = current_user.get("email")
+        user_name = current_user.get("username", "User")
         
         # Get order to find rider info if needed
         order = db.get_order_by_id(f"ORD-{data.order_id}")
@@ -3097,11 +3150,10 @@ async def create_or_get_chat_room(data: ChatRoomCreate, credentials: HTTPAuthori
         rider_name = None
         
         if rider_id:
-            # Find rider name from riders_db
-            for email, rider in riders_db.items():
-                if rider.get('id') == rider_id:
-                    rider_name = rider.get('username', 'Rider')
-                    break
+            # Get rider name from database
+            rider = db.get_rider_by_id(rider_id)
+            if rider:
+                rider_name = rider.get('username', 'Rider')
         
         # Create or get chat room
         chat_room = db.create_or_get_chat_room(
@@ -3114,11 +3166,16 @@ async def create_or_get_chat_room(data: ChatRoomCreate, credentials: HTTPAuthori
         
         return chat_room
     
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"❌ Error creating chat room: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/chat/rooms/{chat_room_id}/messages")
-async def get_chat_messages(
+async def get_chat_messages_endpoint(
     chat_room_id: str,
     limit: int = 50,
     offset: int = 0,
@@ -3126,13 +3183,22 @@ async def get_chat_messages(
 ):
     """Get message history for a chat room"""
     try:
-        # Verify token
-        decode_token(credentials.credentials)
+        # Verify authentication
+        current_user = get_current_user(credentials)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
         
+        print(f"📨 Fetching messages for chat room: {chat_room_id} (limit: {limit}, offset: {offset})")
         messages = db.get_chat_messages(chat_room_id, limit, offset)
+        print(f"✅ Retrieved {len(messages)} messages")
         return messages
     
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"❌ Error fetching chat messages: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/chat/messages")
@@ -3202,29 +3268,39 @@ async def mark_messages_as_read(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/chat/rooms")
-async def get_user_chat_rooms(credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def get_user_chat_rooms_endpoint(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Get all chat rooms for the authenticated user"""
     try:
-        # Verify token
-        payload = decode_token(credentials.credentials)
-        user_email = payload.get("sub")
+        # Verify authentication
+        current_user = get_current_user(credentials)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
         
-        # Determine user type and ID
-        if user_email in users_db:
-            user = users_db[user_email]
-            user_id = user.get("id", 1)
-            user_type = "customer"
-        elif user_email in riders_db:
-            rider = riders_db[user_email]
-            user_id = rider.get("id", 1)
+        user_email = current_user.get("email")
+        user_role = current_user.get("role", "customer")
+        
+        # Determine user type and ID based on role
+        if user_role == "rider":
             user_type = "rider"
+            rider = db.get_rider_by_email(user_email)
+            user_id = rider.get("id") if rider else None
         else:
+            user_type = "customer"
+            user = db.get_user_by_email(user_email)
+            user_id = user.get("id") if user else None
+        
+        if not user_id:
             raise HTTPException(status_code=404, detail="User not found")
         
         chat_rooms = db.get_user_chat_rooms(user_id, user_type)
         return chat_rooms
     
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"❌ Error fetching chat rooms: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/chat/rooms/{chat_room_id}/close")
