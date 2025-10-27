@@ -79,6 +79,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
   const customerMenuItems = [
     { icon: 'receipt-outline', name: 'Order History', screen: 'Orders', description: 'View all your orders' },
+    { icon: 'flame-outline', name: 'Subscription Plans', screen: 'SubscriptionManagement', description: 'Manage your refill plan' },
     { icon: 'location-outline', name: 'Delivery Addresses', screen: null, description: 'Manage saved addresses' },
     { icon: 'card-outline', name: 'Payment Methods', screen: null, description: 'Manage payment options' },
     { icon: 'notifications-outline', name: 'Notifications', screen: 'Notifications', description: 'Notification preferences' },
@@ -155,10 +156,44 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                   )}
                 </View>
               ) : isCustomer ? (
-                <View style={styles.customerBadge}>
-                  <Ionicons name="shield-checkmark" size={16} color="#3b82f6" />
-                  <Text style={styles.customerBadgeText}>VERIFIED CUSTOMER</Text>
-                </View>
+                <>
+                  <View style={styles.customerBadge}>
+                    <Ionicons name="shield-checkmark" size={16} color="#3b82f6" />
+                    <Text style={styles.customerBadgeText}>VERIFIED CUSTOMER</Text>
+                  </View>
+                  
+                  {/* Subscription Badge */}
+                  {user?.subscription_tier && user?.subscription_status === 'active' && (
+                    <View style={[
+                      styles.subscriptionBadge,
+                      user.subscription_tier === 'basic' && styles.subscriptionBasic,
+                      user.subscription_tier === 'pro' && styles.subscriptionPro,
+                      user.subscription_tier === 'family' && styles.subscriptionFamily,
+                    ]}>
+                      <Ionicons 
+                        name={
+                          user.subscription_tier === 'basic' ? 'flame-outline' :
+                          user.subscription_tier === 'pro' ? 'flame' :
+                          'rocket'
+                        } 
+                        size={14} 
+                        color={
+                          user.subscription_tier === 'basic' ? '#059669' :
+                          user.subscription_tier === 'pro' ? '#3b82f6' :
+                          '#9333ea'
+                        }
+                      />
+                      <Text style={[
+                        styles.subscriptionBadgeText,
+                        user.subscription_tier === 'basic' && styles.subscriptionBasicText,
+                        user.subscription_tier === 'pro' && styles.subscriptionProText,
+                        user.subscription_tier === 'family' && styles.subscriptionFamilyText,
+                      ]}>
+                        {user.subscription_tier.toUpperCase()} PLAN
+                      </Text>
+                    </View>
+                  )}
+                </>
               ) : isAdmin ? (
                 <View style={styles.adminBadge}>
                   <Ionicons name="shield-half" size={16} color="#ffffff" />
@@ -210,6 +245,30 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                 </View>
               )}
             </View>
+
+            {/* Upgrade Banner for Basic Subscription */}
+            {isCustomer && user?.subscription_tier === 'basic' && user?.subscription_status === 'active' && (
+              <View style={styles.upgradeBanner}>
+                <View style={styles.upgradeBannerContent}>
+                  <View style={styles.upgradeBannerIcon}>
+                    <Ionicons name="rocket" size={24} color="#3b82f6" />
+                  </View>
+                  <View style={styles.upgradeBannerText}>
+                    <Text style={styles.upgradeBannerTitle}>Upgrade to Pro or Family</Text>
+                    <Text style={styles.upgradeBannerDescription}>
+                      Save up to 25% with more refills per month
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.upgradeBannerButton}
+                  onPress={() => navigation.navigate('RefillPlans')}
+                >
+                  <Text style={styles.upgradeBannerButtonText}>View Plans</Text>
+                  <Ionicons name="arrow-forward" size={16} color="#3b82f6" />
+                </TouchableOpacity>
+              </View>
+            )}
 
             {isCustomer && (
               <View style={styles.customerInfoCard}>
@@ -498,6 +557,96 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1e40af',
     letterSpacing: 0.5,
+  },
+  subscriptionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 5,
+    marginTop: 8,
+  },
+  subscriptionBasic: {
+    backgroundColor: '#d1fae5',
+  },
+  subscriptionPro: {
+    backgroundColor: '#dbeafe',
+  },
+  subscriptionFamily: {
+    backgroundColor: '#f3e8ff',
+  },
+  subscriptionBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  subscriptionBasicText: {
+    color: '#059669',
+  },
+  subscriptionProText: {
+    color: '#3b82f6',
+  },
+  subscriptionFamilyText: {
+    color: '#9333ea',
+  },
+  upgradeBanner: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#dbeafe',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  upgradeBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  upgradeBannerIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  upgradeBannerText: {
+    flex: 1,
+  },
+  upgradeBannerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  upgradeBannerDescription: {
+    fontSize: 13,
+    color: '#6b7280',
+    lineHeight: 18,
+  },
+  upgradeBannerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eff6ff',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    gap: 6,
+  },
+  upgradeBannerButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
   },
   customerStatsContainer: {
     flexDirection: 'row',

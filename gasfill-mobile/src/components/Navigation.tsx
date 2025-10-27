@@ -15,6 +15,8 @@ import CheckoutScreen from '../screens/CheckoutScreen';
 
 // Import new feature screens
 import RefillPlanScreen from '../screens/RefillPlanScreen';
+import RefillPlanBookingScreen from '../screens/RefillPlanBookingScreen';
+import SubscriptionManagementScreen from '../screens/SubscriptionManagementScreen';
 import RewardLoyaltyScreen from '../screens/RewardLoyaltyScreen';
 
 // Import new pickup/refill service screens
@@ -27,6 +29,8 @@ import AdminDashboard from '../screens/AdminDashboard';
 import AboutScreen from '../screens/AboutScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
+import ChatScreen from '../screens/ChatScreen';
+import CustomerChatListScreen from '../screens/CustomerChatListScreen';
 
 // Import services
 import { StorageService } from '../utils/storage';
@@ -53,8 +57,8 @@ function CustomerTabs() {
             case 'Pickup':
               iconName = focused ? 'car' : 'car-outline';
               break;
-            case 'Track':
-              iconName = focused ? 'location' : 'location-outline';
+            case 'Messages':
+              iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
               break;
             case 'Orders':
               iconName = focused ? 'receipt' : 'receipt-outline';
@@ -91,9 +95,9 @@ function CustomerTabs() {
         options={{ title: 'Request Pickup' }}
       />
       <Tab.Screen 
-        name="Track" 
-        component={DeliveryTrackingScreen}
-        options={{ title: 'Track Orders' }}
+        name="Messages" 
+        component={CustomerChatListScreen}
+        options={{ title: 'Messages' }}
       />
       <Tab.Screen name="Orders" component={OrderHistoryScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
@@ -232,11 +236,6 @@ function AppStack() {
 
   useEffect(() => {
     loadUserRole();
-    
-    // Set up interval to check for role changes (in case of login/logout)
-    const roleCheckInterval = setInterval(loadUserRole, 1000);
-    
-    return () => clearInterval(roleCheckInterval);
   }, []);
 
   const loadUserRole = async () => {
@@ -335,6 +334,20 @@ function AppStack() {
         }}
       />
       <Stack.Screen 
+        name="RefillPlanBooking" 
+        component={RefillPlanBookingScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="SubscriptionManagement" 
+        component={SubscriptionManagementScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
         name="Rewards" 
         component={RewardLoyaltyScreen}
         options={{ 
@@ -358,6 +371,13 @@ function AppStack() {
       <Stack.Screen 
         name="NotificationSettings" 
         component={NotificationSettingsScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="Chat" 
+        component={ChatScreen}
         options={{ 
           headerShown: false,
         }}

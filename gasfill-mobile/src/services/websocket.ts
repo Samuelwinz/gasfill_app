@@ -81,11 +81,23 @@ export class WebSocketService {
         };
 
         this.ws.onmessage = (event) => {
+          // Skip non-JSON messages (like ping/pong or server info messages)
+          if (typeof event.data !== 'string') {
+            return;
+          }
+          
+          const dataStr = event.data.trim();
+          if (!dataStr || !dataStr.startsWith('{')) {
+            // Silently ignore non-JSON messages (server info, ping/pong, etc.)
+            return;
+          }
+          
           try {
-            const message: WebSocketMessage = JSON.parse(event.data);
+            const message: WebSocketMessage = JSON.parse(dataStr);
             this.handleMessage(message);
           } catch (error) {
-            console.error('[WebSocket] Failed to parse message:', error);
+            // Only log parse errors for messages that looked like JSON
+            console.warn('[WebSocket] Failed to parse JSON message:', dataStr.substring(0, 100));
           }
         };
 

@@ -374,14 +374,34 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
               </View>
             </View>
             {trackingData.rider_phone && (
-              <TouchableOpacity 
-                style={styles.callButton}
-                onPress={handleCallRider}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="call" size={24} color="#ffffff" />
-                <Text style={styles.callButtonText}>Call Rider</Text>
-              </TouchableOpacity>
+              <View style={styles.riderActions}>
+                <TouchableOpacity 
+                  style={styles.callButton}
+                  onPress={handleCallRider}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="call" size={20} color="#ffffff" />
+                  <Text style={styles.callButtonText}>Call</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.chatButton}
+                  onPress={() => navigation.navigate('Chat', {
+                    orderId: trackingData.order_id,
+                    chatRoomId: `order_${trackingData.order_id}`,
+                    participant: {
+                      id: 101,
+                      name: trackingData.rider_name || 'Rider',
+                      type: 'rider',
+                      is_online: true,
+                    },
+                  })}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="chatbubble" size={20} color="#3b82f6" />
+                  <Text style={styles.chatButtonText}>Chat</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         )}
@@ -678,9 +698,14 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontWeight: '500',
   },
+  riderActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
   callButton: {
+    flex: 1,
     backgroundColor: '#10b981',
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingVertical: 14,
     borderRadius: 12,
     flexDirection: 'row',
@@ -695,7 +720,30 @@ const styles = StyleSheet.create({
   },
   callButtonText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  chatButton: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  chatButtonText: {
+    color: '#3b82f6',
+    fontSize: 15,
     fontWeight: '700',
   },
   orderDetailsCard: {

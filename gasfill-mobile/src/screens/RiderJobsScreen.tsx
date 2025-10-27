@@ -23,7 +23,11 @@ import { useRiderUpdates } from '../context/WebSocketContext';
 import Loading from '../components/Loading';
 import ErrorDisplay from '../components/ErrorDisplay';
 
-const RiderJobsScreen: React.FC = () => {
+interface RiderJobsScreenProps {
+  navigation: any;
+}
+
+const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState<'available' | 'active'>('available');
   const [availableJobs, setAvailableJobs] = useState<AvailableOrder[]>([]);
   const [activeJobs, setActiveJobs] = useState<ActiveOrder[]>([]);
@@ -383,6 +387,27 @@ const RiderJobsScreen: React.FC = () => {
 
               {activeTab === 'active' && (
                 <View style={styles.actionButtons}>
+                  {/* Chat Button */}
+                  <TouchableOpacity
+                    style={styles.chatButton}
+                    onPress={() => {
+                      setShowDetailsModal(false);
+                      navigation.navigate('Chat', {
+                        orderId: selectedOrder.id,
+                        chatRoomId: `order_${selectedOrder.id}`,
+                        participant: {
+                          id: 1,
+                          name: selectedOrder.customer_name,
+                          type: 'customer',
+                          is_online: true,
+                        },
+                      });
+                    }}
+                  >
+                    <Ionicons name="chatbubble" size={20} color="#3b82f6" />
+                    <Text style={styles.chatButtonText}>Chat with Customer</Text>
+                  </TouchableOpacity>
+
                   {(selectedOrder as ActiveOrder).status === 'assigned' && (
                     <TouchableOpacity
                       style={[styles.primaryButton, actionLoading && styles.disabledButton]}
@@ -744,6 +769,24 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     gap: 12,
+  },
+  chatButton: {
+    backgroundColor: '#ffffff',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+    marginBottom: 12,
+  },
+  chatButtonText: {
+    color: '#3b82f6',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

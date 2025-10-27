@@ -122,6 +122,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           role: 'user',
           phone: '+233241234567',
           address: 'Demo Address, Accra',
+          subscription_tier: 'pro',
+          subscription_status: 'active',
         };
         
         const demoToken = 'demo_token_' + Date.now();
@@ -192,6 +194,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           role: 'user',
           phone: userData.phone || '+233241234567',
           address: userData.address || 'Demo Address, Accra',
+          subscription_tier: 'basic',
+          subscription_status: 'active',
         };
         
         const demoToken = 'demo_token_' + Date.now();
