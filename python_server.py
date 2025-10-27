@@ -1756,10 +1756,13 @@ async def get_rider_dashboard(current_rider: dict = Depends(get_current_rider)):
     print(f"👤 Rider Username: {current_rider.get('username')}")
     print(f"👤 Rider Status: {current_rider.get('status')}")
     
-    # Get rider's assigned orders - check both rider_id and assigned_rider_id
+    # Get all orders from database
+    all_orders = db.get_all_orders()
+    
+    # Filter for orders assigned to this rider
     rider_orders = [
-        order for order in orders_db 
-        if order.get("rider_id") == rider_id or order.get("assigned_rider_id") == rider_id
+        order for order in all_orders 
+        if order.get("rider_id") == rider_id
     ]
     
     # Get rider's assigned services
@@ -1769,7 +1772,7 @@ async def get_rider_dashboard(current_rider: dict = Depends(get_current_rider)):
     ]
     
     print(f"\n📦 ORDERS ANALYSIS:")
-    print(f"   Total orders in DB: {len(orders_db)}")
+    print(f"   Total orders in DB: {len(all_orders)}")
     print(f"   Rider's orders found: {len(rider_orders)}")
     if rider_orders:
         print(f"   Order IDs: {[o.get('id') for o in rider_orders]}")
@@ -1787,7 +1790,7 @@ async def get_rider_dashboard(current_rider: dict = Depends(get_current_rider)):
         if datetime.fromisoformat(service["created_at"]).date() == today
     ]
     
-    active_orders = [order for order in rider_orders if order["status"] in ["assigned", "picked_up", "in_transit"]]
+    active_orders = [order for order in rider_orders if order["status"] in ["assigned", "picked_up", "in_transit", "pickup"]]
     active_services = [service for service in rider_services if service["status"] in ["assigned", "in_progress"]]
     
     completed_today_orders = [order for order in today_orders if order["status"] == "delivered"]
@@ -3442,6 +3445,111 @@ if __name__ == "__main__":
         print("✅ Default rider users created:")
         for i, email in enumerate(rider_emails, 1):
             print(f"   Rider {i}: {email} / rider123")
+    
+    # Create sample orders for testing
+    sample_customer_email = "ann@gasfill.com"
+    existing_customer = db.get_user_by_email(sample_customer_email)
+    if not existing_customer:
+        # Create a sample customer first
+        db.create_user({
+            "username": "Ann Mensah",
+            "email": sample_customer_email,
+            "password": hash_password("customer123"),
+            "phone": "+233241234567",
+            "address": "123 Oxford Street, Accra",
+            "role": "customer",
+            "is_active": True
+        })
+        print(f"✅ Sample customer created: {sample_customer_email} / customer123")
+    
+    # Check if sample orders already exist
+    existing_orders = db.get_all_orders()
+    if len(existing_orders) < 3:
+        # Create 5 sample orders with different statuses
+        sample_orders = [
+            {
+                "customer_name": "Ann Mensah",
+                "customer_email": sample_customer_email,
+                "customer_phone": "+233241234567",
+                "delivery_address": "123 Oxford Street, Accra",
+                "items": [{"name": "12.5kg Gas Cylinder", "quantity": 1, "price": 150.0}],
+                "total_amount": 160.0,  # 150 + 10 delivery
+                "payment_method": "cash",
+                "payment_status": "pending",
+                "status": "assigned",
+                "rider_id": 1,
+                "delivery_fee": 10.0,
+                "notes": "Please call when you arrive"
+            },
+            {
+                "customer_name": "Ann Mensah",
+                "customer_email": sample_customer_email,
+                "customer_phone": "+233241234567",
+                "delivery_address": "456 Ring Road, Accra",
+                "items": [{"name": "6kg Gas Cylinder", "quantity": 2, "price": 75.0}],
+                "total_amount": 160.0,  # 150 + 10 delivery
+                "payment_method": "momo",
+                "payment_status": "completed",
+                "status": "in_transit",
+                "rider_id": 1,
+                "delivery_fee": 10.0,
+                "notes": "Gate code: 1234"
+            },
+            {
+                "customer_name": "Ann Mensah",
+                "customer_email": sample_customer_email,
+                "customer_phone": "+233241234567",
+                "delivery_address": "789 Spintex Road, Accra",
+                "items": [{"name": "12.5kg Gas Cylinder", "quantity": 1, "price": 150.0}],
+                "total_amount": 160.0,
+                "payment_method": "card",
+                "payment_status": "completed",
+                "status": "delivered",
+                "rider_id": 2,
+                "delivery_fee": 10.0,
+                "notes": "Thank you!"
+            },
+            {
+                "customer_name": "Ann Mensah",
+                "customer_email": sample_customer_email,
+                "customer_phone": "+233241234567",
+                "delivery_address": "321 Tema Station Road, Tema",
+                "items": [{"name": "6kg Gas Cylinder", "quantity": 1, "price": 75.0}],
+                "total_amount": 85.0,
+                "payment_method": "cash",
+                "payment_status": "pending",
+                "status": "pending",
+                "rider_id": None,
+                "delivery_fee": 10.0,
+                "notes": ""
+            },
+            {
+                "customer_name": "Ann Mensah",
+                "customer_email": sample_customer_email,
+                "customer_phone": "+233241234567",
+                "delivery_address": "555 Airport Residential, Accra",
+                "items": [{"name": "12.5kg Gas Cylinder", "quantity": 2, "price": 150.0}],
+                "total_amount": 310.0,
+                "payment_method": "momo",
+                "payment_status": "completed",
+                "status": "pickup",
+                "rider_id": 2,
+                "delivery_fee": 10.0,
+                "notes": "Apartment 5B"
+            }
+        ]
+        
+        orders_created = 0
+        for order_data in sample_orders:
+            try:
+                db.create_order(order_data)
+                orders_created += 1
+            except Exception as e:
+                print(f"⚠️  Error creating sample order: {e}")
+        
+        if orders_created > 0:
+            print(f"✅ Created {orders_created} sample orders for testing")
+            print(f"   📦 Statuses: pending, assigned, in_transit, pickup, delivered")
     
     print("🚀 Starting GasFill Python Backend Server...")
     print("📊 API Documentation: http://localhost:5002/api/docs")
