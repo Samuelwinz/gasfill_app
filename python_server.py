@@ -526,6 +526,41 @@ async def admin_login(admin_data: AdminLogin):
         }
     }
 
+@app.get("/api/users/list")
+async def list_all_users():
+    """List all registered customers (for debugging/testing)"""
+    customers = []
+    for email, user in users_db.items():
+        customers.append({
+            "id": user.get("id"),
+            "email": email,
+            "name": user.get("name") or user.get("username"),
+            "phone": user.get("phone"),
+            "address": user.get("address"),
+            "role": user.get("role", "customer"),
+            "created_at": user.get("created_at")
+        })
+    
+    riders = []
+    for email, rider in riders_db.items():
+        riders.append({
+            "id": rider.get("id"),
+            "email": email,
+            "username": rider.get("username"),
+            "phone": rider.get("phone"),
+            "vehicle_type": rider.get("vehicle_type"),
+            "status": rider.get("status"),
+            "rating": rider.get("rating"),
+            "created_at": rider.get("created_at")
+        })
+    
+    return {
+        "total_customers": len(customers),
+        "total_riders": len(riders),
+        "customers": customers,
+        "riders": riders
+    }
+
 @app.post("/api/auth/rider-register")
 async def rider_register(rider_data: RiderRegister):
     """Register a new rider"""
@@ -1389,6 +1424,213 @@ async def get_all_orders(current_admin: dict = Depends(get_current_admin)):
 async def get_all_services(current_admin: dict = Depends(get_current_admin)):
     """Get all service requests for admin dashboard"""
     return services_db
+
+@app.get("/api/admin/riders")
+async def get_all_riders(current_admin: dict = Depends(get_current_admin)):
+    """Get all riders for admin dashboard"""
+    riders_list = []
+    for email, rider in riders_db.items():
+        # Count rider's deliveries
+        rider_deliveries = len([o for o in orders_db if o.get("rider_id") == rider.get("id") and o.get("status") == "delivered"])
+        
+        riders_list.append({
+            "id": rider.get("id"),
+            "email": email,
+            "username": rider.get("username"),
+            "phone": rider.get("phone"),
+            "vehicle_type": rider.get("vehicle_type"),
+            "vehicle_number": rider.get("vehicle_number"),
+            "license_number": rider.get("license_number"),
+            "status": rider.get("status", "available"),
+            "rating": rider.get("rating", 0.0),
+            "total_deliveries": rider_deliveries,
+            "earnings": rider.get("earnings", 0.0),
+            "area_coverage": rider.get("area_coverage"),
+            "is_active": rider.get("is_active", True),
+            "is_verified": rider.get("is_verified", False),
+            "is_suspended": rider.get("is_suspended", False),
+            "document_status": rider.get("document_status", "pending"),
+            "verification_date": rider.get("verification_date"),
+            "suspension_reason": rider.get("suspension_reason"),
+            "created_at": rider.get("created_at")
+        })
+    
+    return riders_list
+
+@app.post("/api/admin/riders/{rider_id}/verify")
+async def verify_rider(rider_id: int, verification_data: dict, current_admin: dict = Depends(get_current_admin)):
+    """Verify rider documents and approve for deliveries"""
+    rider = next((r for r in riders_db.values() if r.get("id") == rider_id), None)
+    
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    
+    rider["is_verified"] = verification_data.get("is_verified", True)
+    rider["verification_date"] = utc_now().isoformat()
+    rider["verification_notes"] = verification_data.get("notes", "")
+    rider["document_status"] = "approved" if verification_data.get("is_verified") else "rejected"
+    
+    return {
+        "message": "Rider verification status updated successfully",
+        "rider": {
+            "id": rider["id"],
+            "username": rider["username"],
+            "is_verified": rider["is_verified"],
+            "document_status": rider["document_status"],
+            "verification_date": rider["verification_date"]
+        }
+    }
+
+@app.post("/api/admin/riders/{rider_id}/suspend")
+async def suspend_rider(rider_id: int, suspension_data: dict, current_admin: dict = Depends(get_current_admin)):
+    """Suspend or reactivate rider account"""
+    rider = next((r for r in riders_db.values() if r.get("id") == rider_id), None)
+    
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    
+    is_suspended = suspension_data.get("is_suspended", True)
+    rider["is_suspended"] = is_suspended
+    rider["is_active"] = not is_suspended
+    rider["status"] = "suspended" if is_suspended else "available"
+    
+    if is_suspended:
+        rider["suspension_date"] = utc_now().isoformat()
+        rider["suspension_reason"] = suspension_data.get("reason", "No reason provided")
+    else:
+        rider["suspension_date"] = None
+        rider["suspension_reason"] = None
+    
+    return {
+        "message": f"Rider {'suspended' if is_suspended else 'reactivated'} successfully",
+        "rider": {
+            "id": rider["id"],
+            "username": rider["username"],
+            "status": rider["status"],
+            "is_suspended": rider.get("is_suspended", False),
+            "suspension_reason": rider.get("suspension_reason")
+        }
+    }
+
+@app.get("/api/admin/riders/{rider_id}/earnings")
+async def get_rider_earnings(rider_id: int, current_admin: dict = Depends(get_current_admin)):
+    """Get detailed rider earnings breakdown"""
+    rider = next((r for r in riders_db.values() if r.get("id") == rider_id), None)
+    
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    
+    # Get all delivered orders for this rider
+    rider_orders = [o for o in orders_db if o.get("rider_id") == rider_id and o.get("status") == "delivered"]
+    
+    # Calculate earnings
+    total_deliveries = len(rider_orders)
+    commission_rate = rider.get("commission_rate", 0.8)  # 80% default
+    delivery_fee = rider.get("delivery_fee", 10.0)
+    earnings_per_delivery = delivery_fee * commission_rate
+    total_earnings = total_deliveries * earnings_per_delivery
+    
+    # Calculate today's earnings
+    today = datetime.now().date()
+    today_deliveries = [o for o in rider_orders if datetime.fromisoformat(o["created_at"]).date() == today]
+    today_earnings = len(today_deliveries) * earnings_per_delivery
+    
+    # Calculate this week's earnings
+    week_start = datetime.now() - timedelta(days=datetime.now().weekday())
+    week_deliveries = [o for o in rider_orders if datetime.fromisoformat(o["created_at"]) >= week_start]
+    week_earnings = len(week_deliveries) * earnings_per_delivery
+    
+    # Calculate this month's earnings
+    month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_deliveries = [o for o in rider_orders if datetime.fromisoformat(o["created_at"]) >= month_start]
+    month_earnings = len(month_deliveries) * earnings_per_delivery
+    
+    return {
+        "rider_id": rider_id,
+        "username": rider["username"],
+        "total_earnings": total_earnings,
+        "today_earnings": today_earnings,
+        "week_earnings": week_earnings,
+        "month_earnings": month_earnings,
+        "total_deliveries": total_deliveries,
+        "today_deliveries": len(today_deliveries),
+        "week_deliveries": len(week_deliveries),
+        "month_deliveries": len(month_deliveries),
+        "commission_rate": commission_rate,
+        "delivery_fee": delivery_fee,
+        "earnings_per_delivery": earnings_per_delivery,
+        "recent_deliveries": [
+            {
+                "order_id": o["id"],
+                "customer_name": o.get("customer_name", "Unknown"),
+                "delivery_address": o.get("delivery_address", "Unknown"),
+                "total": o.get("total", 0),
+                "delivery_fee": delivery_fee,
+                "rider_earnings": earnings_per_delivery,
+                "delivered_at": o.get("updated_at", o.get("created_at"))
+            }
+            for o in rider_orders[-10:]  # Last 10 deliveries
+        ]
+    }
+
+@app.get("/api/admin/riders/{rider_id}/performance")
+async def get_rider_performance(rider_id: int, current_admin: dict = Depends(get_current_admin)):
+    """Get rider performance metrics and ratings"""
+    rider = next((r for r in riders_db.values() if r.get("id") == rider_id), None)
+    
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    
+    # Get all orders (delivered and others)
+    all_orders = [o for o in orders_db if o.get("rider_id") == rider_id]
+    delivered_orders = [o for o in all_orders if o.get("status") == "delivered"]
+    cancelled_orders = [o for o in all_orders if o.get("status") == "cancelled"]
+    
+    total_assigned = len(all_orders)
+    total_delivered = len(delivered_orders)
+    total_cancelled = len(cancelled_orders)
+    completion_rate = (total_delivered / total_assigned * 100) if total_assigned > 0 else 0
+    
+    # Calculate average delivery time (mock data - would need timestamps in real scenario)
+    avg_delivery_time = 25  # minutes (placeholder)
+    
+    # Get ratings from delivered orders (would be stored in order feedback)
+    ratings = [o.get("rider_rating", 0) for o in delivered_orders if o.get("rider_rating")]
+    avg_rating = sum(ratings) / len(ratings) if ratings else rider.get("rating", 0.0)
+    
+    # Performance score (0-100)
+    performance_score = (completion_rate * 0.5) + (avg_rating / 5 * 100 * 0.3) + (min(avg_delivery_time, 30) / 30 * 100 * 0.2)
+    
+    return {
+        "rider_id": rider_id,
+        "username": rider["username"],
+        "overall_rating": avg_rating,
+        "total_ratings": len(ratings),
+        "performance_score": round(performance_score, 2),
+        "completion_rate": round(completion_rate, 2),
+        "total_assigned_orders": total_assigned,
+        "total_delivered_orders": total_delivered,
+        "total_cancelled_orders": total_cancelled,
+        "average_delivery_time_minutes": avg_delivery_time,
+        "on_time_delivery_rate": 85.5,  # Placeholder
+        "customer_satisfaction": round(avg_rating / 5 * 100, 2),
+        "status": rider.get("status", "available"),
+        "is_verified": rider.get("is_verified", False),
+        "is_suspended": rider.get("is_suspended", False),
+        "vehicle_type": rider.get("vehicle_type"),
+        "area_coverage": rider.get("area_coverage"),
+        "member_since": rider.get("created_at"),
+        "recent_feedback": [
+            {
+                "order_id": o["id"],
+                "customer_name": o.get("customer_name", "Anonymous"),
+                "rating": o.get("rider_rating", 0),
+                "comment": o.get("rider_feedback", ""),
+                "date": o.get("updated_at", o.get("created_at"))
+            }
+            for o in delivered_orders[-5:] if o.get("rider_rating")
+        ]
+    }
 
 @app.patch("/api/admin/users/{user_id}/status")
 async def update_user_status(user_id: int, status_data: dict, current_admin: dict = Depends(get_current_admin)):
@@ -2760,6 +3002,166 @@ def verify_paystack_signature(payload: bytes, signature: str) -> bool:
         return False
 
 # ========================
+# CHAT API ENDPOINTS
+# ========================
+
+class ChatRoomCreate(BaseModel):
+    order_id: int
+    user_id: int
+    user_type: str
+
+class ChatMessageCreate(BaseModel):
+    chat_room_id: str
+    sender_id: int
+    sender_type: str
+    sender_name: str
+    message: str
+    message_type: str = 'text'
+    image_url: Optional[str] = None
+    location: Optional[Dict[str, Any]] = None
+
+class MarkAsReadRequest(BaseModel):
+    message_ids: List[str]
+
+@app.post("/api/chat/rooms")
+async def create_or_get_chat_room(data: ChatRoomCreate, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Create or get existing chat room for an order"""
+    try:
+        # Verify token
+        payload = decode_token(credentials.credentials)
+        
+        # Get user info from token
+        user_email = payload.get("sub")
+        
+        # Get customer/rider name from database
+        if data.user_type == "customer":
+            user = users_db.get(user_email, {})
+            user_name = user.get("name", "Customer")
+        elif data.user_type == "rider":
+            rider = riders_db.get(user_email, {})
+            user_name = rider.get("username", "Rider")
+        else:
+            user_name = "User"
+        
+        # Get order to find rider info if needed
+        order = db.get_order_by_id(f"ORD-{data.order_id}")
+        rider_id = order.get('rider_id') if order else None
+        rider_name = None
+        
+        if rider_id:
+            # Find rider name from riders_db
+            for email, rider in riders_db.items():
+                if rider.get('id') == rider_id:
+                    rider_name = rider.get('username', 'Rider')
+                    break
+        
+        # Create or get chat room
+        chat_room = db.create_or_get_chat_room(
+            order_id=data.order_id,
+            customer_id=data.user_id,
+            customer_name=user_name,
+            rider_id=rider_id,
+            rider_name=rider_name
+        )
+        
+        return chat_room
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/chat/rooms/{chat_room_id}/messages")
+async def get_chat_messages(
+    chat_room_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Get message history for a chat room"""
+    try:
+        # Verify token
+        decode_token(credentials.credentials)
+        
+        messages = db.get_chat_messages(chat_room_id, limit, offset)
+        return messages
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/chat/messages")
+async def send_chat_message(message: ChatMessageCreate, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Send a new chat message"""
+    try:
+        # Verify token
+        decode_token(credentials.credentials)
+        
+        # Create message in database
+        new_message = db.create_chat_message(message.dict())
+        
+        # TODO: Broadcast via WebSocket to all participants
+        # This would require WebSocket connection tracking
+        
+        return new_message
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/chat/rooms/{chat_room_id}/read")
+async def mark_messages_as_read(
+    chat_room_id: str,
+    data: MarkAsReadRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Mark messages as read"""
+    try:
+        # Verify token
+        decode_token(credentials.credentials)
+        
+        db.mark_messages_as_read(chat_room_id, data.message_ids)
+        return {"success": True}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/chat/rooms")
+async def get_user_chat_rooms(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Get all chat rooms for the authenticated user"""
+    try:
+        # Verify token
+        payload = decode_token(credentials.credentials)
+        user_email = payload.get("sub")
+        
+        # Determine user type and ID
+        if user_email in users_db:
+            user = users_db[user_email]
+            user_id = user.get("id", 1)
+            user_type = "customer"
+        elif user_email in riders_db:
+            rider = riders_db[user_email]
+            user_id = rider.get("id", 1)
+            user_type = "rider"
+        else:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        chat_rooms = db.get_user_chat_rooms(user_id, user_type)
+        return chat_rooms
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/chat/rooms/{chat_room_id}/close")
+async def close_chat_room(chat_room_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Close a chat room"""
+    try:
+        # Verify token
+        decode_token(credentials.credentials)
+        
+        db.close_chat_room(chat_room_id)
+        return {"success": True, "message": "Chat room closed"}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ========================
 # SERVER INITIALIZATION
 # ========================
 
@@ -2814,10 +3216,18 @@ if __name__ == "__main__":
                 "total_deliveries": i * 50,
                 "successful_deliveries": i * 48,
                 "earnings": i * 500.0,
+                "commission_rate": 0.8,
+                "delivery_fee": 10.0,
                 "created_at": utc_now().isoformat(),
                 "updated_at": utc_now().isoformat(),
                 "is_verified": True,
-                "is_active": True
+                "is_active": True,
+                "is_suspended": False,
+                "verification_date": utc_now().isoformat(),
+                "verification_notes": "Default rider - auto-verified",
+                "document_status": "approved",
+                "suspension_date": None,
+                "suspension_reason": None
             }
             riders_db[rider_email] = rider_user
     

@@ -248,7 +248,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               <TouchableOpacity
                 style={styles.demoButton}
                 onPress={() => {
-                  setFormData({ email: 'demo@test.com', password: 'demo123' });
+                  setFormData({ email: 'newuser@gasfill.com', password: 'test123' });
                   setToast({ visible: true, message: 'Demo mode enabled', type: 'info' });
                 }}
               >

@@ -29,14 +29,12 @@ class ChatService {
       });
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => response.statusText);
-        console.warn('[ChatService] Chat API not available:', response.status, errorText);
         throw new Error(`API Error: ${response.status}`);
       }
 
       return await response.json();
     } catch (error) {
-      console.log('[ChatService] Using mock chat room (API not available)');
+      console.log('[ChatService] Chat API not available, using mock chat room');
       
       // Fallback to mock data
       const mockRoom: ChatRoom = {
