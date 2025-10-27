@@ -207,6 +207,7 @@ class OrderCreate(BaseModel):
     customer_email: Optional[str] = None
     customer_phone: Optional[str] = None
     customer_address: Optional[str] = None
+    customer_location: Optional[Dict[str, float]] = None  # {latitude, longitude}
     total: float
     delivery_type: Optional[str] = "standard"
 
@@ -690,6 +691,7 @@ async def create_order(order_data: OrderCreate):
         "customer_phone": order_data.customer_phone or "",
         "customer_address": order_data.customer_address or "To be provided",
         "customer_email": order_data.customer_email or "guest",
+        "customer_location": json.dumps(order_data.customer_location) if order_data.customer_location else None,
         "delivery_type": order_data.delivery_type or "standard",
         "total": order_data.total,
         "status": "pending",
@@ -3482,6 +3484,31 @@ try:
                             heading = event_data.get("heading")
                             
                             print(f"[WebSocket] Rider {rider_id} location update for order {order_id}: ({latitude}, {longitude})")
+                            
+                            # Update rider's location in database
+                            try:
+                                location_data = {
+                                    "latitude": latitude,
+                                    "longitude": longitude,
+                                    "accuracy": accuracy,
+                                    "speed": speed,
+                                    "heading": heading,
+                                    "timestamp": data.get("timestamp") or datetime.now().isoformat()
+                                }
+                                
+                                import sqlite3
+                                conn = sqlite3.connect(db.DB_PATH)
+                                cur = conn.cursor()
+                                cur.execute("""
+                                    UPDATE riders 
+                                    SET location = ?, updated_at = ?
+                                    WHERE id = ?
+                                """, (json.dumps(location_data), datetime.now().isoformat(), rider_id))
+                                conn.commit()
+                                conn.close()
+                                print(f"[WebSocket] ✅ Updated rider {rider_id} location in database")
+                            except Exception as e:
+                                print(f"[WebSocket] ❌ Error updating rider location in DB: {e}")
                             
                             # Broadcast to all clients (customers can filter by order_id)
                             await manager.broadcast(json.dumps({
