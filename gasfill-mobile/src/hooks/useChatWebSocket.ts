@@ -61,13 +61,25 @@ export const useChatWebSocket = ({
     console.log('[useChatWebSocket] Subscribing to chat_message events for room:', chatRoomId);
 
     const unsubscribe = subscribe('chat_message', (data: ChatMessage) => {
-      console.log('[useChatWebSocket] Received chat_message event:', data);
-      console.log('[useChatWebSocket] Checking: data.chat_room_id =', data.chat_room_id, 'vs chatRoomId =', chatRoomId);
-      console.log('[useChatWebSocket] Checking: data.sender_id =', data.sender_id, 'vs userId =', userId);
+      console.log('[useChatWebSocket] 📨 RAW MESSAGE RECEIVED:', JSON.stringify(data, null, 2));
+      console.log('[useChatWebSocket] Current user - userId:', userId, 'userType:', userType);
+      console.log('[useChatWebSocket] Message sender - sender_id:', data.sender_id, 'sender_type:', data.sender_type);
+      console.log('[useChatWebSocket] Room check - data.chat_room_id:', data.chat_room_id, 'vs chatRoomId:', chatRoomId);
+      
+      // Check if message is for this room
+      const isCorrectRoom = data.chat_room_id === chatRoomId;
+      console.log('[useChatWebSocket] ✓ Room match:', isCorrectRoom);
+      
+      // Check if message is from another user
+      // A message is from "me" if BOTH sender_id AND sender_type match
+      const isFromMe = (data.sender_id === userId && data.sender_type === userType);
+      const isFromOtherUser = !isFromMe;
+      console.log('[useChatWebSocket] ✓ Is from me:', isFromMe, '(sender matches both ID and type)');
+      console.log('[useChatWebSocket] ✓ From other user:', isFromOtherUser);
       
       // Only handle messages for this chat room from other participant
-      if (data.chat_room_id === chatRoomId && data.sender_id !== userId) {
-        console.log('[useChatWebSocket] ✅ Message accepted - calling onNewMessage');
+      if (isCorrectRoom && isFromOtherUser) {
+        console.log('[useChatWebSocket] ✅✅✅ MESSAGE ACCEPTED - Calling onNewMessage');
         onNewMessage(data);
 
         // Send delivery receipt
@@ -77,7 +89,8 @@ export const useChatWebSocket = ({
           user_id: userId,
         });
       } else {
-        console.log('[useChatWebSocket] ❌ Message rejected - not for this user/room');
+        console.log('[useChatWebSocket] ❌❌❌ MESSAGE REJECTED');
+        console.log('[useChatWebSocket] Rejection reason: isCorrectRoom =', isCorrectRoom, ', isFromOtherUser =', isFromOtherUser);
       }
     });
 

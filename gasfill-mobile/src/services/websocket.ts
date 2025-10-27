@@ -199,13 +199,15 @@ export class WebSocketService {
    * Handle incoming WebSocket message
    */
   private handleMessage(message: WebSocketMessage) {
-    console.log('[WebSocket] Received:', message);
+    console.log('[WebSocket] 🔔 RAW MESSAGE:', JSON.stringify(message, null, 2));
 
     // Handle pong response
     if (message.type === 'pong') {
       return;
     }
 
+    console.log('[WebSocket] 📢 EMITTING EVENT:', message.type, 'with data:', message.data);
+    
     // Emit specific event type
     this.emit(message.type, message.data);
     
