@@ -4,7 +4,7 @@ GasFill Python Backend Server
 A modern FastAPI server for the GasFill LPG delivery application
 """
 
-from fastapi import FastAPI, HTTPException, Depends, status, Request
+from fastapi import FastAPI, HTTPException, Depends, status, Request, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
@@ -339,13 +339,13 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         if email is None:
             return None
         
-        # Check different databases based on role
+        # Check database based on role
         if role == "rider":
-            user = riders_db.get(email)
+            user = db.get_rider_by_email(email)
             if user:
                 user["role"] = "rider"
         else:
-            user = users_db.get(email)
+            user = db.get_user_by_email(email)
         
         return user
     except jwt.PyJWTError:
@@ -370,7 +370,7 @@ def get_current_rider(credentials: HTTPAuthorizationCredentials = Depends(securi
                 detail="Invalid rider token"
             )
         
-        rider = riders_db.get(email)
+        rider = db.get_rider_by_email(email)
         if not rider:
             raise HTTPException(
                 status_code=401,
@@ -400,29 +400,25 @@ async def health_check():
 async def register_user(user_data: UserRegister):
     """Register a new user"""
     # Check if user already exists
-    if user_data.email in users_db:
+    existing_user = db.get_user_by_email(user_data.email)
+    if existing_user:
         raise HTTPException(
             status_code=400,
             detail="User already exists"
         )
     
-    # Create new user
-    user_id = len(users_db) + 1
+    # Create new user in database
     hashed_password = hash_password(user_data.password)
     
-    user = {
-        "id": user_id,
+    user = db.create_user({
         "username": user_data.username,
         "email": user_data.email,
         "password": hashed_password,
         "phone": user_data.phone,
         "address": user_data.address,
         "role": user_data.role,
-        "created_at": utc_now().isoformat(),
         "is_active": True
-    }
-    
-    users_db[user_data.email] = user
+    })
     
     # Create access token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -451,7 +447,7 @@ async def login_user(login_data: dict):
     if not email or not password:
         raise HTTPException(status_code=400, detail="Email and password required")
     
-    user = users_db.get(email)
+    user = db.get_user_by_email(email)
     
     if not user:
         raise HTTPException(
@@ -493,7 +489,7 @@ async def admin_login(admin_data: AdminLogin):
             detail="Invalid admin key"
         )
     
-    user = users_db.get(admin_data.email)
+    user = db.get_user_by_email(admin_data.email)
     
     if not user or not verify_password(admin_data.password, user["password"]):
         raise HTTPException(
@@ -564,10 +560,9 @@ async def list_all_users():
 @app.post("/api/auth/rider-register")
 async def rider_register(rider_data: RiderRegister):
     """Register a new rider"""
-    global rider_counter
-    
     # Check if rider already exists
-    if rider_data.email in riders_db:
+    existing_rider = db.get_rider_by_email(rider_data.email)
+    if existing_rider:
         raise HTTPException(
             status_code=400,
             detail="Rider with this email already exists"
@@ -576,9 +571,8 @@ async def rider_register(rider_data: RiderRegister):
     # Hash password
     hashed_password = hash_password(rider_data.password)
     
-    # Create rider record
-    rider = {
-        "id": rider_counter,
+    # Create rider record in database
+    rider = db.create_rider({
         "username": rider_data.username,
         "email": rider_data.email,
         "password": hashed_password,
@@ -588,20 +582,19 @@ async def rider_register(rider_data: RiderRegister):
         "vehicle_number": rider_data.vehicle_number,
         "emergency_contact": rider_data.emergency_contact,
         "area_coverage": rider_data.area_coverage,
-        "status": "offline",  # "available", "busy", "offline"
+        "status": "offline",
         "location": None,
         "rating": 5.0,
         "total_deliveries": 0,
         "successful_deliveries": 0,
         "earnings": 0.0,
-        "created_at": utc_now().isoformat(),
-        "updated_at": utc_now().isoformat(),
+        "commission_rate": 0.8,
+        "delivery_fee": 10.0,
         "is_verified": False,
-        "is_active": True
-    }
-    
-    riders_db[rider_data.email] = rider
-    rider_counter += 1
+        "is_active": True,
+        "is_suspended": False,
+        "document_status": "pending"
+    })
     
     # Create access token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -626,7 +619,7 @@ async def rider_register(rider_data: RiderRegister):
 @app.post("/api/auth/rider-login")
 async def rider_login(rider_data: RiderLogin):
     """Rider login"""
-    rider = riders_db.get(rider_data.email)
+    rider = db.get_rider_by_email(rider_data.email)
     
     if not rider or not verify_password(rider_data.password, rider["password"]):
         raise HTTPException(
@@ -1350,10 +1343,11 @@ async def get_service_assignments(current_admin: dict = Depends(get_current_admi
 async def get_admin_dashboard(current_admin: dict = Depends(get_current_admin)):
     """Get admin dashboard overview"""
     all_orders = db.get_all_orders()
-    total_users = len(users_db)
+    all_users = db.get_all_users()
+    total_users = len(all_users)
     total_orders = len(all_orders)
     total_services = len(services_db)
-    active_users = len([u for u in users_db.values() if u.get("is_active", True)])
+    active_users = len([u for u in all_users if u.get("is_active", True)])
     pending_orders = len([o for o in all_orders if o["status"] == "pending"])
     pending_services = len([s for s in services_db if s["status"] == "pending"])
     
@@ -1369,7 +1363,7 @@ async def get_admin_dashboard(current_admin: dict = Depends(get_current_admin)):
         "users": {
             "total": total_users,
             "active": active_users,
-            "new_this_month": len([u for u in users_db.values() 
+            "new_this_month": len([u for u in all_users 
                                  if datetime.fromisoformat(u["created_at"]).month == datetime.now().month])
         },
         "orders": {
@@ -1395,11 +1389,14 @@ async def get_admin_dashboard(current_admin: dict = Depends(get_current_admin)):
 @app.get("/api/admin/users")
 async def get_all_users(current_admin: dict = Depends(get_current_admin)):
     """Get all users for admin dashboard"""
+    users = db.get_all_users()
+    all_orders = db.get_all_orders()
+    
     users_list = []
-    for email, user in users_db.items():
+    for user in users:
         # Count user's orders and services
-        user_orders = len([o for o in orders_db if o.get("customer_email") == email])
-        user_services = len([s for s in services_db if s.get("customer_email") == email])
+        user_orders = len([o for o in all_orders if o.get("customer_email") == user["email"]])
+        user_services = len([s for s in services_db if s.get("customer_email") == user["email"]])
         
         users_list.append({
             "id": user["id"],
@@ -1428,14 +1425,17 @@ async def get_all_services(current_admin: dict = Depends(get_current_admin)):
 @app.get("/api/admin/riders")
 async def get_all_riders(current_admin: dict = Depends(get_current_admin)):
     """Get all riders for admin dashboard"""
+    riders = db.get_all_riders()
+    all_orders = db.get_all_orders()
+    
     riders_list = []
-    for email, rider in riders_db.items():
+    for rider in riders:
         # Count rider's deliveries
-        rider_deliveries = len([o for o in orders_db if o.get("rider_id") == rider.get("id") and o.get("status") == "delivered"])
+        rider_deliveries = len([o for o in all_orders if o.get("rider_id") == rider.get("id") and o.get("status") == "delivered"])
         
         riders_list.append({
             "id": rider.get("id"),
-            "email": email,
+            "email": rider.get("email"),
             "username": rider.get("username"),
             "phone": rider.get("phone"),
             "vehicle_type": rider.get("vehicle_type"),
@@ -1460,62 +1460,68 @@ async def get_all_riders(current_admin: dict = Depends(get_current_admin)):
 @app.post("/api/admin/riders/{rider_id}/verify")
 async def verify_rider(rider_id: int, verification_data: dict, current_admin: dict = Depends(get_current_admin)):
     """Verify rider documents and approve for deliveries"""
-    rider = next((r for r in riders_db.values() if r.get("id") == rider_id), None)
+    rider = db.get_rider_by_id(rider_id)
     
     if not rider:
         raise HTTPException(status_code=404, detail="Rider not found")
     
-    rider["is_verified"] = verification_data.get("is_verified", True)
-    rider["verification_date"] = utc_now().isoformat()
-    rider["verification_notes"] = verification_data.get("notes", "")
-    rider["document_status"] = "approved" if verification_data.get("is_verified") else "rejected"
+    # Update rider verification status
+    db.update_rider(rider_id, {
+        "is_verified": verification_data.get("is_verified", True),
+        "verification_date": utc_now().isoformat(),
+        "verification_notes": verification_data.get("notes", ""),
+        "document_status": "approved" if verification_data.get("is_verified") else "rejected"
+    })
+    
+    updated_rider = db.get_rider_by_id(rider_id)
     
     return {
         "message": "Rider verification status updated successfully",
         "rider": {
-            "id": rider["id"],
-            "username": rider["username"],
-            "is_verified": rider["is_verified"],
-            "document_status": rider["document_status"],
-            "verification_date": rider["verification_date"]
+            "id": updated_rider["id"],
+            "username": updated_rider["username"],
+            "is_verified": updated_rider["is_verified"],
+            "document_status": updated_rider["document_status"],
+            "verification_date": updated_rider["verification_date"]
         }
     }
 
 @app.post("/api/admin/riders/{rider_id}/suspend")
 async def suspend_rider(rider_id: int, suspension_data: dict, current_admin: dict = Depends(get_current_admin)):
     """Suspend or reactivate rider account"""
-    rider = next((r for r in riders_db.values() if r.get("id") == rider_id), None)
+    rider = db.get_rider_by_id(rider_id)
     
     if not rider:
         raise HTTPException(status_code=404, detail="Rider not found")
     
     is_suspended = suspension_data.get("is_suspended", True)
-    rider["is_suspended"] = is_suspended
-    rider["is_active"] = not is_suspended
-    rider["status"] = "suspended" if is_suspended else "available"
     
-    if is_suspended:
-        rider["suspension_date"] = utc_now().isoformat()
-        rider["suspension_reason"] = suspension_data.get("reason", "No reason provided")
-    else:
-        rider["suspension_date"] = None
-        rider["suspension_reason"] = None
+    # Update rider suspension status
+    db.update_rider(rider_id, {
+        "is_suspended": is_suspended,
+        "is_active": not is_suspended,
+        "status": "suspended" if is_suspended else "available",
+        "suspension_date": utc_now().isoformat() if is_suspended else None,
+        "suspension_reason": suspension_data.get("reason", "No reason provided") if is_suspended else None
+    })
+    
+    updated_rider = db.get_rider_by_id(rider_id)
     
     return {
         "message": f"Rider {'suspended' if is_suspended else 'reactivated'} successfully",
         "rider": {
-            "id": rider["id"],
-            "username": rider["username"],
-            "status": rider["status"],
-            "is_suspended": rider.get("is_suspended", False),
-            "suspension_reason": rider.get("suspension_reason")
+            "id": updated_rider["id"],
+            "username": updated_rider["username"],
+            "status": updated_rider["status"],
+            "is_suspended": updated_rider.get("is_suspended", False),
+            "suspension_reason": updated_rider.get("suspension_reason")
         }
     }
 
 @app.get("/api/admin/riders/{rider_id}/earnings")
 async def get_rider_earnings(rider_id: int, current_admin: dict = Depends(get_current_admin)):
     """Get detailed rider earnings breakdown"""
-    rider = next((r for r in riders_db.values() if r.get("id") == rider_id), None)
+    rider = db.get_rider_by_id(rider_id)
     
     if not rider:
         raise HTTPException(status_code=404, detail="Rider not found")
@@ -1576,13 +1582,14 @@ async def get_rider_earnings(rider_id: int, current_admin: dict = Depends(get_cu
 @app.get("/api/admin/riders/{rider_id}/performance")
 async def get_rider_performance(rider_id: int, current_admin: dict = Depends(get_current_admin)):
     """Get rider performance metrics and ratings"""
-    rider = next((r for r in riders_db.values() if r.get("id") == rider_id), None)
+    rider = db.get_rider_by_id(rider_id)
     
     if not rider:
         raise HTTPException(status_code=404, detail="Rider not found")
     
     # Get all orders (delivered and others)
-    all_orders = [o for o in orders_db if o.get("rider_id") == rider_id]
+    all_orders_db = db.get_all_orders()
+    all_orders = [o for o in all_orders_db if o.get("rider_id") == rider_id]
     delivered_orders = [o for o in all_orders if o.get("status") == "delivered"]
     cancelled_orders = [o for o in all_orders if o.get("status") == "cancelled"]
     
@@ -1635,7 +1642,7 @@ async def get_rider_performance(rider_id: int, current_admin: dict = Depends(get
 @app.patch("/api/admin/users/{user_id}/status")
 async def update_user_status(user_id: int, status_data: dict, current_admin: dict = Depends(get_current_admin)):
     """Update user status (activate/deactivate)"""
-    user = next((user for user in users_db.values() if user["id"] == user_id), None)
+    user = db.get_user_by_id(user_id)
     
     if not user:
         raise HTTPException(
@@ -1643,8 +1650,10 @@ async def update_user_status(user_id: int, status_data: dict, current_admin: dic
             detail="User not found"
         )
     
-    user["is_active"] = status_data.get("is_active", True)
-    return {"message": "User status updated successfully", "user": user}
+    db.update_user(user_id, {"is_active": status_data.get("is_active", True)})
+    updated_user = db.get_user_by_id(user_id)
+    
+    return {"message": "User status updated successfully", "user": updated_user}
 
 @app.patch("/api/admin/orders/{order_id}/status")
 async def admin_update_order_status(order_id: str, status_update: OrderStatusUpdate, current_admin: dict = Depends(get_current_admin)):
@@ -2839,8 +2848,47 @@ try:
         await manager.connect(websocket)
         try:
             while True:
-                data = await websocket.receive_text()
-                await manager.broadcast(f"Message: {data}")
+                # Receive JSON data instead of plain text
+                data_text = await websocket.receive_text()
+                try:
+                    data = json.loads(data_text)
+                    event_type = data.get("type", "message")
+                    
+                    if event_type == "message":
+                        # Broadcast new message to all connected clients
+                        await manager.broadcast(json.dumps({
+                            "type": "message",
+                            "chat_room_id": data.get("chat_room_id"),
+                            "message": data.get("message"),
+                            "sender_id": data.get("sender_id"),
+                            "sender_type": data.get("sender_type"),
+                            "sender_name": data.get("sender_name"),
+                            "message_type": data.get("message_type", "text"),
+                            "timestamp": data.get("timestamp")
+                        }))
+                    elif event_type == "typing":
+                        # Broadcast typing indicator
+                        await manager.broadcast(json.dumps({
+                            "type": "typing",
+                            "chat_room_id": data.get("chat_room_id"),
+                            "user_id": data.get("user_id"),
+                            "user_name": data.get("user_name"),
+                            "is_typing": data.get("is_typing", True)
+                        }))
+                    elif event_type == "read":
+                        # Broadcast read receipt
+                        await manager.broadcast(json.dumps({
+                            "type": "read",
+                            "chat_room_id": data.get("chat_room_id"),
+                            "message_ids": data.get("message_ids", []),
+                            "user_id": data.get("user_id")
+                        }))
+                except json.JSONDecodeError:
+                    # Fallback to plain text for backward compatibility
+                    await manager.broadcast(json.dumps({
+                        "type": "message",
+                        "message": data_text
+                    }))
         except WebSocketDisconnect:
             manager.disconnect(websocket)
             
@@ -3092,13 +3140,30 @@ async def send_chat_message(message: ChatMessageCreate, credentials: HTTPAuthori
     """Send a new chat message"""
     try:
         # Verify token
-        decode_token(credentials.credentials)
+        current_user = get_current_user(credentials)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
         
         # Create message in database
         new_message = db.create_chat_message(message.dict())
         
-        # TODO: Broadcast via WebSocket to all participants
-        # This would require WebSocket connection tracking
+        # Broadcast via WebSocket to all connected clients
+        try:
+            await manager.broadcast(json.dumps({
+                "type": "message",
+                "chat_room_id": new_message["chat_room_id"],
+                "message_id": new_message["id"],
+                "sender_id": new_message["sender_id"],
+                "sender_type": new_message["sender_type"],
+                "sender_name": new_message["sender_name"],
+                "message": new_message["message"],
+                "message_type": new_message["message_type"],
+                "image_url": new_message.get("image_url"),
+                "location_data": new_message.get("location_data"),
+                "created_at": new_message["created_at"]
+            }))
+        except Exception as ws_error:
+            print(f"WebSocket broadcast error: {ws_error}")
         
         return new_message
     
@@ -3114,9 +3179,23 @@ async def mark_messages_as_read(
     """Mark messages as read"""
     try:
         # Verify token
-        decode_token(credentials.credentials)
+        current_user = get_current_user(credentials)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
         
         db.mark_messages_as_read(chat_room_id, data.message_ids)
+        
+        # Broadcast read receipt via WebSocket
+        try:
+            await manager.broadcast(json.dumps({
+                "type": "read",
+                "chat_room_id": chat_room_id,
+                "message_ids": data.message_ids,
+                "user_id": current_user["id"]
+            }))
+        except Exception as ws_error:
+            print(f"WebSocket broadcast error: {ws_error}")
+        
         return {"success": True}
     
     except Exception as e:
@@ -3153,13 +3232,70 @@ async def close_chat_room(chat_room_id: str, credentials: HTTPAuthorizationCrede
     """Close a chat room"""
     try:
         # Verify token
-        decode_token(credentials.credentials)
+        current_user = get_current_user(credentials)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
         
         db.close_chat_room(chat_room_id)
         return {"success": True, "message": "Chat room closed"}
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/chat/upload-image")
+async def upload_chat_image(
+    file: UploadFile = File(...),
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Upload an image for chat"""
+    try:
+        # Verify token
+        current_user = get_current_user(credentials)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        # Validate file type
+        allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+        if file.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file type. Allowed: {', '.join(allowed_types)}"
+            )
+        
+        # Validate file size (max 5MB)
+        max_size = 5 * 1024 * 1024  # 5MB in bytes
+        contents = await file.read()
+        if len(contents) > max_size:
+            raise HTTPException(
+                status_code=400,
+                detail="File size exceeds 5MB limit"
+            )
+        
+        # Create uploads directory if it doesn't exist
+        upload_dir = Path(__file__).parent / "uploads" / "chat"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename
+        file_extension = Path(file.filename).suffix
+        unique_filename = f"chat_{utc_now().strftime('%Y%m%d_%H%M%S')}_{current_user['id']}{file_extension}"
+        file_path = upload_dir / unique_filename
+        
+        # Save file
+        with open(file_path, "wb") as f:
+            f.write(contents)
+        
+        # Return URL
+        image_url = f"/uploads/chat/{unique_filename}"
+        return {
+            "success": True,
+            "image_url": image_url,
+            "filename": unique_filename
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 # ========================
 # SERVER INITIALIZATION
@@ -3175,21 +3311,19 @@ if __name__ == "__main__":
     # Clear in-memory orders after migration
     orders_db.clear()
     
-    # Create default admin user if none exists
+    # Create default admin user if none exists in database
     admin_email = "admin@gasfill.com"
-    if admin_email not in users_db:
-        admin_user = {
-            "id": 999999,  # Special admin ID
+    existing_admin = db.get_user_by_email(admin_email)
+    if not existing_admin:
+        db.create_user({
             "username": "admin",
             "email": admin_email,
             "password": hash_password("admin123"),  # Default admin password
             "phone": "+233200000000",
             "address": "GasFill HQ, Accra",
             "role": "admin",
-            "created_at": utc_now().isoformat(),
             "is_active": True
-        }
-        users_db[admin_email] = admin_user
+        })
         print("✅ Default admin user created:")
         print(f"   Email: {admin_email}")
         print(f"   Password: admin123")
@@ -3198,9 +3332,9 @@ if __name__ == "__main__":
     # Create default rider users for testing
     rider_emails = ["rider1@gasfill.com", "rider2@gasfill.com"]
     for i, rider_email in enumerate(rider_emails, 1):
-        if rider_email not in riders_db:
-            rider_user = {
-                "id": 1000 + i,
+        existing_rider = db.get_rider_by_email(rider_email)
+        if not existing_rider:
+            db.create_rider({
                 "username": f"rider{i}",
                 "email": rider_email,
                 "password": hash_password("rider123"),
@@ -3218,8 +3352,6 @@ if __name__ == "__main__":
                 "earnings": i * 500.0,
                 "commission_rate": 0.8,
                 "delivery_fee": 10.0,
-                "created_at": utc_now().isoformat(),
-                "updated_at": utc_now().isoformat(),
                 "is_verified": True,
                 "is_active": True,
                 "is_suspended": False,
@@ -3228,8 +3360,7 @@ if __name__ == "__main__":
                 "document_status": "approved",
                 "suspension_date": None,
                 "suspension_reason": None
-            }
-            riders_db[rider_email] = rider_user
+            })
     
     if rider_emails:
         print("✅ Default rider users created:")

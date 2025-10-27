@@ -11,6 +11,56 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     
+    # Users table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            phone TEXT,
+            role TEXT DEFAULT 'user',
+            address TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    ''')
+    
+    # Riders table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS riders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            phone TEXT,
+            license_number TEXT,
+            vehicle_type TEXT,
+            vehicle_number TEXT,
+            emergency_contact TEXT,
+            area_coverage TEXT,
+            status TEXT DEFAULT 'offline',
+            location TEXT,
+            rating REAL DEFAULT 0.0,
+            total_deliveries INTEGER DEFAULT 0,
+            successful_deliveries INTEGER DEFAULT 0,
+            earnings REAL DEFAULT 0.0,
+            commission_rate REAL DEFAULT 0.8,
+            delivery_fee REAL DEFAULT 10.0,
+            is_verified INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1,
+            is_suspended INTEGER DEFAULT 0,
+            verification_date TEXT,
+            verification_notes TEXT,
+            document_status TEXT DEFAULT 'pending',
+            suspension_date TEXT,
+            suspension_reason TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    ''')
+    
     # Orders table
     cur.execute('''
         CREATE TABLE IF NOT EXISTS orders (
@@ -81,6 +131,9 @@ def init_db():
     ''')
     
     # Create indexes for better query performance
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_riders_email ON riders(email)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_riders_status ON riders(status)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_chat_rooms_order ON chat_rooms(order_id)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(chat_room_id)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_created ON chat_messages(created_at)')
@@ -492,3 +545,361 @@ def close_chat_room(chat_room_id: str) -> None:
     
     conn.commit()
     conn.close()
+
+# ==================== USER FUNCTIONS ====================
+
+def create_user(user_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a new user in the database"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    now = datetime.now(UTC).isoformat()
+    
+    cur.execute('''
+        INSERT INTO users (username, email, password, phone, role, address, is_active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        user_data.get('username'),
+        user_data.get('email'),
+        user_data.get('password'),
+        user_data.get('phone'),
+        user_data.get('role', 'user'),
+        user_data.get('address'),
+        user_data.get('is_active', 1),
+        user_data.get('created_at', now),
+        user_data.get('updated_at', now)
+    ))
+    
+    user_id = cur.lastrowid
+    conn.commit()
+    
+    # Fetch and return the created user
+    cur.execute('SELECT * FROM users WHERE id=?', (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    
+    return {
+        'id': row['id'],
+        'username': row['username'],
+        'email': row['email'],
+        'password': row['password'],
+        'phone': row['phone'],
+        'role': row['role'],
+        'address': row['address'],
+        'is_active': bool(row['is_active']),
+        'created_at': row['created_at'],
+        'updated_at': row['updated_at']
+    }
+
+def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+    """Get user by email"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    cur.execute('SELECT * FROM users WHERE email=?', (email,))
+    row = cur.fetchone()
+    conn.close()
+    
+    if not row:
+        return None
+    
+    return {
+        'id': row['id'],
+        'username': row['username'],
+        'email': row['email'],
+        'password': row['password'],
+        'phone': row['phone'],
+        'role': row['role'],
+        'address': row['address'],
+        'is_active': bool(row['is_active']),
+        'created_at': row['created_at'],
+        'updated_at': row['updated_at']
+    }
+
+def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
+    """Get user by ID"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    cur.execute('SELECT * FROM users WHERE id=?', (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    
+    if not row:
+        return None
+    
+    return {
+        'id': row['id'],
+        'username': row['username'],
+        'email': row['email'],
+        'password': row['password'],
+        'phone': row['phone'],
+        'role': row['role'],
+        'address': row['address'],
+        'is_active': bool(row['is_active']),
+        'created_at': row['created_at'],
+        'updated_at': row['updated_at']
+    }
+
+def get_all_users() -> List[Dict[str, Any]]:
+    """Get all users"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    cur.execute('SELECT * FROM users ORDER BY created_at DESC')
+    rows = cur.fetchall()
+    conn.close()
+    
+    return [
+        {
+            'id': row['id'],
+            'username': row['username'],
+            'email': row['email'],
+            'password': row['password'],
+            'phone': row['phone'],
+            'role': row['role'],
+            'address': row['address'],
+            'is_active': bool(row['is_active']),
+            'created_at': row['created_at'],
+            'updated_at': row['updated_at']
+        }
+        for row in rows
+    ]
+
+def update_user(user_id: int, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Update user data"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    now = datetime.now(UTC).isoformat()
+    
+    # Build dynamic UPDATE query
+    fields = []
+    values = []
+    
+    for key in ['username', 'phone', 'address', 'is_active']:
+        if key in update_data:
+            fields.append(f'{key}=?')
+            values.append(update_data[key])
+    
+    if not fields:
+        return get_user_by_id(user_id)
+    
+    fields.append('updated_at=?')
+    values.append(now)
+    values.append(user_id)
+    
+    query = f'UPDATE users SET {", ".join(fields)} WHERE id=?'
+    cur.execute(query, values)
+    conn.commit()
+    conn.close()
+    
+    return get_user_by_id(user_id)
+
+def delete_user(user_id: int) -> bool:
+    """Delete user (soft delete by setting is_active=0)"""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    now = datetime.now(UTC).isoformat()
+    
+    cur.execute('UPDATE users SET is_active=0, updated_at=? WHERE id=?', (now, user_id))
+    conn.commit()
+    affected = cur.rowcount
+    conn.close()
+    
+    return affected > 0
+
+# ==================== RIDER FUNCTIONS ====================
+
+def create_rider(rider_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a new rider in the database"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    now = datetime.now(UTC).isoformat()
+    
+    cur.execute('''
+        INSERT INTO riders (
+            username, email, password, phone, license_number, vehicle_type, 
+            vehicle_number, emergency_contact, area_coverage, status, location,
+            rating, total_deliveries, successful_deliveries, earnings,
+            commission_rate, delivery_fee, is_verified, is_active, is_suspended,
+            verification_date, verification_notes, document_status,
+            suspension_date, suspension_reason, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        rider_data.get('username'),
+        rider_data.get('email'),
+        rider_data.get('password'),
+        rider_data.get('phone'),
+        rider_data.get('license_number'),
+        rider_data.get('vehicle_type'),
+        rider_data.get('vehicle_number'),
+        rider_data.get('emergency_contact'),
+        rider_data.get('area_coverage'),
+        rider_data.get('status', 'offline'),
+        rider_data.get('location'),
+        rider_data.get('rating', 0.0),
+        rider_data.get('total_deliveries', 0),
+        rider_data.get('successful_deliveries', 0),
+        rider_data.get('earnings', 0.0),
+        rider_data.get('commission_rate', 0.8),
+        rider_data.get('delivery_fee', 10.0),
+        rider_data.get('is_verified', 0),
+        rider_data.get('is_active', 1),
+        rider_data.get('is_suspended', 0),
+        rider_data.get('verification_date'),
+        rider_data.get('verification_notes'),
+        rider_data.get('document_status', 'pending'),
+        rider_data.get('suspension_date'),
+        rider_data.get('suspension_reason'),
+        rider_data.get('created_at', now),
+        rider_data.get('updated_at', now)
+    ))
+    
+    rider_id = cur.lastrowid
+    conn.commit()
+    
+    # Fetch and return the created rider
+    cur.execute('SELECT * FROM riders WHERE id=?', (rider_id,))
+    row = cur.fetchone()
+    conn.close()
+    
+    return _row_to_rider(row)
+
+def get_rider_by_email(email: str) -> Optional[Dict[str, Any]]:
+    """Get rider by email"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    cur.execute('SELECT * FROM riders WHERE email=?', (email,))
+    row = cur.fetchone()
+    conn.close()
+    
+    if not row:
+        return None
+    
+    return _row_to_rider(row)
+
+def get_rider_by_id(rider_id: int) -> Optional[Dict[str, Any]]:
+    """Get rider by ID"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    cur.execute('SELECT * FROM riders WHERE id=?', (rider_id,))
+    row = cur.fetchone()
+    conn.close()
+    
+    if not row:
+        return None
+    
+    return _row_to_rider(row)
+
+def get_all_riders() -> List[Dict[str, Any]]:
+    """Get all riders"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    cur.execute('SELECT * FROM riders ORDER BY created_at DESC')
+    rows = cur.fetchall()
+    conn.close()
+    
+    return [_row_to_rider(row) for row in rows]
+
+def update_rider(rider_id: int, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Update rider data"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    now = datetime.now(UTC).isoformat()
+    
+    # Build dynamic UPDATE query
+    fields = []
+    values = []
+    
+    allowed_fields = [
+        'username', 'phone', 'license_number', 'vehicle_type', 'vehicle_number',
+        'emergency_contact', 'area_coverage', 'status', 'location', 'rating',
+        'total_deliveries', 'successful_deliveries', 'earnings', 'commission_rate',
+        'delivery_fee', 'is_verified', 'is_active', 'is_suspended',
+        'verification_date', 'verification_notes', 'document_status',
+        'suspension_date', 'suspension_reason'
+    ]
+    
+    for key in allowed_fields:
+        if key in update_data:
+            fields.append(f'{key}=?')
+            values.append(update_data[key])
+    
+    if not fields:
+        return get_rider_by_id(rider_id)
+    
+    fields.append('updated_at=?')
+    values.append(now)
+    values.append(rider_id)
+    
+    query = f'UPDATE riders SET {", ".join(fields)} WHERE id=?'
+    cur.execute(query, values)
+    conn.commit()
+    conn.close()
+    
+    return get_rider_by_id(rider_id)
+
+def update_rider_status(rider_id: int, status: str, location: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Update rider status and location"""
+    update_data = {'status': status}
+    if location is not None:
+        update_data['location'] = location
+    return update_rider(rider_id, update_data)
+
+def delete_rider(rider_id: int) -> bool:
+    """Delete rider (soft delete by setting is_active=0)"""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    now = datetime.now(UTC).isoformat()
+    
+    cur.execute('UPDATE riders SET is_active=0, updated_at=? WHERE id=?', (now, rider_id))
+    conn.commit()
+    affected = cur.rowcount
+    conn.close()
+    
+    return affected > 0
+
+def _row_to_rider(row: sqlite3.Row) -> Dict[str, Any]:
+    """Convert SQLite row to rider dict"""
+    return {
+        'id': row['id'],
+        'username': row['username'],
+        'email': row['email'],
+        'password': row['password'],
+        'phone': row['phone'],
+        'license_number': row['license_number'],
+        'vehicle_type': row['vehicle_type'],
+        'vehicle_number': row['vehicle_number'],
+        'emergency_contact': row['emergency_contact'],
+        'area_coverage': row['area_coverage'],
+        'status': row['status'],
+        'location': row['location'],
+        'rating': row['rating'],
+        'total_deliveries': row['total_deliveries'],
+        'successful_deliveries': row['successful_deliveries'],
+        'earnings': row['earnings'],
+        'commission_rate': row['commission_rate'],
+        'delivery_fee': row['delivery_fee'],
+        'is_verified': bool(row['is_verified']),
+        'is_active': bool(row['is_active']),
+        'is_suspended': bool(row['is_suspended']),
+        'verification_date': row['verification_date'],
+        'verification_notes': row['verification_notes'],
+        'document_status': row['document_status'],
+        'suspension_date': row['suspension_date'],
+        'suspension_reason': row['suspension_reason'],
+        'created_at': row['created_at'],
+        'updated_at': row['updated_at']
+    }
