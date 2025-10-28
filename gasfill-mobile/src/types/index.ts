@@ -113,6 +113,14 @@ export interface OrderCreateRequest {
   customer_address?: string;
   total: number;
   delivery_type?: string;
+  delivery_location?: {
+    lat: number;
+    lng: number;
+  };
+  customer_location?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 // Pickup/Refill Service Types

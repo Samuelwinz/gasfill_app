@@ -10,9 +10,12 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import * as Location from 'expo-location';
 import { useNavigation } from '@react-navigation/native';
 import { StorageService } from '../utils/storage';
 import { OrderCreateRequest, OrderItem, PaystackPayment } from '../types';
@@ -23,6 +26,149 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import Toast from '../components/Toast';
 import Loading from '../components/Loading';
+
+interface LocationPickerModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onConfirm: (location: { lat: number; lng: number }) => void;
+  initialLocation?: { lat: number; lng: number } | null;
+}
+
+const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
+  visible,
+  onClose,
+  onConfirm,
+  initialLocation,
+}) => {
+  const [selectedLocation, setSelectedLocation] = useState(
+    initialLocation || { lat: 5.6037, lng: -0.1870 } // Default to Accra, Ghana
+  );
+  const [loading, setLoading] = useState(false);
+  const mapRef = React.useRef<MapView>(null);
+
+  useEffect(() => {
+    if (visible && !initialLocation) {
+      getCurrentLocation();
+    }
+  }, [visible]);
+
+  const getCurrentLocation = async () => {
+    try {
+      setLoading(true);
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      
+      const newLocation = {
+        lat: location.coords.latitude,
+        lng: location.coords.longitude,
+      };
+      
+      setSelectedLocation(newLocation);
+      
+      // Animate map to current location
+      if (mapRef.current) {
+        mapRef.current.animateToRegion({
+          latitude: newLocation.lat,
+          longitude: newLocation.lng,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        });
+      }
+    } catch (error) {
+      console.error('Error getting current location:', error);
+      Alert.alert('Location Error', 'Could not get your current location');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMapPress = (event: any) => {
+    const { latitude, longitude } = event.nativeEvent.coordinate;
+    setSelectedLocation({ lat: latitude, lng: longitude });
+  };
+
+  const handleConfirm = () => {
+    onConfirm(selectedLocation);
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+        {/* Header */}
+        <View style={locationPickerStyles.header}>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={28} color="#111827" />
+          </TouchableOpacity>
+          <Text style={locationPickerStyles.headerTitle}>Pin Your Location</Text>
+          <TouchableOpacity onPress={getCurrentLocation} disabled={loading}>
+            <Ionicons name="locate" size={24} color="#3b82f6" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Map */}
+        <MapView
+          ref={mapRef}
+          style={{ flex: 1 }}
+          provider={PROVIDER_DEFAULT}
+          initialRegion={{
+            latitude: selectedLocation.lat,
+            longitude: selectedLocation.lng,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }}
+          onPress={handleMapPress}
+        >
+          <Marker
+            coordinate={{
+              latitude: selectedLocation.lat,
+              longitude: selectedLocation.lng,
+            }}
+            draggable
+            onDragEnd={handleMapPress}
+          >
+            <View style={locationPickerStyles.markerContainer}>
+              <Ionicons name="location" size={40} color="#dc2626" />
+            </View>
+          </Marker>
+        </MapView>
+
+        {/* Bottom Card */}
+        <View style={locationPickerStyles.bottomCard}>
+          <View style={locationPickerStyles.coordinatesContainer}>
+            <Ionicons name="location-outline" size={20} color="#6b7280" />
+            <Text style={locationPickerStyles.coordinatesText}>
+              {selectedLocation.lat.toFixed(6)}, {selectedLocation.lng.toFixed(6)}
+            </Text>
+          </View>
+          
+          <Text style={locationPickerStyles.instructionText}>
+            Tap or drag the marker to adjust your delivery location
+          </Text>
+
+          <TouchableOpacity
+            style={locationPickerStyles.confirmButton}
+            onPress={handleConfirm}
+          >
+            <Ionicons name="checkmark-circle" size={24} color="#ffffff" />
+            <Text style={locationPickerStyles.confirmButtonText}>Confirm Location</Text>
+          </TouchableOpacity>
+        </View>
+
+        {loading && (
+          <View style={locationPickerStyles.loadingOverlay}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={locationPickerStyles.loadingText}>Getting your location...</Text>
+          </View>
+        )}
+      </SafeAreaView>
+    </Modal>
+  );
+};
 
 const CheckoutScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -38,6 +184,8 @@ const CheckoutScreen: React.FC = () => {
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+  const [deliveryLocation, setDeliveryLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [deliveryType, setDeliveryType] = useState<'standard' | 'express'>('standard');
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'mobile_money'>('card');
 
@@ -83,6 +231,34 @@ const CheckoutScreen: React.FC = () => {
 
   const getTotalAmount = () => {
     return getSubtotal() + getDeliveryFee();
+  };
+
+  const handleOpenLocationPicker = async () => {
+    try {
+      // Request location permissions
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Please enable location permissions to pin your location');
+        return;
+      }
+
+      setShowLocationPicker(true);
+    } catch (error) {
+      console.error('Error opening location picker:', error);
+      Alert.alert('Error', 'Failed to open location picker');
+    }
+  };
+
+  const handleConfirmLocation = (location: { lat: number; lng: number }) => {
+    setDeliveryLocation(location);
+    setShowLocationPicker(false);
+    
+    // Show success message
+    setToast({
+      visible: true,
+      message: 'Location pinned successfully!',
+      type: 'success',
+    });
   };
 
   const validateForm = (): boolean => {
@@ -155,6 +331,10 @@ const CheckoutScreen: React.FC = () => {
         customer_address: customerAddress,
         total: totalAmount,
         delivery_type: deliveryType,
+        ...(deliveryLocation && {
+          delivery_location: deliveryLocation,
+          customer_location: deliveryLocation,
+        }),
       };
 
       try {
@@ -417,7 +597,16 @@ const CheckoutScreen: React.FC = () => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Delivery Address *</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.inputLabel}>Delivery Address *</Text>
+                <TouchableOpacity 
+                  style={styles.pinLocationButton}
+                  onPress={handleOpenLocationPicker}
+                >
+                  <Ionicons name="location" size={16} color="#3b82f6" />
+                  <Text style={styles.pinLocationText}>Pin Location</Text>
+                </TouchableOpacity>
+              </View>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={customerAddress}
@@ -427,6 +616,14 @@ const CheckoutScreen: React.FC = () => {
                 multiline
                 numberOfLines={3}
               />
+              {deliveryLocation && (
+                <View style={styles.locationPinned}>
+                  <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                  <Text style={styles.locationPinnedText}>
+                    Location pinned: {deliveryLocation.lat.toFixed(5)}, {deliveryLocation.lng.toFixed(5)}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -509,6 +706,14 @@ const CheckoutScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Location Picker Modal */}
+      <LocationPickerModal
+        visible={showLocationPicker}
+        onClose={() => setShowLocationPicker(false)}
+        onConfirm={handleConfirmLocation}
+        initialLocation={deliveryLocation}
+      />
     </SafeAreaView>
   );
 };
@@ -793,6 +998,126 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     fontWeight: '700',
+  },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  pinLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+  },
+  pinLocationText: {
+    fontSize: 14,
+    color: '#3b82f6',
+    fontWeight: '600',
+  },
+  locationPinned: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#10b981',
+  },
+  locationPinnedText: {
+    fontSize: 13,
+    color: '#059669',
+    fontWeight: '500',
+  },
+});
+
+const locationPickerStyles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  markerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomCard: {
+    backgroundColor: '#ffffff',
+    padding: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  coordinatesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+  },
+  coordinatesText: {
+    fontSize: 14,
+    color: '#374151',
+    fontFamily: 'monospace',
+  },
+  instructionText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  confirmButton: {
+    flexDirection: 'row',
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  confirmButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
