@@ -18,6 +18,7 @@ import { useWebSocketEvent } from '../context/WebSocketContext';
 import locationTrackingService from '../services/locationTracking';
 import Loading from '../components/Loading';
 import ErrorDisplay from '../components/ErrorDisplay';
+import OrderRatingModal from '../components/OrderRatingModal';
 
 interface TrackingScreenProps {
   navigation: any;
@@ -68,6 +69,7 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
   const [liveTracking, setLiveTracking] = useState(false); // Shows if receiving live updates
   const [eta, setEta] = useState<string | null>(null);
   const [distance, setDistance] = useState<string | null>(null);
+  const [showRatingModal, setShowRatingModal] = useState(false);
   const mapRef = useRef<MapView>(null);
   const orderId = route.params?.orderId;
   const isLoadingRef = useRef(false);
@@ -227,6 +229,25 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
           },
         ]
       );
+    }
+  };
+
+  const handleRatingSubmit = async (rating: number, comment: string) => {
+    try {
+      await apiService.createRating({
+        order_id: orderId || '',
+        rating,
+        comment
+      });
+      
+      Alert.alert('Success', 'Thank you for your rating!');
+      setShowRatingModal(false);
+      
+      // Refresh tracking data to get updated rating
+      await loadTrackingData();
+    } catch (error) {
+      console.error('Error submitting rating:', error);
+      Alert.alert('Error', 'Failed to submit rating. Please try again.');
     }
   };
 
@@ -550,7 +571,27 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
             </>
           )}
         </View>
+
+        {/* Rate Rider Button - Only show for delivered orders */}
+        {trackingData.status.toLowerCase() === 'delivered' && (
+          <TouchableOpacity
+            style={styles.rateRiderButton}
+            onPress={() => setShowRatingModal(true)}
+          >
+            <Ionicons name="star" size={20} color="#FFD700" />
+            <Text style={styles.rateRiderButtonText}>Rate Your Rider</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
+
+      {/* Rating Modal */}
+      <OrderRatingModal
+        visible={showRatingModal}
+        onClose={() => setShowRatingModal(false)}
+        onSubmit={handleRatingSubmit}
+        orderId={orderId || ''}
+        riderName={trackingData.rider_name || 'Your Rider'}
+      />
     </SafeAreaView>
   );
 };
@@ -969,6 +1010,22 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#111827',
+  },
+  rateRiderButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 16,
+    marginVertical: 16,
+    gap: 8,
+  },
+  rateRiderButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

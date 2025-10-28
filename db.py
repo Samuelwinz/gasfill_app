@@ -2,7 +2,7 @@ import sqlite3
 import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from datetime import datetime, UTC
+from datetime import datetime, timedelta, UTC
 
 DB_PATH = Path(__file__).parent / 'gasfill.db'
 
@@ -81,7 +81,13 @@ def init_db():
             tracking_info TEXT,
             status_history TEXT,
             tracking_updates TEXT,
-            estimated_delivery TEXT
+            estimated_delivery TEXT,
+            assignment_expires_at TEXT,
+            assignment_attempts INTEGER DEFAULT 0,
+            assigned_riders TEXT,
+            customer_location TEXT,
+            distance_km REAL,
+            estimated_time_minutes INTEGER
         )
     ''')
     
@@ -1009,6 +1015,233 @@ def delete_rider(rider_id: int) -> bool:
     conn.close()
     
     return affected > 0
+
+def get_available_riders() -> List[Dict[str, Any]]:
+    """Get all riders with status 'available' who are active and verified"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    cur.execute('''
+        SELECT * FROM riders 
+        WHERE status='available' 
+        AND is_active=1 
+        AND is_verified=1 
+        AND is_suspended=0
+        ORDER BY rating DESC, total_deliveries DESC
+    ''')
+    rows = cur.fetchall()
+    conn.close()
+    
+    return [_row_to_rider(row) for row in rows]
+
+def get_riders_by_status(status: str) -> List[Dict[str, Any]]:
+    """Get all riders with a specific status"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    cur.execute('SELECT * FROM riders WHERE status=? AND is_active=1', (status,))
+    rows = cur.fetchall()
+    conn.close()
+    
+    return [_row_to_rider(row) for row in rows]
+
+def assign_order_to_rider(
+    order_id: str, 
+    rider_id: int, 
+    distance_km: float = None, 
+    estimated_time_minutes: int = None,
+    expires_in_seconds: int = 30
+) -> Optional[Dict[str, Any]]:
+    """Assign an order to a rider with timeout"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    now = datetime.now(UTC)
+    expires_at = (now + timedelta(seconds=expires_in_seconds)).isoformat()
+    
+    try:
+        # Get current assignment attempts and assigned riders
+        cur.execute('SELECT assignment_attempts, assigned_riders FROM orders WHERE id=?', (order_id,))
+        row = cur.fetchone()
+        
+        if not row:
+            conn.close()
+            return None
+        
+        attempts = (row['assignment_attempts'] or 0) + 1
+        assigned_riders_str = row['assigned_riders'] or ''
+        assigned_riders_list = assigned_riders_str.split(',') if assigned_riders_str else []
+        assigned_riders_list.append(str(rider_id))
+        new_assigned_riders = ','.join(assigned_riders_list)
+        
+        # Update order with assignment
+        cur.execute('''
+            UPDATE orders 
+            SET rider_id=?, 
+                status='assigned',
+                assignment_expires_at=?,
+                assignment_attempts=?,
+                assigned_riders=?,
+                distance_km=?,
+                estimated_time_minutes=?,
+                updated_at=?
+            WHERE id=?
+        ''', (
+            rider_id, 
+            expires_at, 
+            attempts, 
+            new_assigned_riders,
+            distance_km,
+            estimated_time_minutes,
+            now.isoformat(), 
+            order_id
+        ))
+        
+        # Update rider status to busy
+        cur.execute('UPDATE riders SET status=?, updated_at=? WHERE id=?', ('busy', now.isoformat(), rider_id))
+        
+        conn.commit()
+        
+        # Fetch and return updated order
+        cur.execute('SELECT * FROM orders WHERE id=?', (order_id,))
+        updated_row = cur.fetchone()
+        conn.close()
+        
+        return _row_to_order(updated_row) if updated_row else None
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error assigning order: {e}")
+        return None
+
+def accept_order_assignment(order_id: str, rider_id: int) -> Optional[Dict[str, Any]]:
+    """Rider accepts the order assignment"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    now = datetime.now(UTC).isoformat()
+    
+    try:
+        # Verify the order is assigned to this rider
+        cur.execute('SELECT * FROM orders WHERE id=? AND rider_id=?', (order_id, rider_id))
+        row = cur.fetchone()
+        
+        if not row:
+            conn.close()
+            return None
+        
+        # Clear assignment timeout
+        cur.execute('''
+            UPDATE orders 
+            SET assignment_expires_at=NULL,
+                updated_at=?
+            WHERE id=?
+        ''', (now, order_id))
+        
+        conn.commit()
+        
+        # Fetch and return updated order
+        cur.execute('SELECT * FROM orders WHERE id=?', (order_id,))
+        updated_row = cur.fetchone()
+        conn.close()
+        
+        return _row_to_order(updated_row) if updated_row else None
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error accepting order: {e}")
+        return None
+
+def reject_order_assignment(order_id: str, rider_id: int) -> bool:
+    """Rider rejects the order assignment"""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    now = datetime.now(UTC).isoformat()
+    
+    try:
+        # Verify the order is assigned to this rider
+        cur.execute('SELECT rider_id FROM orders WHERE id=?', (order_id,))
+        row = cur.fetchone()
+        
+        if not row or row[0] != rider_id:
+            conn.close()
+            return False
+        
+        # Clear assignment and revert to pending
+        cur.execute('''
+            UPDATE orders 
+            SET rider_id=NULL,
+                status='pending',
+                assignment_expires_at=NULL,
+                updated_at=?
+            WHERE id=?
+        ''', (now, order_id))
+        
+        # Update rider status back to available
+        cur.execute('UPDATE riders SET status=?, updated_at=? WHERE id=?', ('available', now, rider_id))
+        
+        conn.commit()
+        conn.close()
+        return True
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error rejecting order: {e}")
+        return False
+
+def clear_expired_assignments() -> List[str]:
+    """Clear assignments that have timed out, returns list of expired order IDs"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    now = datetime.now(UTC).isoformat()
+    
+    try:
+        # Find expired assignments
+        cur.execute('''
+            SELECT id, rider_id FROM orders 
+            WHERE assignment_expires_at IS NOT NULL 
+            AND assignment_expires_at < ?
+            AND status='assigned'
+        ''', (now,))
+        expired = cur.fetchall()
+        
+        expired_order_ids = []
+        for row in expired:
+            order_id = row['id']
+            rider_id = row['rider_id']
+            
+            # Clear assignment
+            cur.execute('''
+                UPDATE orders 
+                SET rider_id=NULL,
+                    status='pending',
+                    assignment_expires_at=NULL,
+                    updated_at=?
+                WHERE id=?
+            ''', (now, order_id))
+            
+            # Update rider status if they're still busy
+            if rider_id:
+                cur.execute('UPDATE riders SET status=?, updated_at=? WHERE id=? AND status=?', 
+                           ('available', now, rider_id, 'busy'))
+            
+            expired_order_ids.append(order_id)
+        
+        conn.commit()
+        conn.close()
+        return expired_order_ids
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error clearing expired assignments: {e}")
+        return []
 
 def _row_to_rider(row: sqlite3.Row) -> Dict[str, Any]:
     """Convert SQLite row to rider dict"""

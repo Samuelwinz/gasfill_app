@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   StatusBar,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,7 +28,11 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
       <StatusBar barStyle="light-content" />
       <View style={styles.content}>
         <View style={styles.mascotContainer}>
-          <Ionicons name="flame" size={150} color="#FF6F00" />
+          <Image 
+            source={require('../../assets/images/mascot.png')} 
+            style={styles.mascotImage}
+            resizeMode="contain"
+          />
         </View>
         <Text style={styles.title}>
           Fast, Safe & Reliable{'\n'}Gas Refills!
@@ -65,6 +70,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 40,
+  },
+  mascotImage: {
+    width: 200,
+    height: 200,
   },
   title: {
     fontSize: 32,

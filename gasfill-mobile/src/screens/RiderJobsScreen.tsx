@@ -18,6 +18,9 @@ import {
   updateOrderStatus,
   AvailableOrder,
   ActiveOrder,
+  rejectOrder,
+  confirmOrderAssignment,
+  getPendingAssignments,
 } from '../services/riderApi';
 import { useRiderUpdates, useWebSocket } from '../context/WebSocketContext';
 import { useLocationTracking } from '../hooks/useLocationTracking';
@@ -27,6 +30,7 @@ import ErrorDisplay from '../components/ErrorDisplay';
 import RatingModal from '../components/RatingModal';
 import ReviewCard from '../components/ReviewCard';
 import DisputeModal from '../components/DisputeModal';
+import PendingAssignmentCard from '../components/PendingAssignmentCard';
 import { Rating } from '../types/rating';
 import ApiService from '../services/api';
 
@@ -41,6 +45,7 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState<'available' | 'active'>('available');
   const [availableJobs, setAvailableJobs] = useState<AvailableOrder[]>([]);
   const [activeJobs, setActiveJobs] = useState<ActiveOrder[]>([]);
+  const [pendingJobs, setPendingJobs] = useState<ActiveOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +119,17 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
 
   useEffect(() => {
     loadJobs();
+    loadPendingAssignments(); // Also load pending assignments
   }, [activeTab]);
+
+  useEffect(() => {
+    // Poll for pending assignments every 5 seconds
+    const interval = setInterval(() => {
+      loadPendingAssignments();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     // Load ratings when modal opens and order is delivered
@@ -145,6 +160,17 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
     }
   };
 
+  const loadPendingAssignments = async () => {
+    try {
+      const pending = await getPendingAssignments();
+      setPendingJobs(pending);
+      console.log('✅ Pending assignments loaded:', pending.length);
+    } catch (err: any) {
+      console.error('❌ Error loading pending assignments:', err);
+      // Don't show error for pending assignments, fail silently
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadJobs();
@@ -172,6 +198,46 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
       Alert.alert('Error', err.message || 'Failed to accept order');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleAcceptPendingAssignment = async (orderId: number) => {
+    try {
+      const response = await confirmOrderAssignment(orderId);
+      console.log('✅ Assignment confirmed:', response);
+      
+      Alert.alert(
+        'Assignment Accepted!',
+        'You\'ve confirmed the order assignment. Good luck with the delivery!',
+        [{ text: 'OK' }]
+      );
+      
+      // Refresh both lists
+      loadPendingAssignments();
+      loadJobs();
+      setActiveTab('active'); // Switch to active tab
+    } catch (err: any) {
+      console.error('❌ Error accepting assignment:', err);
+      Alert.alert('Error', err.message || 'Failed to accept assignment');
+    }
+  };
+
+  const handleRejectPendingAssignment = async (orderId: number) => {
+    try {
+      const response = await rejectOrder(orderId);
+      console.log('✅ Assignment rejected:', response);
+      
+      Alert.alert(
+        'Assignment Rejected',
+        'The order has been rejected and will be assigned to another rider.',
+        [{ text: 'OK' }]
+      );
+      
+      // Refresh pending list
+      loadPendingAssignments();
+    } catch (err: any) {
+      console.error('❌ Error rejecting assignment:', err);
+      Alert.alert('Error', err.message || 'Failed to reject assignment');
     }
   };
 
@@ -323,10 +389,29 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
             <Text style={styles.earningsAmount}>₵{job.delivery_fee}</Text>
           </View>
           
-          <View style={styles.viewDetails}>
-            <Text style={styles.viewDetailsText}>Tap for details</Text>
-            <Ionicons name="chevron-forward" size={16} color="#6b7280" />
-          </View>
+          {/* Quick Map Button for in_transit orders */}
+          {activeTab === 'active' && (job as ActiveOrder).status === 'in_transit' ? (
+            <TouchableOpacity
+              style={styles.quickMapButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                navigation.navigate('RiderDeliveryMap', {
+                  orderId: job.id,
+                  customerName: job.customer_name,
+                  customerAddress: (job as ActiveOrder).delivery_address,
+                  customerPhone: job.customer_phone,
+                });
+              }}
+            >
+              <Ionicons name="map" size={16} color="#10b981" />
+              <Text style={styles.quickMapText}>Map</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.viewDetails}>
+              <Text style={styles.viewDetailsText}>Tap for details</Text>
+              <Ionicons name="chevron-forward" size={16} color="#6b7280" />
+            </View>
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -433,6 +518,27 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#10b981']} tintColor="#10b981" />
         }
       >
+        {/* Pending Assignments Section */}
+        {pendingJobs.length > 0 && (
+          <View style={styles.pendingSection}>
+            <Text style={styles.pendingSectionTitle}>
+              ⚡ Pending Assignments ({pendingJobs.length})
+            </Text>
+            <Text style={styles.pendingSectionSubtitle}>
+              You have {pendingJobs.length} order{pendingJobs.length !== 1 ? 's' : ''} waiting for your response
+            </Text>
+            {pendingJobs.map((order) => (
+              <PendingAssignmentCard
+                key={order.id}
+                order={order}
+                expiresAt={order.assignment_expires_at || null}
+                onAccept={handleAcceptPendingAssignment}
+                onReject={handleRejectPendingAssignment}
+              />
+            ))}
+          </View>
+        )}
+
         {renderTabContent()}
       </ScrollView>
 
@@ -543,6 +649,25 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
 
               {activeTab === 'active' && (
                 <View style={styles.actionButtons}>
+                  {/* Map Button - Show for in_transit orders */}
+                  {(selectedOrder as ActiveOrder).status === 'in_transit' && (
+                    <TouchableOpacity
+                      style={styles.mapButton}
+                      onPress={() => {
+                        setShowDetailsModal(false);
+                        navigation.navigate('RiderDeliveryMap', {
+                          orderId: selectedOrder.id,
+                          customerName: selectedOrder.customer_name,
+                          customerAddress: (selectedOrder as ActiveOrder).delivery_address,
+                          customerPhone: selectedOrder.customer_phone,
+                        });
+                      }}
+                    >
+                      <Ionicons name="map" size={20} color="#10b981" />
+                      <Text style={styles.mapButtonText}>View Map</Text>
+                    </TouchableOpacity>
+                  )}
+
                   {/* Chat Button */}
                   <TouchableOpacity
                     style={styles.chatButton}
@@ -860,6 +985,22 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginRight: 4,
   },
+  quickMapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#10b981',
+  },
+  quickMapText: {
+    fontSize: 14,
+    color: '#10b981',
+    fontWeight: '600',
+  },
   errorContainer: {
     flex: 1,
     padding: 20,
@@ -978,6 +1119,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  mapButton: {
+    backgroundColor: '#ffffff',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 2,
+    borderColor: '#10b981',
+    marginBottom: 12,
+  },
+  mapButtonText: {
+    color: '#10b981',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   trackingBanner: {
     backgroundColor: '#d1fae5',
     paddingVertical: 12,
@@ -993,6 +1152,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#065f46',
     fontWeight: '500',
+  },
+  pendingSection: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: '#fffbeb',
+    borderBottomWidth: 2,
+    borderBottomColor: '#fbbf24',
+  },
+  pendingSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#92400e',
+    marginBottom: 4,
+  },
+  pendingSectionSubtitle: {
+    fontSize: 14,
+    color: '#78350f',
+    marginBottom: 12,
   },
   ratingSectionHeader: {
     flexDirection: 'row',

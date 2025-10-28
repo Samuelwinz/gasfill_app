@@ -109,6 +109,17 @@ export interface ActiveOrder extends AvailableOrder {
   accepted_at: string;
   pickup_time?: string;
   delivery_time?: string;
+  assignment_expires_at?: string;
+  distance_km?: number;
+  estimated_time_minutes?: number;
+  customer_location?: {
+    lat: number;
+    lng: number;
+  };
+  delivery_location?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 export interface DashboardData {
@@ -212,6 +223,25 @@ export const acceptOrder = async (
   return response.data;
 };
 
+export const rejectOrder = async (
+  orderId: number | string
+): Promise<{ success: boolean; message: string }> => {
+  const response = await riderApiClient.post(`/api/rider/orders/${orderId}/reject`);
+  return response.data;
+};
+
+export const confirmOrderAssignment = async (
+  orderId: number | string
+): Promise<{ success: boolean; message: string; order: ActiveOrder }> => {
+  const response = await riderApiClient.post(`/api/rider/orders/${orderId}/confirm-assignment`);
+  return response.data;
+};
+
+export const getPendingAssignments = async (): Promise<ActiveOrder[]> => {
+  const response = await riderApiClient.get<ActiveOrder[]>('/api/rider/orders/pending');
+  return response.data;
+};
+
 export const updateOrderStatus = async (
   orderId: number,
   data: OrderStatusUpdate
@@ -221,6 +251,34 @@ export const updateOrderStatus = async (
     data
   );
   return response.data;
+};
+
+// Get single order details for rider
+export const getRiderOrderDetails = async (
+  orderId: number | string
+): Promise<ActiveOrder> => {
+  // Backend doesn't have a single order endpoint, so fetch all and filter
+  const response = await riderApiClient.get<ActiveOrder[]>('/api/rider/orders');
+  
+  // Handle both numeric IDs and string IDs like "ORD-5"
+  const order = response.data.find(o => {
+    // Try matching by ID directly
+    if (o.id === orderId) return true;
+    // Try matching string ID with number
+    if (String(o.id) === String(orderId)) return true;
+    // Try matching number with string ID (remove "ORD-" prefix)
+    const numericPart = String(orderId).replace(/[^\d]/g, '');
+    if (numericPart && String(o.id) === numericPart) return true;
+    return false;
+  });
+  
+  if (!order) {
+    console.error('[getRiderOrderDetails] Order not found. Looking for:', orderId);
+    console.error('[getRiderOrderDetails] Available orders:', response.data.map(o => ({ id: o.id, status: o.status })));
+    throw new Error(`Order ${orderId} not found in active orders`);
+  }
+  
+  return order;
 };
 
 // Earnings APIs
@@ -253,7 +311,11 @@ export default {
   getAvailableOrders,
   getActiveOrders,
   acceptOrder,
+  rejectOrder,
+  confirmOrderAssignment,
+  getPendingAssignments,
   updateOrderStatus,
+  getRiderOrderDetails,
   getRiderEarnings,
   getRiderEarningsDetailed,
   requestPayment,

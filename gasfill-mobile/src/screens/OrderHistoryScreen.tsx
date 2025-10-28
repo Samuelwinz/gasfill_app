@@ -343,7 +343,7 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 {['pending', 'assigned', 'pickup', 'picked_up', 'in_transit'].includes(order.status.toLowerCase()) && (
                   <TouchableOpacity 
                     style={styles.trackButton}
-                    onPress={() => navigation.navigate('OrderTracking', { orderId: order.id })}
+                    onPress={() => navigation.navigate('DeliveryTracking', { orderId: order.id })}
                   >
                     <Ionicons name="location" size={18} color="#ffffff" />
                     <Text style={styles.trackButtonText}>Track Order</Text>

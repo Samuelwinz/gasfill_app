@@ -2645,6 +2645,241 @@ async def accept_order(order_id: str, current_rider: dict = Depends(get_current_
         "tracking_info": tracking_info
     }
 
+@app.post("/api/rider/orders/{order_id}/confirm-assignment")
+async def confirm_order_assignment(order_id: str, current_rider: dict = Depends(get_current_rider)):
+    """Confirm acceptance of an auto-assigned order"""
+    # Get order from database
+    order = db.get_order_by_id(order_id)
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Verify order is assigned to this rider
+    rider_id = current_rider.get("id") or current_rider.get("rider_id")
+    if order.get("rider_id") != rider_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Order not assigned to you"
+        )
+    
+    # Verify order is in assigned state
+    if order.get("status") != "assigned":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Order cannot be confirmed (status: {order.get('status')})"
+        )
+    
+    # Accept the assignment (clears timeout)
+    updated_order = db.accept_order_assignment(order_id, rider_id)
+    
+    if not updated_order:
+        raise HTTPException(status_code=500, detail="Failed to confirm assignment")
+    
+    return {
+        "success": True,
+        "message": "Assignment confirmed successfully",
+        "order_id": order_id,
+        "status": "assigned",
+        "rider_id": rider_id,
+        "order": updated_order
+    }
+
+@app.post("/api/rider/orders/{order_id}/reject")
+async def reject_order(order_id: str, current_rider: dict = Depends(get_current_rider)):
+    """Reject an order assignment"""
+    # Get order from database
+    order = db.get_order_by_id(order_id)
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Verify order is assigned to this rider
+    rider_id = current_rider.get("id") or current_rider.get("rider_id")
+    if order.get("rider_id") != rider_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Order not assigned to you"
+        )
+    
+    # Verify order is still in assigned state
+    if order.get("status") != "assigned":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot reject order in {order.get('status')} status"
+        )
+    
+    # Reject the assignment
+    success = db.reject_order_assignment(order_id, rider_id)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to reject order")
+    
+    return {
+        "success": True,
+        "message": "Order rejected successfully",
+        "order_id": order_id,
+        "status": "pending"
+    }
+
+@app.post("/api/orders/{order_id}/assign")
+async def auto_assign_order(
+    order_id: str,
+    customer_location: Dict[str, float] = None  # {"latitude": float, "longitude": float}
+):
+    """Auto-assign order to nearest available rider"""
+    try:
+        # Get order from database
+        order = db.get_order_by_id(order_id)
+        
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Check if order is already assigned
+        if order.get("status") != "pending":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Order is not available for assignment (status: {order.get('status')})"
+            )
+        
+        # Get all available riders
+        available_riders = db.get_available_riders()
+        
+        if not available_riders:
+            raise HTTPException(
+                status_code=404,
+                detail="No available riders at the moment"
+            )
+        
+        # Filter riders with location data
+        riders_with_location = [r for r in available_riders if r.get('location')]
+        
+        if not riders_with_location:
+            raise HTTPException(
+                status_code=404,
+                detail="No riders with location data available"
+            )
+        
+        # Calculate distances and find nearest rider
+        import json
+        best_rider = None
+        min_distance = float('inf')
+        estimated_time = 0
+        
+        # Use customer location from order if not provided
+        if not customer_location and order.get('customer_location'):
+            try:
+                customer_location = json.loads(order['customer_location']) if isinstance(order['customer_location'], str) else order['customer_location']
+            except Exception as e:
+                print(f"Error parsing customer location: {e}")
+                pass
+        
+        if customer_location:
+            for rider in riders_with_location:
+                try:
+                    rider_loc = json.loads(rider['location']) if isinstance(rider['location'], str) else rider['location']
+                    
+                    # Simple distance calculation (Haversine)
+                    from math import radians, cos, sin, asin, sqrt
+                    
+                    lat1, lon1 = radians(customer_location['latitude']), radians(customer_location['longitude'])
+                    lat2, lon2 = radians(rider_loc['lat']), radians(rider_loc['lng'])
+                    
+                    dlat = lat2 - lat1
+                    dlon = lon2 - lon1
+                    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+                    c = 2 * asin(sqrt(a))
+                    distance = 6371 * c  # Radius of earth in km
+                    
+                    if distance < min_distance:
+                        min_distance = distance
+                        best_rider = rider
+                        # Estimate time: assume 30 km/h average speed
+                        estimated_time = int((distance / 30) * 60)  # minutes
+                        
+                except Exception as e:
+                    print(f"Error calculating distance for rider {rider['id']}: {e}")
+                    continue
+        else:
+            # No location data, just pick the highest rated available rider
+            best_rider = max(riders_with_location, key=lambda r: (r.get('rating', 0), r.get('total_deliveries', 0)))
+            min_distance = 0
+            estimated_time = 15  # Default estimate
+        
+        if not best_rider:
+            raise HTTPException(
+                status_code=404,
+                detail="Could not find suitable rider"
+            )
+        
+        # Assign order to rider
+        assigned_order = db.assign_order_to_rider(
+            order_id=order_id,
+            rider_id=best_rider['id'],
+            distance_km=round(min_distance, 2) if min_distance != float('inf') else None,
+            estimated_time_minutes=estimated_time,
+            expires_in_seconds=30
+        )
+        
+        if not assigned_order:
+            raise HTTPException(status_code=500, detail="Failed to assign order")
+        
+        return {
+            "success": True,
+            "message": "Order assigned successfully",
+            "order_id": order_id,
+            "rider": {
+                "id": best_rider['id'],
+                "username": best_rider['username'],
+                "phone": best_rider['phone'],
+                "vehicle_type": best_rider['vehicle_type'],
+                "rating": best_rider['rating']
+            },
+            "distance_km": round(min_distance, 2) if min_distance != float('inf') else None,
+            "estimated_time_minutes": estimated_time,
+            "assignment_expires_at": assigned_order.get('assignment_expires_at')
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in auto_assign_order: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    
+    if not assigned_order:
+        raise HTTPException(status_code=500, detail="Failed to assign order")
+    
+    return {
+        "success": True,
+        "message": "Order assigned successfully",
+        "order_id": order_id,
+        "rider": {
+            "id": best_rider['id'],
+            "username": best_rider['username'],
+            "phone": best_rider['phone'],
+            "vehicle_type": best_rider['vehicle_type'],
+            "rating": best_rider['rating']
+        },
+        "distance_km": round(min_distance, 2) if min_distance != float('inf') else None,
+        "estimated_time_minutes": estimated_time,
+        "assignment_expires_at": assigned_order.get('assignment_expires_at')
+    }
+
+@app.get("/api/rider/orders/pending")
+async def get_pending_assignments(current_rider: dict = Depends(get_current_rider)):
+    """Get orders pending acceptance by this rider"""
+    rider_id = current_rider.get("id") or current_rider.get("rider_id")
+    
+    all_orders = db.get_all_orders()
+    pending = [
+        order for order in all_orders
+        if order.get("rider_id") == rider_id 
+        and order.get("status") == "assigned"
+        and order.get("assignment_expires_at")
+    ]
+    
+    return pending
+
 @app.put("/api/rider/orders/{order_id}/status")
 async def update_delivery_status(
     order_id: str, 
@@ -2813,16 +3048,25 @@ async def update_rider_status(
     current_rider: dict = Depends(get_current_rider)
 ):
     """Update rider availability status"""
-    current_rider["status"] = status_update.status
-    current_rider["updated_at"] = utc_now().isoformat()
-    
+    # Convert location dict to JSON string if provided
+    location_str = None
     if status_update.location:
-        current_rider["location"] = status_update.location
+        location_str = json.dumps(status_update.location)
+    
+    # Update database
+    updated_rider = db.update_rider_status(
+        current_rider["id"], 
+        status_update.status,
+        location_str
+    )
+    
+    if not updated_rider:
+        raise HTTPException(status_code=500, detail="Failed to update status")
     
     return {
         "message": "Status updated successfully",
-        "status": current_rider["status"],
-        "location": current_rider.get("location")
+        "status": updated_rider["status"],
+        "location": updated_rider.get("location")
     }
 
 @app.get("/api/rider/profile")
@@ -4352,10 +4596,43 @@ async def upload_chat_image(
 # SERVER INITIALIZATION
 # ========================
 
-if __name__ == "__main__":
+# Background task for clearing expired assignments
+async def clear_expired_assignments_task():
+    """Background task that runs every 10 seconds to clear expired order assignments"""
+    while True:
+        try:
+            expired_orders = db.clear_expired_assignments()
+            if expired_orders:
+                print(f"⏰ Cleared {len(expired_orders)} expired assignments: {expired_orders}")
+                
+                # TODO: Trigger re-assignment for these orders
+                # for order_id in expired_orders:
+                #     await auto_assign_order(order_id)
+                
+        except Exception as e:
+            print(f"Error in clear_expired_assignments_task: {e}")
+        
+        await asyncio.sleep(10)  # Run every 10 seconds
+
+@app.on_event("startup")
+async def startup_event():
+    """Run startup tasks"""
+    print("🚀 Starting GasFill Backend Server...")
+    
     # Initialize database
     db.init_db()
+    print("✅ Database initialized")
     
+    # Start background task for clearing expired assignments
+    asyncio.create_task(clear_expired_assignments_task())
+    print("✅ Background assignment cleanup task started")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Run shutdown tasks"""
+    print("👋 Shutting down GasFill Backend Server...")
+
+if __name__ == "__main__":
     # Migrate existing in-memory orders to SQLite
     globals()['order_counter'] = db.migrate_orders(orders_db)
     

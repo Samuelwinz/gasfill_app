@@ -24,6 +24,7 @@ import PickupRequestScreen from '../screens/PickupRequestScreen';
 import DeliveryTrackingScreen from '../screens/DeliveryTrackingScreen';
 import RiderDashboard from '../screens/RiderDashboard';
 import RiderJobsScreen from '../screens/RiderJobsScreen';
+import RiderDeliveryMapScreen from '../screens/RiderDeliveryMapScreen';
 import RiderAnalyticsScreen from '../screens/RiderAnalyticsScreen';
 import RiderEarningsScreen from '../screens/RiderEarningsScreen';
 import AdminDashboard from '../screens/AdminDashboard';
@@ -34,7 +35,6 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
 import ChatScreen from '../screens/ChatScreen';
 import CustomerChatListScreen from '../screens/CustomerChatListScreen';
-import OrderTrackingScreen from '../screens/OrderTrackingScreen';
 
 // Import services
 import { StorageService } from '../utils/storage';
@@ -60,9 +60,6 @@ function CustomerTabs() {
               break;
             case 'Pickup':
               iconName = focused ? 'car' : 'car-outline';
-              break;
-            case 'Messages':
-              iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
               break;
             case 'Orders':
               iconName = focused ? 'receipt' : 'receipt-outline';
@@ -97,11 +94,6 @@ function CustomerTabs() {
         name="Pickup" 
         component={PickupRequestScreen}
         options={{ title: 'Request Pickup' }}
-      />
-      <Tab.Screen 
-        name="Messages" 
-        component={CustomerChatListScreen}
-        options={{ title: 'Messages' }}
       />
       <Tab.Screen name="Orders" component={OrderHistoryScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
@@ -387,13 +379,6 @@ function AppStack() {
         }}
       />
       <Stack.Screen 
-        name="OrderTracking" 
-        component={OrderTrackingScreen}
-        options={{ 
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen 
         name="RiderDetails" 
         component={RiderDetailsScreen}
         options={{ 
@@ -403,6 +388,13 @@ function AppStack() {
       <Stack.Screen 
         name="RiderAnalytics" 
         component={RiderAnalyticsScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="RiderDeliveryMap" 
+        component={RiderDeliveryMapScreen as any}
         options={{ 
           headerShown: false,
         }}

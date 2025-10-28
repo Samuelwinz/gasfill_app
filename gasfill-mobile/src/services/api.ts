@@ -40,6 +40,9 @@ class ApiService {
         const token = await StorageService.getToken();
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
+          console.log('🔑 API Request with token:', config.method?.toUpperCase(), config.url);
+        } else {
+          console.warn('⚠️ API Request WITHOUT token:', config.method?.toUpperCase(), config.url);
         }
         return config;
       },
@@ -116,10 +119,20 @@ class ApiService {
 
   async getCustomerOrders(): Promise<Order[]> {
     try {
+      console.log('📦 Fetching customer orders...');
+      const token = await StorageService.getToken();
+      console.log('🔑 Current token:', token ? 'Present' : 'Missing');
+      
       const response = await this.api.get('/api/customer/orders');
+      console.log('✅ Customer orders fetched:', response.data?.length || 0);
       return response.data;
-    } catch (error) {
-      console.error('Get customer orders failed:', error);
+    } catch (error: any) {
+      console.error('❌ Get customer orders failed:', error.response?.status, error.message);
+      if (error.response?.status === 401) {
+        console.error('🔒 Authentication failed - token may be expired or invalid');
+        const user = await StorageService.getUser();
+        console.log('👤 Current user:', user);
+      }
       throw error;
     }
   }
