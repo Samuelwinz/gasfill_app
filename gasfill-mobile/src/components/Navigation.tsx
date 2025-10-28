@@ -24,6 +24,7 @@ import PickupRequestScreen from '../screens/PickupRequestScreen';
 import DeliveryTrackingScreen from '../screens/DeliveryTrackingScreen';
 import RiderDashboard from '../screens/RiderDashboard';
 import RiderJobsScreen from '../screens/RiderJobsScreen';
+import RiderAnalyticsScreen from '../screens/RiderAnalyticsScreen';
 import RiderEarningsScreen from '../screens/RiderEarningsScreen';
 import AdminDashboard from '../screens/AdminDashboard';
 import AdminRidersScreen from '../screens/AdminRidersScreen';
@@ -395,6 +396,13 @@ function AppStack() {
       <Stack.Screen 
         name="RiderDetails" 
         component={RiderDetailsScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="RiderAnalytics" 
+        component={RiderAnalyticsScreen}
         options={{ 
           headerShown: false,
         }}

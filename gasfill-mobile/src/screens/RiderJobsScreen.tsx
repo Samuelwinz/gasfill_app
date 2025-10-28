@@ -24,6 +24,11 @@ import { useLocationTracking } from '../hooks/useLocationTracking';
 import { useAuth } from '../context/AuthContext';
 import Loading from '../components/Loading';
 import ErrorDisplay from '../components/ErrorDisplay';
+import RatingModal from '../components/RatingModal';
+import ReviewCard from '../components/ReviewCard';
+import DisputeModal from '../components/DisputeModal';
+import { Rating } from '../types/rating';
+import ApiService from '../services/api';
 
 interface RiderJobsScreenProps {
   navigation: any;
@@ -42,6 +47,13 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
   const [selectedOrder, setSelectedOrder] = useState<AvailableOrder | ActiveOrder | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Rating states
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingOrderId, setRatingOrderId] = useState<string | number | null>(null);
+  const [orderRatings, setOrderRatings] = useState<Record<string | number, Rating[]>>({});
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputeRatingId, setDisputeRatingId] = useState<string | null>(null);
 
   // Determine if rider should be tracking location (has active delivery orders)
   const hasActiveDelivery = activeJobs.some(
@@ -103,6 +115,13 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
   useEffect(() => {
     loadJobs();
   }, [activeTab]);
+
+  useEffect(() => {
+    // Load ratings when modal opens and order is delivered
+    if (showDetailsModal && selectedOrder && (selectedOrder as ActiveOrder).status === 'delivered') {
+      loadOrderRatings(selectedOrder.id);
+    }
+  }, [showDetailsModal, selectedOrder]);
 
   const loadJobs = async () => {
     try {
@@ -175,6 +194,14 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
         [{ text: 'OK', onPress: () => {
           setShowDetailsModal(false);
           loadJobs();
+          
+          // Prompt rating after delivery
+          if (newStatus === 'delivered') {
+            setTimeout(() => {
+              setRatingOrderId(order.id);
+              setShowRatingModal(true);
+            }, 500);
+          }
         }}]
       );
     } catch (err: any) {
@@ -182,6 +209,48 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
       Alert.alert('Error', err.message || 'Failed to update status');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const loadOrderRatings = async (orderId: string | number) => {
+    try {
+      const ratings = await ApiService.getOrderRatings(String(orderId));
+      setOrderRatings(prev => ({ ...prev, [orderId]: ratings }));
+    } catch (err) {
+      console.error('Failed to load ratings:', err);
+    }
+  };
+
+  const handleSubmitRating = async (rating: number, comment: string, tags: string[]) => {
+    if (!ratingOrderId) return;
+
+    try {
+      await ApiService.createRating({
+        order_id: String(ratingOrderId),
+        rating,
+        comment,
+        tags,
+      });
+
+      Alert.alert('Success', 'Thank you for your feedback!');
+      loadOrderRatings(ratingOrderId);
+    } catch (err: any) {
+      throw new Error(err.message || 'Failed to submit rating');
+    }
+  };
+
+  const handleDisputeRating = async (reason: string) => {
+    if (!disputeRatingId) return;
+
+    try {
+      await ApiService.disputeRating(disputeRatingId, reason);
+      Alert.alert('Dispute Submitted', 'Your dispute has been submitted for review.');
+      
+      if (selectedOrder) {
+        loadOrderRatings(selectedOrder.id);
+      }
+    } catch (err: any) {
+      throw new Error(err.message || 'Failed to submit dispute');
     }
   };
 
@@ -309,11 +378,19 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
             <Text style={styles.headerTitle}>Order Management</Text>
             <Text style={styles.headerSubtitle}>Available & active deliveries</Text>
           </View>
-          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-            <View style={styles.refreshIcon}>
-              <Ionicons name="refresh" size={20} color="#10b981" />
-            </View>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={styles.analyticsButton} 
+              onPress={() => navigation.navigate('RiderAnalytics')}
+            >
+              <Ionicons name="stats-chart" size={20} color="#3b82f6" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+              <View style={styles.refreshIcon}>
+                <Ionicons name="refresh" size={20} color="#10b981" />
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -417,6 +494,40 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
                 </Text>
               </View>
 
+              {/* Ratings Section - Show for delivered orders */}
+              {(selectedOrder as ActiveOrder).status === 'delivered' && (
+                <View style={styles.modalSection}>
+                  <View style={styles.ratingSectionHeader}>
+                    <Text style={styles.modalSectionTitle}>Customer Rating</Text>
+                    {!orderRatings[selectedOrder.id]?.some(r => r.reviewer_type === 'rider') && (
+                      <TouchableOpacity
+                        style={styles.rateButton}
+                        onPress={() => {
+                          setRatingOrderId(selectedOrder.id);
+                          setShowRatingModal(true);
+                        }}
+                      >
+                        <Ionicons name="star" size={16} color="#FFD700" />
+                        <Text style={styles.rateButtonText}>Rate Customer</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  
+                  {orderRatings[selectedOrder.id]?.map((rating) => (
+                    <ReviewCard
+                      key={rating.id}
+                      rating={rating}
+                      currentUserId={rider?.id || 0}
+                      currentUserType="rider"
+                      onDispute={(ratingId) => {
+                        setDisputeRatingId(ratingId);
+                        setShowDisputeModal(true);
+                      }}
+                    />
+                  ))}
+                </View>
+              )}
+
               {/* Action Buttons */}
               {activeTab === 'available' && (
                 <TouchableOpacity
@@ -491,6 +602,26 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
           )}
         </SafeAreaView>
       </Modal>
+
+      {/* Rating Modal */}
+      {ratingOrderId && selectedOrder && (
+        <RatingModal
+          visible={showRatingModal}
+          onClose={() => setShowRatingModal(false)}
+          onSubmit={handleSubmitRating}
+          targetName={selectedOrder.customer_name}
+          targetType="customer"
+          title="Rate Customer"
+        />
+      )}
+
+      {/* Dispute Modal */}
+      <DisputeModal
+        visible={showDisputeModal}
+        onClose={() => setShowDisputeModal(false)}
+        onSubmit={handleDisputeRating}
+        ratingId={disputeRatingId || ''}
+      />
     </SafeAreaView>
   );
 };
@@ -531,6 +662,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '500',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  analyticsButton: {
+    padding: 8,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   refreshButton: {
     padding: 8,
@@ -848,6 +993,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#065f46',
     fontWeight: '500',
+  },
+  ratingSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  rateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    gap: 4,
+  },
+  rateButtonText: {
+    color: '#F57C00',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
 

@@ -608,6 +608,103 @@ class ApiService {
       throw error;
     }
   }
+
+  // Rider Analytics
+  async getRiderAnalytics(period: 'day' | 'week' | 'month' = 'week'): Promise<any> {
+    try {
+      const response = await this.api.get('/api/rider/analytics', {
+        params: { period }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get rider analytics failed:', error);
+      throw error;
+    }
+  }
+
+  // Ratings & Reviews
+  async createRating(ratingData: {
+    order_id: string;
+    rating: number;
+    comment?: string;
+    tags?: string[];
+  }): Promise<any> {
+    try {
+      const response = await this.api.post('/api/ratings', ratingData);
+      return response.data;
+    } catch (error) {
+      console.error('Create rating failed:', error);
+      throw error;
+    }
+  }
+
+  async getOrderRatings(orderId: string): Promise<any[]> {
+    try {
+      const response = await this.api.get(`/api/ratings/order/${orderId}`);
+      return response.data.ratings || [];
+    } catch (error) {
+      console.error('Get order ratings failed:', error);
+      return [];
+    }
+  }
+
+  async getUserRatings(userId: number, userType: 'customer' | 'rider'): Promise<any> {
+    try {
+      const response = await this.api.get(`/api/ratings/user/${userId}`, {
+        params: { user_type: userType }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get user ratings failed:', error);
+      throw error;
+    }
+  }
+
+  async getMyRatingStats(): Promise<any> {
+    try {
+      const response = await this.api.get('/api/ratings/stats');
+      return response.data;
+    } catch (error) {
+      console.error('Get rating stats failed:', error);
+      throw error;
+    }
+  }
+
+  async disputeRating(ratingId: string, reason: string): Promise<any> {
+    try {
+      const response = await this.api.put(`/api/ratings/${ratingId}/dispute`, {
+        reason
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Dispute rating failed:', error);
+      throw error;
+    }
+  }
+
+  // Admin Rating Management
+  async getDisputedRatings(): Promise<any[]> {
+    try {
+      const response = await this.api.get('/api/admin/ratings/disputes');
+      return response.data.disputes || [];
+    } catch (error) {
+      console.error('Get disputed ratings failed:', error);
+      throw error;
+    }
+  }
+
+  async resolveRatingDispute(ratingId: string, adminResponse: string, status: 'resolved' | 'rejected'): Promise<any> {
+    try {
+      const response = await this.api.put(`/api/admin/ratings/${ratingId}/resolve`, {
+        admin_response: adminResponse,
+        status
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Resolve rating dispute failed:', error);
+      throw error;
+    }
+  }
 }
 
 export const apiService = new ApiService();

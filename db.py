@@ -133,6 +133,33 @@ def init_db():
         )
     ''')
     
+    # Ratings table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS ratings (
+            id TEXT PRIMARY KEY,
+            order_id TEXT NOT NULL,
+            rating_type TEXT NOT NULL,
+            reviewer_id INTEGER NOT NULL,
+            reviewer_name TEXT NOT NULL,
+            reviewer_type TEXT NOT NULL,
+            reviewee_id INTEGER NOT NULL,
+            reviewee_name TEXT NOT NULL,
+            reviewee_type TEXT NOT NULL,
+            rating INTEGER NOT NULL,
+            comment TEXT,
+            tags TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT,
+            disputed INTEGER DEFAULT 0,
+            dispute_status TEXT DEFAULT 'none',
+            dispute_reason TEXT,
+            dispute_date TEXT,
+            admin_response TEXT,
+            admin_resolved_date TEXT,
+            FOREIGN KEY (order_id) REFERENCES orders(id)
+        )
+    ''')
+    
     # Create indexes for better query performance
     cur.execute('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_riders_email ON riders(email)')
@@ -141,6 +168,10 @@ def init_db():
     cur.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(chat_room_id)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_created ON chat_messages(created_at)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_chat_participants_room ON chat_participants(chat_room_id)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_ratings_order ON ratings(order_id)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_ratings_reviewee ON ratings(reviewee_id, reviewee_type)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_ratings_reviewer ON ratings(reviewer_id, reviewer_type)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_ratings_dispute ON ratings(disputed, dispute_status)')
     
     # Migration: Add new columns to orders table if they don't exist
     try:
@@ -1010,4 +1041,276 @@ def _row_to_rider(row: sqlite3.Row) -> Dict[str, Any]:
         'suspension_reason': row['suspension_reason'],
         'created_at': row['created_at'],
         'updated_at': row['updated_at']
+    }
+
+# ============= RATINGS FUNCTIONS =============
+
+def create_rating(rating_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a new rating"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    now = datetime.now(UTC).isoformat()
+    
+    rating_id = f"rating_{int(datetime.now(UTC).timestamp() * 1000)}"
+    
+    cur.execute('''
+        INSERT INTO ratings (
+            id, order_id, rating_type, reviewer_id, reviewer_name, reviewer_type,
+            reviewee_id, reviewee_name, reviewee_type, rating, comment, tags,
+            created_at, disputed, dispute_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'none')
+    ''', (
+        rating_id,
+        rating_data['order_id'],
+        rating_data['rating_type'],
+        rating_data['reviewer_id'],
+        rating_data['reviewer_name'],
+        rating_data['reviewer_type'],
+        rating_data['reviewee_id'],
+        rating_data['reviewee_name'],
+        rating_data['reviewee_type'],
+        rating_data['rating'],
+        rating_data.get('comment'),
+        json.dumps(rating_data.get('tags', [])),
+        now
+    ))
+    
+    conn.commit()
+    
+    # Update average rating for the reviewee
+    if rating_data['reviewee_type'] == 'rider':
+        update_rider_average_rating(rating_data['reviewee_id'])
+    
+    # Get and return the created rating
+    cur.execute('SELECT * FROM ratings WHERE id=?', (rating_id,))
+    row = cur.fetchone()
+    conn.close()
+    
+    return _row_to_rating(row) if row else None
+
+def get_rating_by_id(rating_id: str) -> Optional[Dict[str, Any]]:
+    """Get rating by ID"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    cur.execute('SELECT * FROM ratings WHERE id=?', (rating_id,))
+    row = cur.fetchone()
+    conn.close()
+    
+    return _row_to_rating(row) if row else None
+
+def get_ratings_for_order(order_id: str) -> List[Dict[str, Any]]:
+    """Get all ratings for an order"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    cur.execute('SELECT * FROM ratings WHERE order_id=? ORDER BY created_at DESC', (order_id,))
+    rows = cur.fetchall()
+    conn.close()
+    
+    return [_row_to_rating(row) for row in rows]
+
+def get_ratings_for_user(user_id: int, user_type: str) -> List[Dict[str, Any]]:
+    """Get all ratings received by a user"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    cur.execute('''
+        SELECT * FROM ratings 
+        WHERE reviewee_id=? AND reviewee_type=? 
+        ORDER BY created_at DESC
+    ''', (user_id, user_type))
+    rows = cur.fetchall()
+    conn.close()
+    
+    return [_row_to_rating(row) for row in rows]
+
+def get_ratings_by_user(user_id: int, user_type: str) -> List[Dict[str, Any]]:
+    """Get all ratings given by a user"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    cur.execute('''
+        SELECT * FROM ratings 
+        WHERE reviewer_id=? AND reviewer_type=? 
+        ORDER BY created_at DESC
+    ''', (user_id, user_type))
+    rows = cur.fetchall()
+    conn.close()
+    
+    return [_row_to_rating(row) for row in rows]
+
+def get_rating_stats(user_id: int, user_type: str) -> Dict[str, Any]:
+    """Get rating statistics for a user"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    ratings = get_ratings_for_user(user_id, user_type)
+    
+    if not ratings:
+        return {
+            'user_id': user_id,
+            'user_type': user_type,
+            'average_rating': 0,
+            'total_ratings': 0,
+            'five_star': 0,
+            'four_star': 0,
+            'three_star': 0,
+            'two_star': 0,
+            'one_star': 0,
+            'recent_ratings': [],
+            'top_tags': []
+        }
+    
+    total = len(ratings)
+    avg = sum(r['rating'] for r in ratings) / total
+    
+    # Count stars
+    star_counts = {5: 0, 4: 0, 3: 0, 2: 0, 1: 0}
+    for r in ratings:
+        star_counts[r['rating']] += 1
+    
+    # Count tags
+    tag_counts = {}
+    for r in ratings:
+        if r.get('tags'):
+            for tag in r['tags']:
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+    
+    top_tags = sorted(
+        [{'tag': tag, 'count': count} for tag, count in tag_counts.items()],
+        key=lambda x: x['count'],
+        reverse=True
+    )[:5]
+    
+    return {
+        'user_id': user_id,
+        'user_type': user_type,
+        'average_rating': round(avg, 2),
+        'total_ratings': total,
+        'five_star': star_counts[5],
+        'four_star': star_counts[4],
+        'three_star': star_counts[3],
+        'two_star': star_counts[2],
+        'one_star': star_counts[1],
+        'recent_ratings': ratings[:10],
+        'top_tags': top_tags
+    }
+
+def update_rating(rating_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Update a rating"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    now = datetime.now(UTC).isoformat()
+    
+    update_data['updated_at'] = now
+    
+    fields = []
+    values = []
+    
+    for key, value in update_data.items():
+        if key in ['comment', 'disputed', 'dispute_status', 'dispute_reason', 
+                   'dispute_date', 'admin_response', 'admin_resolved_date', 'updated_at']:
+            fields.append(f'{key}=?')
+            values.append(value)
+    
+    if not fields:
+        conn.close()
+        return get_rating_by_id(rating_id)
+    
+    values.append(rating_id)
+    query = f'UPDATE ratings SET {", ".join(fields)} WHERE id=?'
+    cur.execute(query, values)
+    conn.commit()
+    conn.close()
+    
+    return get_rating_by_id(rating_id)
+
+def dispute_rating(rating_id: str, dispute_reason: str) -> Optional[Dict[str, Any]]:
+    """Mark a rating as disputed"""
+    now = datetime.now(UTC).isoformat()
+    return update_rating(rating_id, {
+        'disputed': 1,
+        'dispute_status': 'pending',
+        'dispute_reason': dispute_reason,
+        'dispute_date': now
+    })
+
+def resolve_dispute(rating_id: str, admin_response: str, status: str) -> Optional[Dict[str, Any]]:
+    """Resolve a rating dispute (admin only)"""
+    now = datetime.now(UTC).isoformat()
+    return update_rating(rating_id, {
+        'dispute_status': status,
+        'admin_response': admin_response,
+        'admin_resolved_date': now
+    })
+
+def get_disputed_ratings() -> List[Dict[str, Any]]:
+    """Get all disputed ratings (admin only)"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    cur.execute('''
+        SELECT * FROM ratings 
+        WHERE disputed=1 AND dispute_status='pending'
+        ORDER BY dispute_date DESC
+    ''')
+    rows = cur.fetchall()
+    conn.close()
+    
+    return [_row_to_rating(row) for row in rows]
+
+def update_rider_average_rating(rider_id: int):
+    """Update rider's average rating based on all their ratings"""
+    ratings = get_ratings_for_user(rider_id, 'rider')
+    
+    if not ratings:
+        return
+    
+    avg_rating = sum(r['rating'] for r in ratings) / len(ratings)
+    
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('UPDATE riders SET rating=? WHERE id=?', (round(avg_rating, 2), rider_id))
+    conn.commit()
+    conn.close()
+
+def _row_to_rating(row: sqlite3.Row) -> Dict[str, Any]:
+    """Convert SQLite row to rating dict"""
+    tags = row['tags']
+    if tags:
+        try:
+            tags = json.loads(tags)
+        except:
+            tags = []
+    
+    return {
+        'id': row['id'],
+        'order_id': row['order_id'],
+        'rating_type': row['rating_type'],
+        'reviewer_id': row['reviewer_id'],
+        'reviewer_name': row['reviewer_name'],
+        'reviewer_type': row['reviewer_type'],
+        'reviewee_id': row['reviewee_id'],
+        'reviewee_name': row['reviewee_name'],
+        'reviewee_type': row['reviewee_type'],
+        'rating': row['rating'],
+        'comment': row['comment'],
+        'tags': tags,
+        'created_at': row['created_at'],
+        'updated_at': row['updated_at'],
+        'disputed': bool(row['disputed']),
+        'dispute_status': row['dispute_status'],
+        'dispute_reason': row['dispute_reason'],
+        'dispute_date': row['dispute_date'],
+        'admin_response': row['admin_response'],
+        'admin_resolved_date': row['admin_resolved_date']
     }

@@ -386,6 +386,48 @@ def get_current_rider(credentials: HTTPAuthorizationCredentials = Depends(securi
             detail="Invalid token"
         )
 
+def get_current_user_flexible(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Get current user (customer or rider) from JWT token"""
+    if not credentials:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required"
+        )
+    
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        role: str = payload.get("role", "customer")
+        
+        if email is None:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token"
+            )
+        
+        # Check database based on role
+        if role == "rider":
+            user = db.get_rider_by_email(email)
+            if user:
+                user["role"] = "rider"
+        else:
+            user = db.get_user_by_email(email)
+            if user:
+                user["role"] = role or "customer"
+        
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="User not found"
+            )
+        
+        return user
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token"
+        )
+
 # API Routes
 
 @app.get("/api/health")
@@ -2140,6 +2182,342 @@ async def get_rider_dashboard(current_rider: dict = Depends(get_current_rider)):
     
     print(f"📤 Returning dashboard data: {dashboard_data}\n")
     return dashboard_data
+
+@app.get("/api/rider/analytics")
+async def get_rider_analytics(
+    period: Optional[str] = "week",
+    current_rider: dict = Depends(get_current_rider)
+):
+    """Get detailed analytics and performance metrics for rider
+    
+    Period options: day, week, month
+    """
+    from datetime import datetime, timedelta, timezone
+    from collections import Counter
+    
+    rider_id = current_rider.get("id") or current_rider.get("rider_id")
+    
+    # Get rider details for commission rate
+    rider = db.get_rider_by_id(rider_id)
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    
+    # Get all orders for this rider
+    all_orders = db.get_all_orders()
+    rider_orders = [o for o in all_orders if o.get("rider_id") == rider_id]
+    
+    # Calculate earnings per delivery (assuming fixed delivery fee of 20 GHS)
+    delivery_fee = 20.0
+    commission_rate = rider.get("commission_rate", 0.8)
+    rider_earnings_per_delivery = delivery_fee * commission_rate
+    
+    # Date filtering based on period (make timezone-aware)
+    now = datetime.now(timezone.utc)
+    if period == "day":
+        start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == "month":
+        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:  # week
+        start_date = now - timedelta(days=now.weekday())
+        start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Filter orders by period
+    period_orders = []
+    for o in rider_orders:
+        try:
+            created_at = o.get("created_at")
+            if created_at:
+                order_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                if order_date >= start_date:
+                    period_orders.append(o)
+        except (ValueError, AttributeError):
+            # Skip orders with invalid dates
+            continue
+    
+    # Calculate delivery stats
+    completed_orders = [o for o in rider_orders if o.get("status") == "delivered"]
+    completed_period = [o for o in period_orders if o.get("status") == "delivered"]
+    pending_orders = [o for o in rider_orders if o.get("status") == "pending"]
+    in_progress_orders = [o for o in rider_orders if o.get("status") in ["assigned", "pickup", "in_transit"]]
+    cancelled_orders = [o for o in rider_orders if o.get("status") == "cancelled"]
+    
+    total_deliveries = len(completed_orders)
+    completion_rate = (len(completed_orders) / len(rider_orders) * 100) if rider_orders else 0
+    
+    # Calculate earnings (timezone-aware dates)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = start_date if period == "week" else now - timedelta(days=7)
+    week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = start_date if period == "month" else now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    today_completed = []
+    week_completed = []
+    month_completed = []
+    
+    for o in completed_orders:
+        try:
+            created_at = o.get("created_at")
+            if created_at:
+                order_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                if order_date >= today_start:
+                    today_completed.append(o)
+                if order_date >= week_start:
+                    week_completed.append(o)
+                if order_date >= month_start:
+                    month_completed.append(o)
+        except (ValueError, AttributeError):
+            continue
+    
+    earnings_summary = {
+        "today": len(today_completed) * rider_earnings_per_delivery,
+        "week": len(week_completed) * rider_earnings_per_delivery,
+        "month": len(month_completed) * rider_earnings_per_delivery,
+        "total": total_deliveries * rider_earnings_per_delivery
+    }
+    
+    # Earnings trend (daily breakdown)
+    earnings_trend = {}
+    for order in completed_period:
+        try:
+            created_at = order.get("created_at")
+            if created_at:
+                order_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                date_key = order_date.strftime("%Y-%m-%d")
+                if date_key not in earnings_trend:
+                    earnings_trend[date_key] = {"date": date_key, "amount": 0, "deliveries": 0}
+                earnings_trend[date_key]["amount"] += rider_earnings_per_delivery
+                earnings_trend[date_key]["deliveries"] += 1
+        except (ValueError, AttributeError):
+            continue
+    
+    earnings_trend_list = sorted(earnings_trend.values(), key=lambda x: x["date"])
+    
+    # Rating distribution
+    ratings = [o.get("rating") for o in completed_orders if o.get("rating")]
+    rating_counts = Counter(ratings)
+    rating_distribution = {
+        "five_star": rating_counts.get(5, 0),
+        "four_star": rating_counts.get(4, 0),
+        "three_star": rating_counts.get(3, 0),
+        "two_star": rating_counts.get(2, 0),
+        "one_star": rating_counts.get(1, 0)
+    }
+    
+    # Peak hours analysis
+    peak_hours = {}
+    for order in completed_orders:
+        try:
+            created_at = order.get("created_at")
+            if created_at:
+                order_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                hour = order_date.hour
+                if hour not in peak_hours:
+                    peak_hours[hour] = {"hour": hour, "deliveries": 0, "earnings": 0}
+                peak_hours[hour]["deliveries"] += 1
+                peak_hours[hour]["earnings"] += rider_earnings_per_delivery
+        except (ValueError, AttributeError):
+            continue
+    
+    peak_hours_list = sorted(peak_hours.values(), key=lambda x: x["deliveries"], reverse=True)[:10]
+    
+    # Performance metrics
+    avg_rating = sum(ratings) / len(ratings) if ratings else 0
+    on_time_deliveries = [o for o in completed_orders if not o.get("late", False)]
+    on_time_percentage = (len(on_time_deliveries) / len(completed_orders) * 100) if completed_orders else 100
+    
+    analytics_data = {
+        "period": period,
+        "earnings_summary": earnings_summary,
+        "delivery_stats": {
+            "total_deliveries": total_deliveries,
+            "completed_today": len(today_completed),
+            "completed_week": len(week_completed),
+            "completed_month": len(month_completed),
+            "pending": len(pending_orders),
+            "in_progress": len(in_progress_orders),
+            "cancelled": len(cancelled_orders),
+            "completion_rate": round(completion_rate, 2)
+        },
+        "performance_metrics": {
+            "average_rating": round(avg_rating, 2),
+            "total_ratings": len(ratings),
+            "on_time_percentage": round(on_time_percentage, 2),
+            "average_delivery_time": 30,  # TODO: Calculate from actual data
+            "customer_satisfaction": round(avg_rating / 5 * 100, 2) if avg_rating else 0
+        },
+        "earnings_trend": earnings_trend_list,
+        "rating_distribution": rating_distribution,
+        "peak_hours": peak_hours_list
+    }
+    
+    return analytics_data
+
+# ============= RATING ENDPOINTS =============
+
+@app.post("/api/ratings")
+async def create_rating(
+    rating_data: dict,
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """Submit a rating for an order"""
+    try:
+        # Determine user type and ID
+        user_type = current_user.get("role", "customer")
+        if user_type == "rider":
+            user_id = current_user.get("id") or current_user.get("rider_id")
+            user_name = current_user.get("username", "Rider")
+        else:
+            user_id = current_user.get("id") or current_user.get("user_id")
+            user_name = current_user.get("username", "Customer")
+        
+        # Get order to determine the other party
+        order = db.get_order_by_id(rating_data["order_id"])
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Determine rating type and reviewee
+        if user_type == "rider":
+            # Rider rating customer
+            rating_type = "rider_to_customer"
+            reviewee_type = "customer"
+            reviewee_id = order.get("customer_id") or 0  # TODO: Add customer_id to orders
+            reviewee_name = order.get("customer_name", "Customer")
+        else:
+            # Customer rating rider
+            rating_type = "customer_to_rider"
+            reviewee_type = "rider"
+            reviewee_id = order.get("rider_id")
+            if not reviewee_id:
+                raise HTTPException(status_code=400, detail="Order has no assigned rider")
+            rider = db.get_rider_by_id(reviewee_id)
+            reviewee_name = rider.get("username", "Rider") if rider else "Rider"
+        
+        # Create rating
+        new_rating = db.create_rating({
+            "order_id": rating_data["order_id"],
+            "rating_type": rating_type,
+            "reviewer_id": user_id,
+            "reviewer_name": user_name,
+            "reviewer_type": user_type,
+            "reviewee_id": reviewee_id,
+            "reviewee_name": reviewee_name,
+            "reviewee_type": reviewee_type,
+            "rating": rating_data["rating"],
+            "comment": rating_data.get("comment"),
+            "tags": rating_data.get("tags", [])
+        })
+        
+        return new_rating
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error creating rating: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ratings/order/{order_id}")
+async def get_order_ratings(
+    order_id: str,
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """Get all ratings for an order"""
+    ratings = db.get_ratings_for_order(order_id)
+    return {"ratings": ratings}
+
+@app.get("/api/ratings/user/{user_id}")
+async def get_user_ratings(
+    user_id: int,
+    user_type: str,
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """Get all ratings received by a user"""
+    ratings = db.get_ratings_for_user(user_id, user_type)
+    stats = db.get_rating_stats(user_id, user_type)
+    return {
+        "ratings": ratings,
+        "stats": stats
+    }
+
+@app.get("/api/ratings/stats")
+async def get_my_rating_stats(
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """Get rating stats for current user"""
+    user_type = current_user.get("role", "customer")
+    if user_type == "rider":
+        user_id = current_user.get("id") or current_user.get("rider_id")
+    else:
+        user_id = current_user.get("id") or current_user.get("user_id")
+    
+    stats = db.get_rating_stats(user_id, user_type)
+    return stats
+
+@app.put("/api/ratings/{rating_id}/dispute")
+async def dispute_rating(
+    rating_id: str,
+    dispute_data: dict,
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """Dispute a rating"""
+    try:
+        rating = db.get_rating_by_id(rating_id)
+        if not rating:
+            raise HTTPException(status_code=404, detail="Rating not found")
+        
+        # Check if user is the reviewee
+        user_type = current_user.get("role", "customer")
+        if user_type == "rider":
+            user_id = current_user.get("id") or current_user.get("rider_id")
+        else:
+            user_id = current_user.get("id") or current_user.get("user_id")
+        
+        if rating["reviewee_id"] != user_id or rating["reviewee_type"] != user_type:
+            raise HTTPException(status_code=403, detail="You can only dispute ratings you received")
+        
+        if rating["disputed"]:
+            raise HTTPException(status_code=400, detail="Rating already disputed")
+        
+        updated_rating = db.dispute_rating(rating_id, dispute_data.get("reason", ""))
+        return updated_rating
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error disputing rating: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/ratings/disputes")
+async def get_disputed_ratings(
+    current_admin: dict = Depends(get_current_admin)
+):
+    """Get all disputed ratings (admin only)"""
+    disputed = db.get_disputed_ratings()
+    return {"disputes": disputed}
+
+@app.put("/api/admin/ratings/{rating_id}/resolve")
+async def resolve_rating_dispute(
+    rating_id: str,
+    resolution_data: dict,
+    current_admin: dict = Depends(get_current_admin)
+):
+    """Resolve a rating dispute (admin only)"""
+    try:
+        rating = db.get_rating_by_id(rating_id)
+        if not rating:
+            raise HTTPException(status_code=404, detail="Rating not found")
+        
+        if not rating["disputed"]:
+            raise HTTPException(status_code=400, detail="Rating is not disputed")
+        
+        updated_rating = db.resolve_dispute(
+            rating_id,
+            resolution_data.get("admin_response", ""),
+            resolution_data.get("status", "resolved")
+        )
+        return updated_rating
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error resolving dispute: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/rider/orders")
 async def get_rider_orders(
