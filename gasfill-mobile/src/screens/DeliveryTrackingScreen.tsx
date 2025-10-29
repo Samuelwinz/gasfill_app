@@ -9,10 +9,12 @@ import {
   Linking,
   Alert,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import * as Location from 'expo-location';
 import { apiService } from '../services/api';
 import { useWebSocketEvent } from '../context/WebSocketContext';
 import locationTrackingService from '../services/locationTracking';
@@ -70,6 +72,9 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
   const [eta, setEta] = useState<string | null>(null);
   const [distance, setDistance] = useState<string | null>(null);
   const [showRatingModal, setShowRatingModal] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [updatingLocation, setUpdatingLocation] = useState(false);
+  const [newLocation, setNewLocation] = useState<{ lat: number; lng: number } | null>(null);
   const mapRef = useRef<MapView>(null);
   const orderId = route.params?.orderId;
   const isLoadingRef = useRef(false);
@@ -255,6 +260,54 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
     } catch (error) {
       console.error('Error submitting rating:', error);
       Alert.alert('Error', 'Failed to submit rating. Please try again.');
+    }
+  };
+
+  const handleOpenLocationPicker = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required to update delivery location.');
+        return;
+      }
+      
+      // Set initial location to current customer location or get current GPS
+      if (trackingData?.customer_location) {
+        setNewLocation(trackingData.customer_location);
+      } else {
+        const location = await Location.getCurrentPositionAsync({});
+        setNewLocation({
+          lat: location.coords.latitude,
+          lng: location.coords.longitude,
+        });
+      }
+      
+      setShowLocationPicker(true);
+    } catch (error) {
+      console.error('Error opening location picker:', error);
+      Alert.alert('Error', 'Failed to get location access');
+    }
+  };
+
+  const handleUpdateLocation = async () => {
+    if (!newLocation || !orderId) return;
+    
+    try {
+      setUpdatingLocation(true);
+      
+      // Call API to update order location
+      await apiService.updateOrderLocation(orderId, newLocation);
+      
+      Alert.alert('Success', 'Delivery location updated successfully!');
+      setShowLocationPicker(false);
+      
+      // Reload tracking data
+      await loadTrackingData();
+    } catch (error: any) {
+      console.error('Error updating location:', error);
+      Alert.alert('Error', error.message || 'Failed to update location');
+    } finally {
+      setUpdatingLocation(false);
     }
   };
 
@@ -602,6 +655,19 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
             </View>
           )}
 
+          {/* Update Location Button - Only for pending/assigned orders */}
+          {(trackingData.status === 'pending' || trackingData.status === 'assigned') && (
+            <TouchableOpacity
+              style={styles.updateLocationButton}
+              onPress={handleOpenLocationPicker}
+            >
+              <Ionicons name="location" size={18} color="#3b82f6" />
+              <Text style={styles.updateLocationText}>
+                {trackingData.customer_location ? 'Update Location' : 'Pin Exact Location'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {trackingData.items && trackingData.items.length > 0 && (
             <>
               <View style={styles.divider} />
@@ -645,6 +711,101 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
         orderId={orderId || ''}
         riderName={trackingData.rider_name || 'Your Rider'}
       />
+
+      {/* Location Picker Modal */}
+      <Modal
+        visible={showLocationPicker}
+        animationType="slide"
+        onRequestClose={() => setShowLocationPicker(false)}
+      >
+        <SafeAreaView style={styles.locationPickerContainer}>
+          <View style={styles.locationPickerHeader}>
+            <TouchableOpacity onPress={() => setShowLocationPicker(false)}>
+              <Ionicons name="close" size={24} color="#0A2540" />
+            </TouchableOpacity>
+            <Text style={styles.locationPickerTitle}>Update Delivery Location</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          {newLocation && (
+            <MapView
+              style={styles.locationPickerMap}
+              initialRegion={{
+                latitude: newLocation.lat,
+                longitude: newLocation.lng,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+              }}
+              onRegionChangeComplete={(region) => {
+                setNewLocation({
+                  lat: region.latitude,
+                  lng: region.longitude,
+                });
+              }}
+            >
+              <Marker
+                coordinate={{
+                  latitude: newLocation.lat,
+                  longitude: newLocation.lng,
+                }}
+                draggable
+                onDragEnd={(e) => {
+                  setNewLocation({
+                    lat: e.nativeEvent.coordinate.latitude,
+                    lng: e.nativeEvent.coordinate.longitude,
+                  });
+                }}
+              >
+                <View style={styles.locationPickerMarker}>
+                  <Ionicons name="pin" size={32} color="#3b82f6" />
+                </View>
+              </Marker>
+            </MapView>
+          )}
+
+          <View style={styles.locationPickerFooter}>
+            <View style={styles.coordinatesDisplay}>
+              <Text style={styles.coordinatesLabel}>Selected Location:</Text>
+              <Text style={styles.coordinatesText}>
+                {newLocation?.lat.toFixed(6)}, {newLocation?.lng.toFixed(6)}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.getCurrentLocationButton}
+              onPress={async () => {
+                try {
+                  const location = await Location.getCurrentPositionAsync({});
+                  setNewLocation({
+                    lat: location.coords.latitude,
+                    lng: location.coords.longitude,
+                  });
+                } catch (error) {
+                  Alert.alert('Error', 'Failed to get current location');
+                }
+              }}
+            >
+              <Ionicons name="navigate" size={18} color="#3b82f6" />
+              <Text style={styles.getCurrentLocationText}>Use Current Location</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.confirmLocationButton, updatingLocation && styles.confirmLocationButtonDisabled]}
+              onPress={handleUpdateLocation}
+              disabled={updatingLocation}
+            >
+              {updatingLocation ? (
+                <Text style={styles.confirmLocationText}>Updating...</Text>
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={20} color="#ffffff" />
+                  <Text style={styles.confirmLocationText}>Update Location</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1157,6 +1318,108 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#92400e',
     flex: 1,
+  },
+  updateLocationButton: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+  },
+  updateLocationText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  locationPickerContainer: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  locationPickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  locationPickerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  locationPickerMap: {
+    flex: 1,
+  },
+  locationPickerMarker: {
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  locationPickerFooter: {
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    gap: 12,
+  },
+  coordinatesDisplay: {
+    padding: 12,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+  },
+  coordinatesLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  coordinatesText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  getCurrentLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+    backgroundColor: '#ffffff',
+  },
+  getCurrentLocationText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  confirmLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#3b82f6',
+  },
+  confirmLocationButtonDisabled: {
+    opacity: 0.6,
+  },
+  confirmLocationText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });
 

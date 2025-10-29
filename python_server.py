@@ -881,6 +881,61 @@ async def update_order_status(order_id: str, status_update: OrderStatusUpdate):
     
     return order
 
+@app.patch("/api/orders/{order_id}/location")
+async def update_order_location(order_id: str, location_data: dict):
+    """Update order delivery location"""
+    order = db.get_order_by_id(order_id)
+    
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail="Order not found"
+        )
+    
+    # Only allow location updates for pending or assigned orders
+    if order["status"] not in ["pending", "assigned"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot update location for order with status: {order['status']}"
+        )
+    
+    # Get customer_location from request
+    customer_location = location_data.get("customer_location")
+    
+    if not customer_location:
+        raise HTTPException(
+            status_code=400,
+            detail="customer_location is required"
+        )
+    
+    print(f"📍 Updating location for order {order_id}: {customer_location}")
+    
+    # Update order in database
+    import sqlite3
+    conn = sqlite3.connect(db.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    # Convert location to JSON string for storage
+    location_json = json.dumps(customer_location)
+    
+    cur.execute(
+        'UPDATE orders SET customer_location=?, updated_at=? WHERE id=?',
+        (location_json, utc_now().isoformat(), order_id)
+    )
+    conn.commit()
+    
+    # Fetch updated order
+    cur.execute('SELECT * FROM orders WHERE id=?', (order_id,))
+    row = cur.fetchone()
+    conn.close()
+    
+    updated_order = db._row_to_order(row) if row else None
+    
+    print(f"✅ Location updated successfully for order {order_id}")
+    
+    return updated_order
+
 @app.delete("/api/orders/{order_id}")
 async def delete_order(order_id: str):
     """Delete an order"""

@@ -157,6 +157,20 @@ class ApiService {
     }
   }
 
+  async updateOrderLocation(orderId: string, location: { lat: number; lng: number }): Promise<any> {
+    try {
+      console.log('📍 Updating order location:', orderId, location);
+      const response = await this.api.patch(`/api/orders/${orderId}/location`, {
+        customer_location: location
+      });
+      console.log('✅ Location updated successfully');
+      return response.data;
+    } catch (error) {
+      console.error('Update order location failed:', error);
+      throw error;
+    }
+  }
+
   async getOrderTracking(orderId: string): Promise<any> {
     try {
       const response = await this.api.get(`/api/order/tracking/${orderId}`);

@@ -26,6 +26,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import Toast from '../components/Toast';
 import Loading from '../components/Loading';
+import geocodingService from '../services/geocodingService';
 
 interface LocationPickerModalProps {
   visible: boolean;
@@ -188,6 +189,7 @@ const CheckoutScreen: React.FC = () => {
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [deliveryType, setDeliveryType] = useState<'standard' | 'express'>('standard');
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'mobile_money'>('card');
+  const [geocoding, setGeocoding] = useState(false);
 
   // Toast state
   const [toast, setToast] = useState({
@@ -259,6 +261,65 @@ const CheckoutScreen: React.FC = () => {
       message: 'Location pinned successfully!',
       type: 'success',
     });
+  };
+
+  const handleGeocodeAddress = async () => {
+    if (!customerAddress || !customerAddress.trim()) {
+      Alert.alert('No Address', 'Please enter a delivery address first');
+      return;
+    }
+
+    try {
+      setGeocoding(true);
+      console.log('Geocoding address:', customerAddress);
+      
+      const result = await geocodingService.geocodeAddress(customerAddress);
+      
+      if (result) {
+        console.log('Geocoding successful:', result);
+        
+        // Check if location is within service area
+        if (!geocodingService.isWithinServiceArea(result.lat, result.lng)) {
+          Alert.alert(
+            'Outside Service Area',
+            'We currently only deliver within Ghana. The address you entered appears to be outside our service area.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        
+        // Set the location
+        setDeliveryLocation({ lat: result.lat, lng: result.lng });
+        
+        // Show success with formatted address
+        Alert.alert(
+          'Address Located! 📍',
+          `Found: ${result.formattedAddress}\n\nCoordinates: ${result.lat.toFixed(5)}, ${result.lng.toFixed(5)}\n\nYou can adjust the pin if needed by tapping "Pin Location".`,
+          [{ text: 'OK' }]
+        );
+        
+        setToast({
+          visible: true,
+          message: 'Address geocoded successfully!',
+          type: 'success',
+        });
+      } else {
+        Alert.alert(
+          'Address Not Found',
+          'Could not locate this address on the map. Please:\n\n1. Check for typos\n2. Use "Pin Location" to manually select your location\n3. Include landmarks (e.g., "near Circle, Accra")',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error: any) {
+      console.error('Geocoding error:', error);
+      Alert.alert(
+        'Geocoding Failed',
+        'Unable to convert your address to coordinates. Please use "Pin Location" to select your location on the map.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setGeocoding(false);
+    }
   };
 
   const validateForm = (): boolean => {
@@ -599,19 +660,35 @@ const CheckoutScreen: React.FC = () => {
             <View style={styles.inputGroup}>
               <View style={styles.labelRow}>
                 <Text style={styles.inputLabel}>Delivery Address *</Text>
-                <TouchableOpacity 
-                  style={styles.pinLocationButton}
-                  onPress={handleOpenLocationPicker}
-                >
-                  <Ionicons name="location" size={16} color="#3b82f6" />
-                  <Text style={styles.pinLocationText}>Pin Location</Text>
-                </TouchableOpacity>
+                <View style={styles.locationButtonsRow}>
+                  <TouchableOpacity 
+                    style={[styles.geocodeButton, geocoding && styles.geocodeButtonDisabled]}
+                    onPress={handleGeocodeAddress}
+                    disabled={geocoding || !customerAddress.trim()}
+                  >
+                    {geocoding ? (
+                      <ActivityIndicator size="small" color="#3b82f6" />
+                    ) : (
+                      <Ionicons name="search" size={16} color="#3b82f6" />
+                    )}
+                    <Text style={styles.geocodeButtonText}>
+                      {geocoding ? 'Finding...' : 'Find on Map'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.pinLocationButton}
+                    onPress={handleOpenLocationPicker}
+                  >
+                    <Ionicons name="location" size={16} color="#3b82f6" />
+                    <Text style={styles.pinLocationText}>Pin Location</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={customerAddress}
                 onChangeText={setCustomerAddress}
-                placeholder="Enter your complete delivery address"
+                placeholder="Enter your complete delivery address (e.g., House 123, Circle, Accra)"
                 placeholderTextColor="#9ca3af"
                 multiline
                 numberOfLines={3}
@@ -621,6 +698,14 @@ const CheckoutScreen: React.FC = () => {
                   <Ionicons name="checkmark-circle" size={16} color="#10b981" />
                   <Text style={styles.locationPinnedText}>
                     Location pinned: {deliveryLocation.lat.toFixed(5)}, {deliveryLocation.lng.toFixed(5)}
+                  </Text>
+                </View>
+              )}
+              {!deliveryLocation && customerAddress.trim() && (
+                <View style={styles.locationWarning}>
+                  <Ionicons name="warning" size={16} color="#f59e0b" />
+                  <Text style={styles.locationWarningText}>
+                    Tip: Use "Find on Map" or "Pin Location" for accurate delivery
                   </Text>
                 </View>
               )}
@@ -1036,6 +1121,47 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#059669',
     fontWeight: '500',
+  },
+  locationButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  geocodeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+  },
+  geocodeButtonDisabled: {
+    opacity: 0.6,
+  },
+  geocodeButtonText: {
+    fontSize: 14,
+    color: '#3b82f6',
+    fontWeight: '600',
+  },
+  locationWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: '#fffbeb',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  locationWarningText: {
+    fontSize: 13,
+    color: '#d97706',
+    fontWeight: '500',
+    flex: 1,
   },
 });
 
