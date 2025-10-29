@@ -45,6 +45,11 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
   const messageAnimations = useRef<Map<string, Animated.Value>>(new Map());
   const connectionPulse = useRef(new Animated.Value(0)).current;
 
+  // Debug: Log typing state changes
+  useEffect(() => {
+    console.log('[ChatScreen] 🔔 participantTyping state changed:', participantTyping);
+  }, [participantTyping]);
+
   // Get or create animation value for a message
   const getMessageAnimation = (messageId: string) => {
     if (!messageAnimations.current.has(messageId)) {
@@ -124,7 +129,8 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }, []),
-    onTypingStatus: useCallback((isTyping: boolean) => {
+    onTypingStatus: useCallback((isTyping: boolean, participantName?: string) => {
+      console.log('[ChatScreen] Typing status:', isTyping, participantName);
       setParticipantTyping(isTyping);
     }, []),
     onMessageRead: useCallback((messageIds: string[]) => {

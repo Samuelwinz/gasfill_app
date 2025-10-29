@@ -1,4 +1,5 @@
 import * as Location from 'expo-location';
+import geocodingCacheService from './geocodingCacheService';
 
 export interface GeocodingResult {
   lat: number;
@@ -6,13 +7,57 @@ export interface GeocodingResult {
   formattedAddress: string;
 }
 
+// Rate limiting
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 1000; // 1 second between requests
+
 class GeocodingService {
+  private requestQueue: Array<() => Promise<any>> = [];
+  private isProcessingQueue = false;
+
   /**
-   * Geocode an address string to coordinates
+   * Wait before making next request (rate limiting)
+   */
+  private async waitForRateLimit(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime;
+    
+    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+      const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+      console.log(`⏱️ Rate limiting: waiting ${waitTime}ms`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    lastRequestTime = Date.now();
+  }
+
+  /**
+   * Geocode an address string to coordinates (with caching and rate limiting)
    */
   async geocodeAddress(address: string): Promise<GeocodingResult | null> {
     try {
       console.log('🗺️ Geocoding address:', address);
+      
+      // Check cache first
+      const cached = await geocodingCacheService.getGeocode(address);
+      if (cached) {
+        console.log('✅ Using cached geocode result');
+        
+        // Get formatted address from reverse geocode cache
+        const formattedAddress = await geocodingCacheService.getReverseGeocode(
+          cached.latitude,
+          cached.longitude
+        ) || address;
+        
+        return {
+          lat: cached.latitude,
+          lng: cached.longitude,
+          formattedAddress,
+        };
+      }
+
+      // Rate limit API requests
+      await this.waitForRateLimit();
       
       // Use Expo's built-in geocoding
       const results = await Location.geocodeAsync(address);
@@ -21,9 +66,19 @@ class GeocodingService {
         const location = results[0];
         console.log('✅ Geocoding successful:', location);
         
+        // Cache the result immediately
+        await geocodingCacheService.setGeocode(
+          address,
+          location.latitude,
+          location.longitude
+        );
+        
         // Try to get formatted address via reverse geocoding
         let formattedAddress = address;
         try {
+          // Rate limit this request too
+          await this.waitForRateLimit();
+          
           const reverseResults = await Location.reverseGeocodeAsync({
             latitude: location.latitude,
             longitude: location.longitude,
@@ -40,9 +95,17 @@ class GeocodingService {
             ]
               .filter(Boolean)
               .join(', ');
+            
+            // Cache the reverse geocode result
+            await geocodingCacheService.setReverseGeocode(
+              location.latitude,
+              location.longitude,
+              formattedAddress
+            );
           }
-        } catch (err) {
-          console.warn('⚠️ Reverse geocoding failed:', err);
+        } catch (err: any) {
+          console.warn('⚠️ Reverse geocoding failed:', err.message || err);
+          // Use the original address if reverse geocoding fails
         }
         
         return {
@@ -54,18 +117,32 @@ class GeocodingService {
       
       console.warn('⚠️ No geocoding results found for address:', address);
       return null;
-    } catch (error) {
-      console.error('❌ Geocoding error:', error);
+    } catch (error: any) {
+      if (error.message?.includes('rate limit')) {
+        console.error('❌ Geocoding rate limit exceeded - using cache only');
+      } else {
+        console.error('❌ Geocoding error:', error);
+      }
       return null;
     }
   }
 
   /**
-   * Reverse geocode coordinates to an address
+   * Reverse geocode coordinates to an address (with caching and rate limiting)
    */
   async reverseGeocode(lat: number, lng: number): Promise<string | null> {
     try {
       console.log('🗺️ Reverse geocoding:', lat, lng);
+      
+      // Check cache first
+      const cached = await geocodingCacheService.getReverseGeocode(lat, lng);
+      if (cached) {
+        console.log('✅ Using cached reverse geocode result');
+        return cached;
+      }
+
+      // Rate limit API requests
+      await this.waitForRateLimit();
       
       const results = await Location.reverseGeocodeAsync({
         latitude: lat,
@@ -85,13 +162,22 @@ class GeocodingService {
           .join(', ');
         
         console.log('✅ Reverse geocoding successful:', formattedAddress);
+        
+        // Cache the result
+        await geocodingCacheService.setReverseGeocode(lat, lng, formattedAddress);
+        
         return formattedAddress;
       }
       
       console.warn('⚠️ No reverse geocoding results found');
       return null;
-    } catch (error) {
-      console.error('❌ Reverse geocoding error:', error);
+    } catch (error: any) {
+      if (error.message?.includes('rate limit')) {
+        console.error('❌ Geocoding rate limit exceeded');
+        console.log('💡 Showing coordinates instead of address');
+      } else {
+        console.error('❌ Reverse geocoding error:', error);
+      }
       return null;
     }
   }

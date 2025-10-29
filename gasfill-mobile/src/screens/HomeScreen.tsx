@@ -11,6 +11,7 @@ import {
   Dimensions,
   Linking,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,8 @@ import * as Location from 'expo-location';
 import { StorageService } from '../utils/storage';
 import ApiService from '../services/api';
 import geocodingService from '../services/geocodingService';
+import websocketService from '../services/websocketService';
+import pushNotificationService from '../services/pushNotificationService';
 import { Order } from '../types';
 
 interface HomeScreenProps {
@@ -34,12 +37,103 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [locationName, setLocationName] = useState<string | null>(null);
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [orderAddresses, setOrderAddresses] = useState<{ [key: string]: string }>({});
+  const [refreshing, setRefreshing] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
 
   useEffect(() => {
     loadUserData();
     loadActiveOrders();
     getCurrentLocation();
+    initializeServices();
+
+    return () => {
+      // Cleanup on unmount
+      websocketService.disconnect();
+      pushNotificationService.cleanup();
+    };
   }, []);
+
+  const initializeServices = async () => {
+    try {
+      // Initialize push notifications (gracefully fails if not on physical device)
+      await pushNotificationService.initialize();
+
+      // Connect to WebSocket (gracefully fails if backend not running)
+      const user = await StorageService.getUser();
+      if (user?.id) {
+        websocketService.connect(user.id.toString());
+        
+        // Listen for connection status
+        websocketService.onConnectionChange((connected) => {
+          setWsConnected(connected);
+          if (connected) {
+            console.log('✅ Real-time tracking active');
+          } else {
+            console.log('⚠️ Real-time tracking unavailable (using polling)');
+          }
+        });
+
+        // Listen for order updates
+        websocketService.subscribe('order_update', (data) => {
+          console.log('📦 Order update received:', data);
+          handleOrderUpdate(data);
+        });
+
+        // Listen for rider location updates
+        websocketService.subscribe('rider_location', (data) => {
+          console.log('📍 Rider location update:', data);
+          handleRiderLocationUpdate(data);
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error initializing services:', error);
+      console.log('💡 App will work without real-time features');
+    }
+  };
+
+  const handleOrderUpdate = (data: any) => {
+    const { order_id, status, rider_location } = data;
+    
+    // Update local orders
+    setActiveOrders(prevOrders => 
+      prevOrders.map(order => 
+        order.id === order_id 
+          ? { ...order, status, rider_location } 
+          : order
+      )
+    );
+
+    // Show push notification
+    pushNotificationService.notifyOrderStatusChange(order_id, status);
+  };
+
+  const handleRiderLocationUpdate = (data: any) => {
+    const { order_id, location } = data;
+    
+    // Update rider location for the order
+    setActiveOrders(prevOrders =>
+      prevOrders.map(order =>
+        order.id === order_id
+          ? { ...order, rider_location: location }
+          : order
+      )
+    );
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        loadUserData(),
+        loadActiveOrders(),
+        getCurrentLocation(),
+      ]);
+    } catch (error) {
+      console.error('Error refreshing:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const loadActiveOrders = async () => {
     try {
@@ -49,8 +143,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       );
       setActiveOrders(active.slice(0, 2)); // Show max 2 active orders
       
-      // Reverse geocode delivery addresses for active orders
-      active.slice(0, 2).forEach(async (order) => {
+      // Reverse geocode delivery addresses for active orders (sequentially to avoid rate limits)
+      const ordersToGeocode = active.slice(0, 2);
+      for (const order of ordersToGeocode) {
         if (order.customer_location) {
           const address = await geocodingService.reverseGeocode(
             order.customer_location.lat,
@@ -60,7 +155,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             setOrderAddresses(prev => ({ ...prev, [order.id]: address }));
           }
         }
-      });
+      }
     } catch (error) {
       console.log('Error loading active orders:', error);
     }
@@ -166,7 +261,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F4F7FA" />
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#10b981']}
+            tintColor="#10b981"
+          />
+        }
+      >
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Hi, {userName}!</Text>
@@ -360,15 +466,26 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                   </View>
                   <View style={styles.orderActions}>
                     {order.rider_phone && (
-                      <TouchableOpacity 
-                        style={styles.callButton}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleCallRider(order);
-                        }}
-                      >
-                        <Ionicons name="call" size={16} color="#3b82f6" />
-                      </TouchableOpacity>
+                      <>
+                        <TouchableOpacity 
+                          style={styles.callButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleCallRider(order);
+                          }}
+                        >
+                          <Ionicons name="call" size={16} color="#3b82f6" />
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={styles.chatButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            navigation.navigate('Chat', { orderId: order.id, riderId: order.rider_id });
+                          }}
+                        >
+                          <Ionicons name="chatbubble" size={16} color="#10b981" />
+                        </TouchableOpacity>
+                      </>
                     )}
                     <TouchableOpacity style={styles.trackButton}>
                       <Ionicons name="navigate" size={16} color="#ffffff" />
@@ -796,6 +913,14 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     backgroundColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#d1fae5',
     alignItems: 'center',
     justifyContent: 'center',
   },

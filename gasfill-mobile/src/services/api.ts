@@ -733,6 +733,32 @@ class ApiService {
       throw error;
     }
   }
+
+  // Push Notification Methods
+  async registerPushToken(pushToken: string, deviceType: string = 'mobile'): Promise<any> {
+    try {
+      const response = await this.api.post('/api/notifications/register-token', {
+        push_token: pushToken,
+        device_type: deviceType
+      });
+      console.log('✅ Push token registered with backend');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Failed to register push token with backend:', error);
+      throw error;
+    }
+  }
+
+  async removePushToken(): Promise<any> {
+    try {
+      const response = await this.api.post('/api/notifications/remove-token', {});
+      console.log('✅ Push token removed from backend');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Failed to remove push token from backend:', error);
+      throw error;
+    }
+  }
 }
 
 export const apiService = new ApiService();

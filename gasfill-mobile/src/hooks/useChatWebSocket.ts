@@ -103,11 +103,30 @@ export const useChatWebSocket = ({
   useEffect(() => {
     if (!onTypingStatus) return;
 
+    console.log('[useChatWebSocket] Setting up chat_typing subscription for room:', chatRoomId, 'userId:', userId);
+
     const unsubscribe = subscribe('chat_typing', (data: TypingIndicator) => {
+      console.log('[useChatWebSocket] 🔔 RAW chat_typing event received:', JSON.stringify(data, null, 2));
+      console.log('[useChatWebSocket] Current room:', chatRoomId, 'Event room:', data.chat_room_id);
+      console.log('[useChatWebSocket] Current userId:', userId, 'Event userId:', data.user_id);
+      
+      // Normalize room IDs for comparison (handle both "room_ORD-1" and "order_ORD-1")
+      const normalizeRoomId = (roomId: string) => {
+        if (!roomId) return '';
+        return roomId.replace(/^(room_|order_)/, '').toLowerCase();
+      };
+      
+      const currentRoomNormalized = normalizeRoomId(chatRoomId);
+      const eventRoomNormalized = normalizeRoomId(data.chat_room_id);
+      
+      console.log('[useChatWebSocket] Normalized - Current:', currentRoomNormalized, 'Event:', eventRoomNormalized);
+      
       // Only handle typing for this chat room from other participant
-      if (data.chat_room_id === chatRoomId && data.user_id !== userId) {
-        console.log('[useChatWebSocket] Typing status changed:', data.is_typing);
+      if (eventRoomNormalized === currentRoomNormalized && data.user_id !== userId) {
+        console.log('[useChatWebSocket] ✅ Typing status changed:', data.is_typing);
         onTypingStatus(data.is_typing, ''); // Name will be filled from participant data
+      } else {
+        console.log('[useChatWebSocket] ⚠️ Typing event ignored - room match:', eventRoomNormalized === currentRoomNormalized, 'user match:', data.user_id !== userId);
       }
     });
 

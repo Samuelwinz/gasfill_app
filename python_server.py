@@ -10,7 +10,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, EmailStr
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 import uvicorn
 import jwt
 import hashlib
@@ -4427,7 +4427,7 @@ def verify_paystack_signature(payload: bytes, signature: str) -> bool:
 # ========================
 
 class ChatRoomCreate(BaseModel):
-    order_id: int
+    order_id: Union[int, str]  # Accept both int and string (e.g., "ORD-1" or 1)
     user_id: int
     user_type: str
 
@@ -4457,8 +4457,17 @@ async def create_or_get_chat_room(data: ChatRoomCreate, credentials: HTTPAuthori
         user_email = current_user.get("email")
         user_name = current_user.get("username", "User")
         
+        # Normalize order_id (convert "ORD-1" to 1, or keep as int)
+        order_id = data.order_id
+        if isinstance(order_id, str):
+            # Extract number from "ORD-1" format
+            if order_id.startswith("ORD-"):
+                order_id = int(order_id.replace("ORD-", ""))
+            else:
+                order_id = int(order_id)
+        
         # Get order to find rider info if needed
-        order = db.get_order_by_id(f"ORD-{data.order_id}")
+        order = db.get_order_by_id(f"ORD-{order_id}")
         rider_id = order.get('rider_id') if order else None
         rider_name = None
         
@@ -4470,7 +4479,7 @@ async def create_or_get_chat_room(data: ChatRoomCreate, credentials: HTTPAuthori
         
         # Create or get chat room
         chat_room = db.create_or_get_chat_room(
-            order_id=data.order_id,
+            order_id=order_id,
             customer_id=data.user_id,
             customer_name=user_name,
             rider_id=rider_id,

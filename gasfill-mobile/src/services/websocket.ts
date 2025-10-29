@@ -201,14 +201,18 @@ export class WebSocketService {
    */
   private emit(event: string, data: any) {
     const callbacks = this.listeners.get(event);
+    console.log(`[WebSocket] 🎯 Emitting '${event}' - ${callbacks ? callbacks.size : 0} listeners`);
     if (callbacks) {
       callbacks.forEach(callback => {
         try {
+          console.log(`[WebSocket] 📤 Calling listener for '${event}'`);
           callback(data);
         } catch (error) {
           console.error(`[WebSocket] Error in event callback for ${event}:`, error);
         }
       });
+    } else {
+      console.warn(`[WebSocket] ⚠️ No listeners registered for event '${event}'`);
     }
   }
 
