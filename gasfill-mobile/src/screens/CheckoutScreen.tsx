@@ -419,7 +419,7 @@ const CheckoutScreen: React.FC = () => {
         setTimeout(() => {
           Alert.alert(
             'Order Placed Successfully! 🎉',
-            `Your order #${order.id} has been placed and payment confirmed.\n\nTotal: ₵${totalAmount.toFixed(2)}\n\nYou'll receive updates via email and SMS.`,
+            `Your order #${order.id} has been placed and payment confirmed.\n\nTotal: GH₵ ${totalAmount.toFixed(2)}\n\nYou'll receive updates via email and SMS.`,
             [
               {
                 text: 'View Orders',
@@ -471,7 +471,7 @@ const CheckoutScreen: React.FC = () => {
         setTimeout(() => {
           Alert.alert(
             'Order Saved Locally ✓',
-            `Payment confirmed! Your order has been saved locally and will sync when connection is restored.\n\nTotal: ₵${totalAmount.toFixed(2)}`,
+            `Payment confirmed! Your order has been saved locally and will sync when connection is restored.\n\nTotal: GH₵ ${totalAmount.toFixed(2)}`,
             [
               {
                 text: 'OK',
@@ -538,9 +538,9 @@ const CheckoutScreen: React.FC = () => {
               <View key={item.id} style={styles.orderItem}>
                 <View style={styles.orderItemLeft}>
                   <Text style={styles.orderItemName}>{item.name}</Text>
-                  <Text style={styles.orderItemDetails}>₵{item.price} × {item.qty}</Text>
+                  <Text style={styles.orderItemDetails}>GH₵ {item.price.toFixed(2)} × {item.qty}</Text>
                 </View>
-                <Text style={styles.orderItemTotal}>₵{(item.price * item.qty).toFixed(2)}</Text>
+                <Text style={styles.orderItemTotal}>GH₵ {(item.price * item.qty).toFixed(2)}</Text>
               </View>
             ))}
 
@@ -548,15 +548,15 @@ const CheckoutScreen: React.FC = () => {
             
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Subtotal</Text>
-              <Text style={styles.priceValue}>₵{getSubtotal().toFixed(2)}</Text>
+              <Text style={styles.priceValue}>GH₵ {getSubtotal().toFixed(2)}</Text>
             </View>
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Delivery Fee</Text>
-              <Text style={styles.priceValue}>₵{getDeliveryFee().toFixed(2)}</Text>
+              <Text style={styles.priceValue}>GH₵ {getDeliveryFee().toFixed(2)}</Text>
             </View>
             <View style={[styles.priceRow, styles.totalRow]}>
               <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>₵{getTotalAmount().toFixed(2)}</Text>
+              <Text style={styles.totalValue}>GH₵ {getTotalAmount().toFixed(2)}</Text>
             </View>
           </View>
 

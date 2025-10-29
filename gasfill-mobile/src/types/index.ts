@@ -20,6 +20,10 @@ export interface Order {
   customer_email?: string;
   customer_phone?: string;
   customer_address?: string;
+  customer_location?: {
+    lat: number;
+    lng: number;
+  };
   total: number;
   delivery_type?: string;
   status: OrderStatus;
@@ -30,6 +34,10 @@ export interface Order {
   rider_name?: string;
   rider_phone?: string;
   rider_rating?: number;
+  rider_location?: {
+    lat: number;
+    lng: number;
+  };
   tracking_info?: TrackingInfo;
 }
 

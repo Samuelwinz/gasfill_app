@@ -336,7 +336,7 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                       {order.status}
                     </Text>
                   </View>
-                  <Text style={styles.total}>₵{order.total.toFixed(2)}</Text>
+                  <Text style={styles.total}>GH₵ {order.total.toFixed(2)}</Text>
                 </View>
                 
                 {/* Track Order Button for active orders */}

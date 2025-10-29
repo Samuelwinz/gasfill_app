@@ -145,7 +145,7 @@ const ProductsScreen: React.FC = () => {
             </TouchableOpacity>
             <TouchableOpacity style={styles.optionCard}>
               <Text style={styles.priceText}>
-                {selectedSize === '6kg' ? '80' : selectedSize === '12kg' ? '150' : selectedSize === '15kg' ? '180' : '—'}
+                {selectedSize === '6kg' ? 'GH₵ 80.00' : selectedSize === '12kg' ? 'GH₵ 150.00' : selectedSize === '15kg' ? 'GH₵ 180.00' : '—'}
               </Text>
               <Text style={styles.optionText}>Price</Text>
             </TouchableOpacity>

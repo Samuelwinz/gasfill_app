@@ -7,11 +7,18 @@ import {
   TouchableOpacity,
   StatusBar,
   Image,
+  ActivityIndicator,
+  Dimensions,
+  Linking,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import * as Location from 'expo-location';
 import { StorageService } from '../utils/storage';
 import ApiService from '../services/api';
+import geocodingService from '../services/geocodingService';
 import { Order } from '../types';
 
 interface HomeScreenProps {
@@ -23,10 +30,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [points, setPoints] = useState(1200);
   const [ordersCompleted, setOrdersCompleted] = useState(42);
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationName, setLocationName] = useState<string | null>(null);
+  const [loadingLocation, setLoadingLocation] = useState(false);
+  const [orderAddresses, setOrderAddresses] = useState<{ [key: string]: string }>({});
 
   useEffect(() => {
     loadUserData();
     loadActiveOrders();
+    getCurrentLocation();
   }, []);
 
   const loadActiveOrders = async () => {
@@ -36,8 +48,105 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         ['pending', 'assigned', 'pickup', 'picked_up', 'in_transit'].includes(order.status.toLowerCase())
       );
       setActiveOrders(active.slice(0, 2)); // Show max 2 active orders
+      
+      // Reverse geocode delivery addresses for active orders
+      active.slice(0, 2).forEach(async (order) => {
+        if (order.customer_location) {
+          const address = await geocodingService.reverseGeocode(
+            order.customer_location.lat,
+            order.customer_location.lng
+          );
+          if (address) {
+            setOrderAddresses(prev => ({ ...prev, [order.id]: address }));
+          }
+        }
+      });
     } catch (error) {
       console.log('Error loading active orders:', error);
+    }
+  };
+
+  const getCurrentLocation = async () => {
+    try {
+      setLoadingLocation(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status !== 'granted') {
+        console.log('Location permission denied');
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const coords = {
+        lat: location.coords.latitude,
+        lng: location.coords.longitude,
+      };
+      
+      setCurrentLocation(coords);
+
+      // Reverse geocode to get location name
+      const address = await geocodingService.reverseGeocode(coords.lat, coords.lng);
+      if (address) {
+        // Extract just the area name (e.g., "Osu, Accra")
+        const parts = address.split(',');
+        setLocationName(parts.slice(0, 2).join(',').trim());
+      }
+    } catch (error) {
+      console.log('Error getting location:', error);
+    } finally {
+      setLoadingLocation(false);
+    }
+  };
+
+  const calculateETA = (orderStatus: string): string => {
+    const etaMap: { [key: string]: string } = {
+      'pending': '30-45 min',
+      'assigned': '25-35 min',
+      'pickup': '20-30 min',
+      'picked_up': '15-25 min',
+      'in_transit': '10-15 min',
+    };
+    return etaMap[orderStatus.toLowerCase()] || '30 min';
+  };
+
+  const getStatusProgress = (status: string): number => {
+    const progressMap: { [key: string]: number } = {
+      'pending': 20,
+      'assigned': 40,
+      'pickup': 60,
+      'picked_up': 70,
+      'in_transit': 90,
+      'delivered': 100,
+    };
+    return progressMap[status.toLowerCase()] || 0;
+  };
+
+  const handleCallRider = (order: Order) => {
+    if (order.rider_phone) {
+      Alert.alert(
+        'Call Rider',
+        `Do you want to call the rider for order #${order.id}?`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Call',
+            onPress: () => {
+              Linking.openURL(`tel:${order.rider_phone}`).catch((err) => {
+                Alert.alert('Error', 'Unable to make phone call');
+                console.error('Error calling rider:', err);
+              });
+            },
+          },
+        ]
+      );
+    } else {
+      Alert.alert('No Contact', 'Rider contact information not available yet');
     }
   };
 
@@ -96,6 +205,28 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </View>
         </View>
 
+        {/* Location Banner */}
+        {currentLocation && (
+          <View style={styles.locationBanner}>
+            <View style={styles.locationIconContainer}>
+              <Ionicons name="location-sharp" size={24} color="#10b981" />
+            </View>
+            <View style={styles.locationInfo}>
+              <Text style={styles.locationLabel}>Your Location</Text>
+              {loadingLocation ? (
+                <ActivityIndicator size="small" color="#10b981" />
+              ) : (
+                <Text style={styles.locationText}>
+                  {locationName || `${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}`}
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity onPress={getCurrentLocation}>
+              <Ionicons name="refresh" size={20} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.quickAccessGrid}>
           <TouchableOpacity style={styles.quickAccessCard} onPress={() => navigation.navigate('Products')}>
             <View style={styles.cardIconContainer}>
@@ -124,24 +255,90 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             {activeOrders.map((order) => (
               <TouchableOpacity
                 key={order.id}
-                style={styles.activeOrderCard}
+                style={styles.enhancedOrderCard}
                 onPress={() => navigation.navigate('DeliveryTracking', { orderId: order.id })}
               >
+                {/* Progress Bar */}
+                <View style={styles.orderProgressBar}>
+                  <View style={[styles.orderProgress, { width: `${getStatusProgress(order.status)}%` }]} />
+                </View>
+
+                {/* Order Header */}
                 <View style={styles.activeOrderHeader}>
                   <View style={styles.activeOrderInfo}>
                     <Text style={styles.activeOrderId}>Order #{order.id}</Text>
-                    <Text style={styles.activeOrderStatus}>
-                      {order.status === 'pending' && '⏳ Order Placed'}
-                      {order.status === 'assigned' && '👤 Rider Assigned'}
-                      {order.status === 'pickup' && '📦 Picking Up'}
-                      {order.status === 'picked_up' && '📦 Picked Up'}
-                      {order.status === 'in_transit' && '🚴 On the Way'}
-                    </Text>
+                    <View style={styles.statusBadge}>
+                      <View style={styles.statusDot} />
+                      <Text style={styles.activeOrderStatus}>
+                        {order.status === 'pending' && 'Order Placed'}
+                        {order.status === 'assigned' && 'Rider Assigned'}
+                        {order.status === 'pickup' && 'Picking Up'}
+                        {order.status === 'picked_up' && 'Picked Up'}
+                        {order.status === 'in_transit' && 'On the Way'}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.trackIconContainer}>
-                    <Ionicons name="location" size={20} color="#10b981" />
+                  <View style={styles.etaBadge}>
+                    <Ionicons name="time-outline" size={14} color="#10b981" />
+                    <Text style={styles.etaText}>ETA {calculateETA(order.status)}</Text>
                   </View>
                 </View>
+
+                {/* Delivery Address with Reverse Geocoding */}
+                {order.customer_location && orderAddresses[order.id] && (
+                  <View style={styles.deliveryAddressRow}>
+                    <Ionicons name="location" size={16} color="#6b7280" />
+                    <Text style={styles.deliveryAddressText} numberOfLines={1}>
+                      {orderAddresses[order.id]}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Mini Map Preview (if rider location available) */}
+                {order.rider_location && order.customer_location && (
+                  <View style={styles.miniMapContainer}>
+                    <MapView
+                      style={styles.miniMap}
+                      provider={PROVIDER_DEFAULT}
+                      initialRegion={{
+                        latitude: (order.rider_location.lat + order.customer_location.lat) / 2,
+                        longitude: (order.rider_location.lng + order.customer_location.lng) / 2,
+                        latitudeDelta: 0.05,
+                        longitudeDelta: 0.05,
+                      }}
+                      scrollEnabled={false}
+                      zoomEnabled={false}
+                      rotateEnabled={false}
+                      pitchEnabled={false}
+                    >
+                      <Marker
+                        coordinate={{
+                          latitude: order.rider_location.lat,
+                          longitude: order.rider_location.lng,
+                        }}
+                      >
+                        <View style={styles.riderMarker}>
+                          <Ionicons name="bicycle" size={16} color="#ffffff" />
+                        </View>
+                      </Marker>
+                      <Marker
+                        coordinate={{
+                          latitude: order.customer_location.lat,
+                          longitude: order.customer_location.lng,
+                        }}
+                      >
+                        <View style={styles.customerMarker}>
+                          <Ionicons name="home" size={16} color="#ffffff" />
+                        </View>
+                      </Marker>
+                    </MapView>
+                    <View style={styles.miniMapOverlay}>
+                      <Ionicons name="expand-outline" size={16} color="#ffffff" />
+                    </View>
+                  </View>
+                )}
+
+                {/* Items */}
                 <View style={styles.activeOrderItems}>
                   {order.items.slice(0, 2).map((item, idx) => (
                     <Text key={idx} style={styles.activeOrderItem}>
@@ -150,15 +347,33 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                   ))}
                   {order.items.length > 2 && (
                     <Text style={styles.activeOrderItem}>
-                      +{order.items.length - 2} more
+                      +{order.items.length - 2} more items
                     </Text>
                   )}
                 </View>
-                <View style={styles.activeOrderFooter}>
-                  <Text style={styles.activeOrderTotal}>₵{order.total.toFixed(2)}</Text>
-                  <View style={styles.trackButton}>
-                    <Ionicons name="navigate" size={14} color="#10b981" />
-                    <Text style={styles.trackText}>Track Order</Text>
+
+                {/* Footer with Actions */}
+                <View style={styles.enhancedOrderFooter}>
+                  <View>
+                    <Text style={styles.totalLabel}>Total Amount</Text>
+                    <Text style={styles.activeOrderTotal}>GH₵ {order.total.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.orderActions}>
+                    {order.rider_phone && (
+                      <TouchableOpacity 
+                        style={styles.callButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleCallRider(order);
+                        }}
+                      >
+                        <Ionicons name="call" size={16} color="#3b82f6" />
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity style={styles.trackButton}>
+                      <Ionicons name="navigate" size={16} color="#ffffff" />
+                      <Text style={styles.trackText}>Track Live</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -382,15 +597,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#d1fae5',
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#10b981',
+    borderRadius: 10,
   },
   trackText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#10b981',
+    color: '#ffffff',
   },
   headerActions: {
     flexDirection: 'row',
@@ -418,6 +633,171 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#fff',
+  },
+  // Location Banner Styles
+  locationBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0fdf4',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#10b981',
+  },
+  locationIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#d1fae5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  locationInfo: {
+    flex: 1,
+  },
+  locationLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  locationText: {
+    fontSize: 14,
+    color: '#065f46',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  // Enhanced Order Card Styles
+  enhancedOrderCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  orderProgressBar: {
+    height: 4,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 2,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  orderProgress: {
+    height: '100%',
+    backgroundColor: '#10b981',
+    borderRadius: 2,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10b981',
+  },
+  etaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  etaText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10b981',
+  },
+  deliveryAddressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+  },
+  deliveryAddressText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#4b5563',
+  },
+  miniMapContainer: {
+    position: 'relative',
+    height: 120,
+    marginVertical: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  miniMap: {
+    width: '100%',
+    height: '100%',
+  },
+  miniMapOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: 6,
+    borderRadius: 8,
+  },
+  riderMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#3b82f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+  },
+  customerMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#10b981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+  },
+  enhancedOrderFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  totalLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  orderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  callButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

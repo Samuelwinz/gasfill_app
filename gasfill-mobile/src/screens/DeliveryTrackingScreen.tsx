@@ -18,6 +18,7 @@ import * as Location from 'expo-location';
 import { apiService } from '../services/api';
 import { useWebSocketEvent } from '../context/WebSocketContext';
 import locationTrackingService from '../services/locationTracking';
+import geocodingService from '../services/geocodingService';
 import Loading from '../components/Loading';
 import ErrorDisplay from '../components/ErrorDisplay';
 import OrderRatingModal from '../components/OrderRatingModal';
@@ -75,6 +76,8 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [updatingLocation, setUpdatingLocation] = useState(false);
   const [newLocation, setNewLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [customerAddressFormatted, setCustomerAddressFormatted] = useState<string | null>(null);
+  const [loadingAddress, setLoadingAddress] = useState(false);
   const mapRef = useRef<MapView>(null);
   const orderId = route.params?.orderId;
   const isLoadingRef = useRef(false);
@@ -173,6 +176,11 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
       
       setTrackingData(data);
 
+      // Reverse geocode customer location to get formatted address
+      if (data.customer_location && !customerAddressFormatted) {
+        reverseGeocodeCustomerLocation(data.customer_location.lat, data.customer_location.lng);
+      }
+
       // Fit map to show both locations
       if (data.rider_location && data.customer_location && mapRef.current) {
         console.log('[DeliveryTracking] 🗺️ Fitting map to show rider and customer');
@@ -226,6 +234,28 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
   const handleRefresh = () => {
     setRefreshing(true);
     loadTrackingData(true);
+  };
+
+  const reverseGeocodeCustomerLocation = async (lat: number, lng: number) => {
+    try {
+      setLoadingAddress(true);
+      console.log('🗺️ Reverse geocoding customer location:', { lat, lng });
+      
+      const address = await geocodingService.reverseGeocode(lat, lng);
+      
+      if (address) {
+        console.log('✅ Formatted address:', address);
+        setCustomerAddressFormatted(address);
+      } else {
+        console.log('⚠️ Could not reverse geocode location');
+        setCustomerAddressFormatted(null);
+      }
+    } catch (error) {
+      console.error('❌ Reverse geocoding error:', error);
+      setCustomerAddressFormatted(null);
+    } finally {
+      setLoadingAddress(false);
+    }
   };
 
   const handleCallRider = () => {
@@ -303,6 +333,9 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
       
       // Reload tracking data
       await loadTrackingData();
+      
+      // Reverse geocode the new location
+      await reverseGeocodeCustomerLocation(newLocation.lat, newLocation.lng);
     } catch (error: any) {
       console.error('Error updating location:', error);
       Alert.alert('Error', error.message || 'Failed to update location');
@@ -627,9 +660,20 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
           {/* Pinned Location Info */}
           {trackingData.customer_location ? (
             <View style={styles.pinnedLocationRow}>
-              <View style={styles.pinnedLocationBadge}>
-                <Ionicons name="pin" size={18} color="#10b981" />
-                <Text style={styles.pinnedLocationText}>Exact location pinned</Text>
+              <View style={styles.pinnedLocationInfo}>
+                <View style={styles.pinnedLocationBadge}>
+                  <Ionicons name="pin" size={18} color="#10b981" />
+                  <Text style={styles.pinnedLocationText}>Exact location pinned</Text>
+                </View>
+                {loadingAddress ? (
+                  <Text style={styles.formattedAddress}>Loading address...</Text>
+                ) : customerAddressFormatted ? (
+                  <Text style={styles.formattedAddress}>📍 {customerAddressFormatted}</Text>
+                ) : (
+                  <Text style={styles.locationCoordinates}>
+                    {trackingData.customer_location.lat.toFixed(5)}, {trackingData.customer_location.lng.toFixed(5)}
+                  </Text>
+                )}
               </View>
               <TouchableOpacity
                 style={styles.openMapButton}
@@ -678,14 +722,14 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
                     {item.quantity}x {item.name}
                   </Text>
                   <Text style={styles.itemPrice}>
-                    ₵{((item.price || 0) * (item.quantity || 0)).toFixed(2)}
+                    GH₵ {((item.price || 0) * (item.quantity || 0)).toFixed(2)}
                   </Text>
                 </View>
               ))}
               <View style={styles.divider} />
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>₵{(trackingData.total || 0).toFixed(2)}</Text>
+                <Text style={styles.totalValue}>GH₵ {(trackingData.total || 0).toFixed(2)}</Text>
               </View>
             </>
           )}
@@ -1279,6 +1323,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#065f46',
+  },
+  pinnedLocationInfo: {
+    flex: 1,
+    gap: 8,
+  },
+  formattedAddress: {
+    fontSize: 13,
+    color: '#374151',
+    fontStyle: 'italic',
+    marginLeft: 24,
+  },
+  locationCoordinates: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontFamily: 'monospace',
+    marginLeft: 24,
   },
   openMapButton: {
     flexDirection: 'row',
