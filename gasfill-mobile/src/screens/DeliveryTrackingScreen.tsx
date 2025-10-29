@@ -159,6 +159,13 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
         customer_location: data.customer_location,
       });
       
+      // Log detailed customer location info
+      if (data.customer_location) {
+        console.log('📍✅ Customer location IS PINNED:', data.customer_location);
+      } else {
+        console.log('📍⚠️ Customer location NOT PINNED - will use default location');
+      }
+      
       setTrackingData(data);
 
       // Fit map to show both locations
@@ -295,8 +302,11 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
   }
 
   const currentStatusIndex = getCurrentStepIndex();
-  const riderLocation = trackingData.rider_location || { lat: 5.65, lng: -0.2 };
-  const customerLocation = trackingData.customer_location || { lat: 5.6, lng: -0.18 };
+  
+  // Use customer location if pinned, otherwise use a default location for Accra, Ghana
+  const DEFAULT_LOCATION = { lat: 5.6037, lng: -0.1870 }; // Accra city center
+  const customerLocation = trackingData.customer_location || DEFAULT_LOCATION;
+  const hasCustomerLocation = !!trackingData.customer_location;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -327,11 +337,23 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
             latitude: customerLocation.lat,
             longitude: customerLocation.lng,
           }} 
-          title="Delivery Location"
+          title={hasCustomerLocation ? "📍 Pinned Location" : "Delivery Location (Approximate)"}
           description={trackingData.customer_address}
         >
-          <View style={styles.customerMarker}>
-            <Ionicons name="home" size={28} color="#ffffff" />
+          <View style={[
+            styles.customerMarker,
+            hasCustomerLocation && styles.pinnedMarker
+          ]}>
+            <Ionicons 
+              name={hasCustomerLocation ? "pin" : "home"} 
+              size={28} 
+              color="#ffffff" 
+            />
+            {hasCustomerLocation && (
+              <View style={styles.pinnedMarkerBadge}>
+                <Ionicons name="checkmark-circle" size={14} color="#10b981" />
+              </View>
+            )}
           </View>
         </Marker>
 
@@ -549,6 +571,37 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
             </Text>
           </View>
 
+          {/* Pinned Location Info */}
+          {trackingData.customer_location ? (
+            <View style={styles.pinnedLocationRow}>
+              <View style={styles.pinnedLocationBadge}>
+                <Ionicons name="pin" size={18} color="#10b981" />
+                <Text style={styles.pinnedLocationText}>Exact location pinned</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.openMapButton}
+                onPress={() => {
+                  const lat = trackingData.customer_location!.lat;
+                  const lng = trackingData.customer_location!.lng;
+                  const url = `https://www.google.com/maps?q=${lat},${lng}`;
+                  Linking.openURL(url);
+                }}
+              >
+                <Ionicons name="map-outline" size={16} color="#3b82f6" />
+                <Text style={styles.openMapText}>Open in Maps</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.locationWarningRow}>
+              <View style={styles.locationWarningBadge}>
+                <Ionicons name="warning-outline" size={16} color="#f59e0b" />
+                <Text style={styles.locationWarningText}>
+                  Location not pinned - Using text address
+                </Text>
+              </View>
+            </View>
+          )}
+
           {trackingData.items && trackingData.items.length > 0 && (
             <>
               <View style={styles.divider} />
@@ -634,6 +687,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
+  },
+  pinnedMarker: {
+    backgroundColor: '#3b82f6',
+  },
+  pinnedMarkerBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#10b981',
   },
   riderMarker: {
     width: 44,
@@ -1026,6 +1095,68 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  pinnedLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  pinnedLocationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  pinnedLocationText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#065f46',
+  },
+  openMapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+    backgroundColor: '#eff6ff',
+  },
+  openMapText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  locationWarningRow: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  locationWarningBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fbbf24',
+  },
+  locationWarningText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#92400e',
+    flex: 1,
   },
 });
 

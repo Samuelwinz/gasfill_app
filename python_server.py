@@ -207,7 +207,7 @@ class OrderCreate(BaseModel):
     customer_email: Optional[str] = None
     customer_phone: Optional[str] = None
     customer_address: Optional[str] = None
-    customer_location: Optional[Dict[str, float]] = None  # {latitude, longitude}
+    customer_location: Optional[Dict[str, float]] = None  # {lat, lng} or {latitude, longitude}
     total: float
     delivery_type: Optional[str] = "standard"
 
@@ -726,6 +726,12 @@ async def create_order(order_data: OrderCreate):
     """Create a new order"""
     global order_counter
     
+    print(f"📦 Creating order with data:")
+    print(f"  - customer_name: {order_data.customer_name}")
+    print(f"  - customer_address: {order_data.customer_address}")
+    print(f"  - customer_location: {order_data.customer_location}")
+    print(f"  - customer_location type: {type(order_data.customer_location)}")
+    
     order = {
         "id": f"ORD-{order_counter}",
         "items": [item.model_dump() for item in order_data.items],
@@ -742,8 +748,14 @@ async def create_order(order_data: OrderCreate):
         "updated_at": utc_now().isoformat()
     }
     
+    print(f"💾 Saving order with customer_location: {order['customer_location']}")
+    
     # Save to database
     result = db.create_order(order)
+    
+    print(f"✅ Order created: {result.get('id')}")
+    print(f"✅ Returned customer_location: {result.get('customer_location')}")
+    
     order_counter += 1
     
     return result
@@ -930,18 +942,37 @@ async def get_order_tracking(order_id: str):
     # Parse customer location from order
     customer_location = None
     customer_loc_data = order.get("customer_location")
+    
+    print(f"🔍 DEBUG - Raw customer_location from DB: {customer_loc_data}")
+    print(f"🔍 DEBUG - customer_location type: {type(customer_loc_data)}")
+    
     if customer_loc_data:
         if isinstance(customer_loc_data, str):
             try:
                 customer_loc_data = json.loads(customer_loc_data)
-            except:
+                print(f"🔍 DEBUG - Parsed customer_location: {customer_loc_data}")
+            except Exception as e:
+                print(f"❌ ERROR - Failed to parse customer_location JSON: {e}")
                 customer_loc_data = None
         
-        if customer_loc_data and "latitude" in customer_loc_data and "longitude" in customer_loc_data:
-            customer_location = {
-                "lat": customer_loc_data["latitude"],
-                "lng": customer_loc_data["longitude"]
-            }
+        # Support both formats: {lat, lng} and {latitude, longitude}
+        if customer_loc_data:
+            if "lat" in customer_loc_data and "lng" in customer_loc_data:
+                customer_location = {
+                    "lat": customer_loc_data["lat"],
+                    "lng": customer_loc_data["lng"]
+                }
+                print(f"✅ Customer location (lat/lng format): {customer_location}")
+            elif "latitude" in customer_loc_data and "longitude" in customer_loc_data:
+                customer_location = {
+                    "lat": customer_loc_data["latitude"],
+                    "lng": customer_loc_data["longitude"]
+                }
+                print(f"✅ Customer location (latitude/longitude format): {customer_location}")
+            else:
+                print(f"⚠️ WARNING - Unknown customer_location format: {customer_loc_data}")
+    else:
+        print(f"⚠️ WARNING - No customer_location in order")
     
     # Build tracking response
     tracking_data = {
@@ -2724,7 +2755,7 @@ async def reject_order(order_id: str, current_rider: dict = Depends(get_current_
 @app.post("/api/orders/{order_id}/assign")
 async def auto_assign_order(
     order_id: str,
-    customer_location: Dict[str, float] = None  # {"latitude": float, "longitude": float}
+    customer_location: Dict[str, float] = None  # {lat, lng} or {latitude, longitude}
 ):
     """Auto-assign order to nearest available rider"""
     try:
@@ -2781,7 +2812,15 @@ async def auto_assign_order(
                     # Simple distance calculation (Haversine)
                     from math import radians, cos, sin, asin, sqrt
                     
-                    lat1, lon1 = radians(customer_location['latitude']), radians(customer_location['longitude'])
+                    # Support both formats: {lat, lng} and {latitude, longitude}
+                    cust_lat = customer_location.get('lat') or customer_location.get('latitude')
+                    cust_lng = customer_location.get('lng') or customer_location.get('longitude')
+                    
+                    if not cust_lat or not cust_lng:
+                        print(f"Invalid customer location format: {customer_location}")
+                        continue
+                    
+                    lat1, lon1 = radians(cust_lat), radians(cust_lng)
                     lat2, lon2 = radians(rider_loc['lat']), radians(rider_loc['lng'])
                     
                     dlat = lat2 - lat1

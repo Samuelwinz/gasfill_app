@@ -169,6 +169,13 @@ class ApiService {
         const orderResponse = await this.api.get(`/api/orders/${orderId}`);
         const order = orderResponse.data;
         
+        console.log('📦 Order data from backend:', {
+          id: order.id,
+          customer_location: order.customer_location,
+          customer_location_type: typeof order.customer_location,
+          customer_location_is_null: order.customer_location === null,
+        });
+        
         // Fetch rider details if rider is assigned
         let riderData = null;
         if (order.rider_id) {
@@ -190,14 +197,8 @@ class ApiService {
           rider_name: riderData?.username || order.rider_name,
           rider_phone: riderData?.phone || '+233241234567',
           rider_rating: riderData?.rating || 4.5,
-          customer_location: order.customer_location || {
-            lat: 5.6037,
-            lng: -0.1870,
-          },
-          rider_location: riderData?.location || order.rider_location || {
-            lat: 5.6057,
-            lng: -0.1890,
-          },
+          customer_location: order.customer_location || null,
+          rider_location: riderData?.location || order.rider_location || null,
           items: order.items || [],
           total: order.total_amount || order.total || 0,
           estimated_arrival: order.estimated_delivery || new Date(Date.now() + 15 * 60 * 1000).toISOString(),
