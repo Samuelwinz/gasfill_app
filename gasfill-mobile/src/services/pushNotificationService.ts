@@ -133,9 +133,16 @@ class PushNotificationService {
     try {
       await ApiService.registerPushToken(token, Platform.OS);
       console.log('✅ Push token registered with backend');
-    } catch (error) {
-      console.error('❌ Error registering push token with backend:', error);
+    } catch (error: any) {
       // Don't throw - local notifications will still work
+      // Backend push token registration is optional
+      console.log('⚠️ Could not register push token with backend (non-critical)');
+      console.log('💡 Local notifications will continue to work normally');
+      
+      // Only log details in development
+      if (__DEV__) {
+        console.log('Push token registration error:', error.message || error);
+      }
     }
   }
 

@@ -8,12 +8,17 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
+  Modal,
+  Image,
+  TextInput,
+  ScrollView,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
+import adminAuthService from '../services/adminAuthService';
 
-const API_URL = 'http://192.168.1.25:8000';
+const API_URL = 'http://192.168.8.100:8000';
 
 interface Rider {
   id: number;
@@ -33,38 +38,70 @@ interface Rider {
   is_suspended: boolean;
   document_status: string;
   verification_date?: string;
+  verification_notes?: string;
   suspension_reason?: string;
   created_at: string;
+  license_photo_url?: string;
+  vehicle_photo_url?: string;
 }
+
+type FilterType = 'all' | 'pending' | 'approved' | 'rejected';
 
 const AdminRidersScreen: React.FC = () => {
   const navigation = useNavigation();
   const [riders, setRiders] = useState<Rider[]>([]);
+  const [filteredRiders, setFilteredRiders] = useState<Rider[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState<FilterType>('all');
+  const [showDocumentModal, setShowDocumentModal] = useState(false);
+  const [selectedRider, setSelectedRider] = useState<Rider | null>(null);
+  const [verificationNotes, setVerificationNotes] = useState('');
 
   useEffect(() => {
     fetchRiders();
   }, []);
 
+  useEffect(() => {
+    applyFilter();
+  }, [riders, filter]);
+
+  const applyFilter = () => {
+    if (filter === 'all') {
+      setFilteredRiders(riders);
+    } else {
+      setFilteredRiders(riders.filter(r => r.document_status === filter));
+    }
+  };
+
   const fetchRiders = async () => {
     try {
-      const token = await AsyncStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/admin/riders`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setRiders(data);
-      } else {
-        Alert.alert('Error', 'Failed to fetch riders');
+      // Check if admin is logged in
+      const isLoggedIn = await adminAuthService.isAdminLoggedIn();
+      if (!isLoggedIn) {
+        Alert.alert(
+          'Authentication Required',
+          'Please login as admin to continue',
+          [{ text: 'OK', onPress: () => navigation.navigate('AdminLogin' as never) }]
+        );
+        return;
       }
-    } catch (error) {
+
+      // Use admin auth service to make authenticated request
+      const data = await adminAuthService.makeAdminRequest<Rider[]>('/api/admin/riders');
+      setRiders(data);
+    } catch (error: any) {
       console.error('Error fetching riders:', error);
-      Alert.alert('Error', 'Network error');
+      
+      if (error.message?.includes('Admin session expired')) {
+        Alert.alert(
+          'Session Expired',
+          'Your admin session has expired. Please login again.',
+          [{ text: 'OK', onPress: () => navigation.navigate('AdminLogin' as never) }]
+        );
+      } else {
+        Alert.alert('Error', error.message || 'Failed to fetch riders');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -74,6 +111,79 @@ const AdminRidersScreen: React.FC = () => {
   const onRefresh = () => {
     setRefreshing(true);
     fetchRiders();
+  };
+
+  const handleViewDocuments = (rider: Rider) => {
+    setSelectedRider(rider);
+    setVerificationNotes('');
+    setShowDocumentModal(true);
+  };
+
+  const handleApproveDocuments = async () => {
+    if (!selectedRider) return;
+
+    try {
+      await adminAuthService.makeAdminRequest(`/api/admin/riders/${selectedRider.id}/verify`, {
+        method: 'POST',
+        data: {
+          is_verified: true,
+          notes: verificationNotes || 'Documents approved by admin',
+        },
+      });
+
+      Alert.alert('Success', 'Rider documents approved successfully');
+      setShowDocumentModal(false);
+      setSelectedRider(null);
+      fetchRiders();
+    } catch (error: any) {
+      console.error('Error approving documents:', error);
+      
+      if (error.message?.includes('Admin session expired')) {
+        Alert.alert(
+          'Session Expired',
+          'Your admin session has expired. Please login again.',
+          [{ text: 'OK', onPress: () => navigation.navigate('AdminLogin' as never) }]
+        );
+      } else {
+        Alert.alert('Error', error.message || 'Failed to approve documents');
+      }
+    }
+  };
+
+  const handleRejectDocuments = async () => {
+    if (!selectedRider) return;
+    
+    if (!verificationNotes.trim()) {
+      Alert.alert('Error', 'Please provide a rejection reason');
+      return;
+    }
+
+    try {
+      await adminAuthService.makeAdminRequest(`/api/admin/riders/${selectedRider.id}/verify`, {
+        method: 'POST',
+        data: {
+          is_verified: false,
+          notes: verificationNotes,
+        },
+      });
+
+      Alert.alert('Success', 'Documents rejected. Rider will be notified.');
+      setShowDocumentModal(false);
+      setSelectedRider(null);
+      fetchRiders();
+    } catch (error: any) {
+      console.error('Error rejecting documents:', error);
+      
+      if (error.message?.includes('Admin session expired')) {
+        Alert.alert(
+          'Session Expired',
+          'Your admin session has expired. Please login again.',
+          [{ text: 'OK', onPress: () => navigation.navigate('AdminLogin' as never) }]
+        );
+      } else {
+        Alert.alert('Error', error.message || 'Failed to reject documents');
+      }
+    }
   };
 
   const handleVerifyRider = async (riderId: number, currentStatus: boolean) => {
@@ -88,30 +198,28 @@ const AdminRidersScreen: React.FC = () => {
           text: 'Confirm',
           onPress: async () => {
             try {
-              const token = await AsyncStorage.getItem('token');
-              const response = await fetch(
-                `${API_URL}/api/admin/riders/${riderId}/verify`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    is_verified: !currentStatus,
-                    notes: currentStatus ? 'Unverified by admin' : 'Verified by admin',
-                  }),
-                }
-              );
+              await adminAuthService.makeAdminRequest(`/api/admin/riders/${riderId}/verify`, {
+                method: 'POST',
+                data: {
+                  is_verified: !currentStatus,
+                  notes: currentStatus ? 'Unverified by admin' : 'Verified by admin',
+                },
+              });
 
-              if (response.ok) {
-                Alert.alert('Success', `Rider ${currentStatus ? 'unverified' : 'verified'} successfully`);
-                fetchRiders();
+              Alert.alert('Success', `Rider ${currentStatus ? 'unverified' : 'verified'} successfully`);
+              fetchRiders();
+            } catch (error: any) {
+              console.error('Error updating verification:', error);
+              
+              if (error.message?.includes('Admin session expired')) {
+                Alert.alert(
+                  'Session Expired',
+                  'Your admin session has expired. Please login again.',
+                  [{ text: 'OK', onPress: () => navigation.navigate('AdminLogin' as never) }]
+                );
               } else {
-                Alert.alert('Error', 'Failed to update verification status');
+                Alert.alert('Error', error.message || 'Failed to update verification status');
               }
-            } catch (error) {
-              Alert.alert('Error', 'Network error');
             }
           },
         },
@@ -128,29 +236,27 @@ const AdminRidersScreen: React.FC = () => {
           text: 'Reactivate',
           onPress: async () => {
             try {
-              const token = await AsyncStorage.getItem('token');
-              const response = await fetch(
-                `${API_URL}/api/admin/riders/${riderId}/suspend`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    is_suspended: false,
-                  }),
-                }
-              );
+              await adminAuthService.makeAdminRequest(`/api/admin/riders/${riderId}/suspend`, {
+                method: 'POST',
+                data: {
+                  is_suspended: false,
+                },
+              });
 
-              if (response.ok) {
-                Alert.alert('Success', 'Rider reactivated successfully');
-                fetchRiders();
+              Alert.alert('Success', 'Rider reactivated successfully');
+              fetchRiders();
+            } catch (error: any) {
+              console.error('Error reactivating rider:', error);
+              
+              if (error.message?.includes('Admin session expired')) {
+                Alert.alert(
+                  'Session Expired',
+                  'Your admin session has expired. Please login again.',
+                  [{ text: 'OK', onPress: () => navigation.navigate('AdminLogin' as never) }]
+                );
               } else {
-                Alert.alert('Error', 'Failed to reactivate rider');
+                Alert.alert('Error', error.message || 'Failed to reactivate rider');
               }
-            } catch (error) {
-              Alert.alert('Error', 'Network error');
             }
           },
         },
@@ -167,30 +273,28 @@ const AdminRidersScreen: React.FC = () => {
           }
 
           try {
-            const token = await AsyncStorage.getItem('token');
-            const response = await fetch(
-              `${API_URL}/api/admin/riders/${riderId}/suspend`,
-              {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  is_suspended: true,
-                  reason: reason.trim(),
-                }),
-              }
-            );
+            await adminAuthService.makeAdminRequest(`/api/admin/riders/${riderId}/suspend`, {
+              method: 'POST',
+              data: {
+                is_suspended: true,
+                reason: reason.trim(),
+              },
+            });
 
-            if (response.ok) {
-              Alert.alert('Success', 'Rider suspended successfully');
-              fetchRiders();
+            Alert.alert('Success', 'Rider suspended successfully');
+            fetchRiders();
+          } catch (error: any) {
+            console.error('Error suspending rider:', error);
+            
+            if (error.message?.includes('Admin session expired')) {
+              Alert.alert(
+                'Session Expired',
+                'Your admin session has expired. Please login again.',
+                [{ text: 'OK', onPress: () => navigation.navigate('AdminLogin' as never) }]
+              );
             } else {
-              Alert.alert('Error', 'Failed to suspend rider');
+              Alert.alert('Error', error.message || 'Failed to suspend rider');
             }
-          } catch (error) {
-            Alert.alert('Error', 'Network error');
           }
         }
       );
@@ -216,10 +320,24 @@ const AdminRidersScreen: React.FC = () => {
     }
   };
 
-  const renderRiderCard = ({ item }: { item: Rider }) => (
+  const getDocumentStatusConfig = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return { bg: '#d1fae5', text: '#065f46', label: '✓ Approved', icon: 'checkmark-circle' };
+      case 'rejected':
+        return { bg: '#fee2e2', text: '#991b1b', label: '✗ Rejected', icon: 'close-circle' };
+      default:
+        return { bg: '#fef3c7', text: '#92400e', label: '⏳ Pending Review', icon: 'time' };
+    }
+  };
+
+  const renderRiderCard = ({ item }: { item: Rider }) => {
+    const docStatus = getDocumentStatusConfig(item.document_status);
+    
+    return (
     <TouchableOpacity
       style={styles.riderCard}
-      onPress={() => handleViewDetails(item)}
+      onPress={() => handleViewDocuments(item)}
       activeOpacity={0.7}
     >
       <View style={styles.cardHeader}>
@@ -237,6 +355,21 @@ const AdminRidersScreen: React.FC = () => {
           <Text style={styles.statusText}>{item.status}</Text>
         </View>
       </View>
+
+      {/* Document Status Banner */}
+      <View style={[styles.documentStatusBanner, { backgroundColor: docStatus.bg }]}>
+        <Ionicons name={docStatus.icon as any} size={16} color={docStatus.text} />
+        <Text style={[styles.documentStatusText, { color: docStatus.text }]}>
+          {docStatus.label}
+        </Text>
+      </View>
+
+      {item.verification_notes && item.document_status === 'rejected' && (
+        <View style={styles.rejectionNotice}>
+          <Ionicons name="alert-circle" size={14} color="#991b1b" />
+          <Text style={styles.rejectionText}>{item.verification_notes}</Text>
+        </View>
+      )}
 
       <View style={styles.cardBody}>
         <View style={styles.infoRow}>
@@ -300,20 +433,11 @@ const AdminRidersScreen: React.FC = () => {
 
       <View style={styles.actionsRow}>
         <TouchableOpacity
-          style={[
-            styles.actionButton,
-            item.is_verified ? styles.unverifyButton : styles.verifyButton,
-          ]}
-          onPress={() => handleVerifyRider(item.id, item.is_verified)}
+          style={[styles.actionButton, styles.documentsButton]}
+          onPress={() => handleViewDocuments(item)}
         >
-          <Ionicons
-            name={item.is_verified ? 'shield-outline' : 'shield-checkmark'}
-            size={16}
-            color="#fff"
-          />
-          <Text style={styles.actionButtonText}>
-            {item.is_verified ? 'Unverify' : 'Verify'}
-          </Text>
+          <Ionicons name="document-text-outline" size={16} color="#fff" />
+          <Text style={styles.actionButtonText}>View Docs</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -332,14 +456,6 @@ const AdminRidersScreen: React.FC = () => {
             {item.is_suspended ? 'Reactivate' : 'Suspend'}
           </Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.actionButton, styles.detailsButton]}
-          onPress={() => handleViewDetails(item)}
-        >
-          <Ionicons name="eye-outline" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>Details</Text>
-        </TouchableOpacity>
       </View>
 
       {item.suspension_reason && (
@@ -351,7 +467,8 @@ const AdminRidersScreen: React.FC = () => {
         </View>
       )}
     </TouchableOpacity>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -367,12 +484,48 @@ const AdminRidersScreen: React.FC = () => {
       <View style={styles.header}>
         <Text style={styles.title}>Riders Management</Text>
         <Text style={styles.subtitle}>
-          {riders.length} {riders.length === 1 ? 'rider' : 'riders'} registered
+          {filteredRiders.length} of {riders.length} {riders.length === 1 ? 'rider' : 'riders'}
         </Text>
       </View>
 
+      {/* Filter Tabs */}
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={[styles.filterTab, filter === 'all' && styles.filterTabActive]}
+          onPress={() => setFilter('all')}
+        >
+          <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>
+            All ({riders.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterTab, filter === 'pending' && styles.filterTabActive]}
+          onPress={() => setFilter('pending')}
+        >
+          <Text style={[styles.filterText, filter === 'pending' && styles.filterTextActive]}>
+            Pending ({riders.filter(r => r.document_status === 'pending').length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterTab, filter === 'approved' && styles.filterTabActive]}
+          onPress={() => setFilter('approved')}
+        >
+          <Text style={[styles.filterText, filter === 'approved' && styles.filterTextActive]}>
+            Approved ({riders.filter(r => r.document_status === 'approved').length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterTab, filter === 'rejected' && styles.filterTabActive]}
+          onPress={() => setFilter('rejected')}
+        >
+          <Text style={[styles.filterText, filter === 'rejected' && styles.filterTextActive]}>
+            Rejected ({riders.filter(r => r.document_status === 'rejected').length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
-        data={riders}
+        data={filteredRiders}
         renderItem={renderRiderCard}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.listContainer}
@@ -390,6 +543,125 @@ const AdminRidersScreen: React.FC = () => {
           </View>
         }
       />
+
+      {/* Document Viewer Modal */}
+      <Modal
+        visible={showDocumentModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowDocumentModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Rider Documents</Text>
+              <TouchableOpacity onPress={() => setShowDocumentModal(false)}>
+                <Ionicons name="close" size={28} color="#111827" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedRider && (
+              <ScrollView style={styles.modalBody}>
+                <View style={styles.riderInfoSection}>
+                  <Text style={styles.sectionTitle}>Rider Information</Text>
+                  <View style={styles.infoItem}>
+                    <Text style={styles.infoLabel}>Name:</Text>
+                    <Text style={styles.infoValue}>{selectedRider.username}</Text>
+                  </View>
+                  <View style={styles.infoItem}>
+                    <Text style={styles.infoLabel}>Email:</Text>
+                    <Text style={styles.infoValue}>{selectedRider.email}</Text>
+                  </View>
+                  <View style={styles.infoItem}>
+                    <Text style={styles.infoLabel}>License:</Text>
+                    <Text style={styles.infoValue}>{selectedRider.license_number || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.infoItem}>
+                    <Text style={styles.infoLabel}>Vehicle:</Text>
+                    <Text style={styles.infoValue}>
+                      {selectedRider.vehicle_type} - {selectedRider.vehicle_number}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.documentsSection}>
+                  <Text style={styles.sectionTitle}>Uploaded Documents</Text>
+                  
+                  <View style={styles.documentCard}>
+                    <Text style={styles.documentLabel}>License Photo</Text>
+                    {selectedRider.license_photo_url ? (
+                      <Image
+                        source={{ uri: `${API_URL}${selectedRider.license_photo_url}` }}
+                        style={styles.documentImage}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <View style={styles.noDocument}>
+                        <Ionicons name="document-outline" size={48} color="#d1d5db" />
+                        <Text style={styles.noDocumentText}>No photo uploaded</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.documentCard}>
+                    <Text style={styles.documentLabel}>Vehicle Photo</Text>
+                    {selectedRider.vehicle_photo_url ? (
+                      <Image
+                        source={{ uri: `${API_URL}${selectedRider.vehicle_photo_url}` }}
+                        style={styles.documentImage}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <View style={styles.noDocument}>
+                        <Ionicons name="car-outline" size={48} color="#d1d5db" />
+                        <Text style={styles.noDocumentText}>No photo uploaded</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.notesSection}>
+                  <Text style={styles.sectionTitle}>Verification Notes</Text>
+                  <TextInput
+                    style={styles.notesInput}
+                    placeholder="Enter approval/rejection notes..."
+                    value={verificationNotes}
+                    onChangeText={setVerificationNotes}
+                    multiline
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                  />
+                </View>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.approveButton]}
+                    onPress={handleApproveDocuments}
+                  >
+                    <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                    <Text style={styles.modalButtonText}>Approve</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.rejectButton]}
+                    onPress={handleRejectDocuments}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#fff" />
+                    <Text style={styles.modalButtonText}>Reject</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.cancelButton]}
+                    onPress={() => setShowDocumentModal(false)}
+                  >
+                    <Text style={[styles.modalButtonText, { color: '#6b7280' }]}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -600,6 +872,190 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#9ca3af',
     marginTop: 16,
+  },
+  // Filter styles
+  filterContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  filterTab: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginHorizontal: 4,
+    alignItems: 'center',
+  },
+  filterTabActive: {
+    backgroundColor: '#3b82f6',
+  },
+  filterText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  filterTextActive: {
+    color: '#fff',
+  },
+  // Document status
+  documentStatusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  documentStatusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  rejectionNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#fef3c7',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  rejectionText: {
+    fontSize: 13,
+    color: '#92400e',
+    marginLeft: 8,
+    flex: 1,
+  },
+  documentsButton: {
+    backgroundColor: '#6366f1',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: Dimensions.get('window').height * 0.9,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  riderInfoSection: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  infoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+    width: 100,
+  },
+  infoValue: {
+    fontSize: 14,
+    color: '#111827',
+    flex: 1,
+  },
+  documentsSection: {
+    marginBottom: 24,
+  },
+  documentCard: {
+    marginBottom: 16,
+  },
+  documentLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  documentImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+  },
+  noDocument: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    borderStyle: 'dashed',
+  },
+  noDocumentText: {
+    fontSize: 14,
+    color: '#9ca3af',
+    marginTop: 8,
+  },
+  notesSection: {
+    marginBottom: 24,
+  },
+  notesInput: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    minHeight: 100,
+    backgroundColor: '#fff',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  modalButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 8,
+  },
+  approveButton: {
+    backgroundColor: '#10b981',
+  },
+  rejectButton: {
+    backgroundColor: '#ef4444',
+  },
+  cancelButton: {
+    backgroundColor: '#f3f4f6',
+  },
+  modalButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+    marginLeft: 6,
   },
 });
 

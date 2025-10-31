@@ -29,6 +29,7 @@ import RiderAnalyticsScreen from '../screens/RiderAnalyticsScreen';
 import RiderEarningsScreen from '../screens/RiderEarningsScreen';
 import AdminDashboard from '../screens/AdminDashboard';
 import AdminRidersScreen from '../screens/AdminRidersScreen';
+import AdminLoginScreen from '../screens/AdminLoginScreen';
 import RiderDetailsScreen from '../screens/RiderDetailsScreen';
 import AboutScreen from '../screens/AboutScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
@@ -294,6 +295,21 @@ function AppStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={MainComponent} />
+      <Stack.Screen 
+        name="AdminLogin" 
+        component={AdminLoginScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="AdminRiders" 
+        component={AdminRidersScreen}
+        options={{ 
+          headerShown: true,
+          title: 'Rider Verification',
+        }}
+      />
       <Stack.Screen 
         name="DeliveryTracking" 
         component={DeliveryTrackingScreen as any}

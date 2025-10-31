@@ -861,16 +861,16 @@
             <div id="login-error" class="error-message" style="display: none;"></div>
             <form id="admin-login-form">
                 <div class="form-group">
-                    <label class="form-label">Admin Email</label>
-                    <input type="email" class="form-input" id="admin-email" required value="admin@gasfill.com">
+                    <label class="form-label" for="admin-email">Admin Email</label>
+                    <input type="email" class="form-input" id="admin-email" required value="admin@gasfill.com" aria-label="Admin Email">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Password</label>
-                    <input type="password" class="form-input" id="admin-password" required value="admin123">
+                    <label class="form-label" for="admin-password">Password</label>
+                    <input type="password" class="form-input" id="admin-password" required value="admin123" aria-label="Password">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Admin Key</label>
-                    <input type="password" class="form-input" id="admin-key" required placeholder="Enter admin key">
+                    <label class="form-label" for="admin-key">Admin Key</label>
+                    <input type="password" class="form-input" id="admin-key" required placeholder="Enter admin key" aria-label="Admin Key">
                 </div>
                 <button type="submit" class="login-btn" id="login-btn">
                     <span id="login-loader" class="loading" style="display: none;"></span>
@@ -1007,37 +1007,57 @@
 
                 <!-- Riders Verification Section -->
                 <section id="riders-section" class="admin-section">
-                    <h2 style="margin-bottom: 2rem; color: var(--admin-primary); font-size: 2rem;">Rider Verification</h2>
-                    
-                    <div style="margin-bottom: 1.5rem; display: flex; gap: 1rem; flex-wrap: wrap;">
-                        <button class="btn btn-primary" onclick="refreshRiders()">
-                            🔄 Refresh Riders
-                        </button>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <button class="btn" onclick="filterRidersByStatus('all')" id="filter-all">All</button>
-                            <button class="btn" onclick="filterRidersByStatus('pending')" id="filter-pending">Pending</button>
-                            <button class="btn" onclick="filterRidersByStatus('approved')" id="filter-approved">Approved</button>
-                            <button class="btn" onclick="filterRidersByStatus('rejected')" id="filter-rejected">Rejected</button>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <h2 style="margin: 0; color: var(--admin-primary); font-size: 2rem; font-weight: 700;">🏍️ Rider Verification</h2>
+                            <p style="margin: 0.5rem 0 0 0; color: var(--text-muted); font-size: 0.95rem;">Review and approve rider documents</p>
                         </div>
+                        <button class="btn" onclick="refreshRiders()" style="background: var(--admin-primary); color: white; padding: 0.75rem 1.5rem; font-weight: 600; box-shadow: 0 2px 8px rgba(124,58,237,0.3);">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                    
+                    <!-- Stats Cards -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;" id="rider-stats">
+                        <!-- Stats will be populated here -->
+                    </div>
+                    
+                    <!-- Filter Tabs -->
+                    <div style="margin-bottom: 1.5rem; background: white; border-radius: 12px; padding: 0.5rem; display: inline-flex; gap: 0.25rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                        <button class="filter-tab active" onclick="filterRidersByStatus('all')" id="filter-all" style="padding: 0.75rem 1.5rem; border: none; background: var(--admin-primary); color: white; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            All Riders
+                        </button>
+                        <button class="filter-tab" onclick="filterRidersByStatus('pending')" id="filter-pending" style="padding: 0.75rem 1.5rem; border: none; background: transparent; color: var(--text); border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            ⏳ Pending
+                        </button>
+                        <button class="filter-tab" onclick="filterRidersByStatus('approved')" id="filter-approved" style="padding: 0.75rem 1.5rem; border: none; background: transparent; color: var(--text); border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            ✅ Approved
+                        </button>
+                        <button class="filter-tab" onclick="filterRidersByStatus('rejected')" id="filter-rejected" style="padding: 0.75rem 1.5rem; border: none; background: transparent; color: var(--text); border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            ❌ Rejected
+                        </button>
                     </div>
 
-                    <div class="table-container">
-                        <table class="admin-table">
-                            <thead>
+                    <div class="table-container" style="background: white; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); overflow: hidden;">
+                        <table class="admin-table" style="margin: 0;">
+                            <thead style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);">
                                 <tr>
-                                    <th>Rider ID</th>
-                                    <th>Username</th>
-                                    <th>Email</th>
-                                    <th class="hide-mobile">License</th>
-                                    <th class="hide-mobile">Vehicle</th>
-                                    <th>Status</th>
-                                    <th class="hide-mobile">Deliveries</th>
-                                    <th>Actions</th>
+                                    <th style="padding: 1rem; font-weight: 600; color: var(--admin-primary);">ID</th>
+                                    <th style="padding: 1rem; font-weight: 600; color: var(--admin-primary);">Rider</th>
+                                    <th style="padding: 1rem; font-weight: 600; color: var(--admin-primary);">Contact</th>
+                                    <th class="hide-mobile" style="padding: 1rem; font-weight: 600; color: var(--admin-primary);">License</th>
+                                    <th class="hide-mobile" style="padding: 1rem; font-weight: 600; color: var(--admin-primary);">Vehicle</th>
+                                    <th style="padding: 1rem; font-weight: 600; color: var(--admin-primary);">Status</th>
+                                    <th class="hide-mobile" style="padding: 1rem; font-weight: 600; color: var(--admin-primary);">Deliveries</th>
+                                    <th style="padding: 1rem; font-weight: 600; color: var(--admin-primary);">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="riders-table-body">
                                 <tr>
-                                    <td colspan="8" style="text-align: center; padding: 2rem;">Loading riders...</td>
+                                    <td colspan="8" style="text-align: center; padding: 3rem; color: var(--text-muted);">
+                                        <div style="font-size: 3rem; margin-bottom: 1rem;">🔄</div>
+                                        <div style="font-size: 1.1rem;">Loading riders...</div>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1047,7 +1067,7 @@
                 <!-- Document Viewer Modal -->
                 <div id="documentModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
                     <div style="background: white; border-radius: 12px; max-width: 800px; width: 90%; max-height: 90vh; overflow-y: auto; padding: 2rem; position: relative;">
-                        <button onclick="closeDocumentModal()" style="position: absolute; top: 1rem; right: 1rem; background: #dc2626; color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px;">✕</button>
+                        <button type="button" onclick="closeDocumentModal()" style="position: absolute; top: 1rem; right: 1rem; background: #dc2626; color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px;">✕</button>
                         
                         <h3 style="margin-bottom: 1.5rem; color: #1f2937; font-size: 1.5rem;">Rider Documents</h3>
                         
@@ -1076,13 +1096,13 @@
                             </div>
                             
                             <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-                                <button class="btn" style="background: #10b981; color: white;" onclick="approveFromModal()">
+                                <button type="button" class="btn" style="background: #10b981; color: white;" onclick="approveFromModal()">
                                     ✓ Approve
                                 </button>
-                                <button class="btn" style="background: #dc2626; color: white;" onclick="rejectFromModal()">
+                                <button type="button" class="btn" style="background: #dc2626; color: white;" onclick="rejectFromModal()">
                                     ✗ Reject
                                 </button>
-                                <button class="btn" onclick="closeDocumentModal()">
+                                <button type="button" class="btn" onclick="closeDocumentModal()">
                                     Cancel
                                 </button>
                             </div>
@@ -1636,38 +1656,95 @@
 
         // Rider Management Functions
         let currentRiderFilter = 'all';
+        let allRidersData = []; // Store riders data globally
         
         async function loadRiders() {
             try {
                 console.log('📥 Loading riders...');
                 const response = await adminApiCall('/admin/riders');
-                const riders = response || [];
+                console.log('✅ Riders response:', response);
+                allRidersData = response || []; // Store in global variable
+                console.log('📊 Total riders loaded:', allRidersData.length);
                 
-                displayRiders(riders);
+                // Update stats cards
+                updateRiderStats(allRidersData);
+                
+                displayRiders(allRidersData);
             } catch (error) {
                 console.error('❌ Error loading riders:', error);
                 const tbody = document.getElementById('riders-table-body');
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--error);">Failed to load riders</td></tr>';
+                if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--error);">
+                        Failed to load riders: ${error.message}<br>
+                        <button class="btn btn-sm" onclick="loadRiders()" style="margin-top: 1rem;">Retry</button>
+                    </td></tr>`;
+                } else {
+                    console.error('❌ riders-table-body element not found!');
+                }
             }
         }
         
-        function filterRidersByStatus(status) {
-            currentRiderFilter = status;
-            // Update button styles
-            document.querySelectorAll('[id^="filter-"]').forEach(btn => {
-                btn.classList.remove('btn-primary');
-                btn.classList.add('btn');
-            });
-            document.getElementById(`filter-${status}`).classList.remove('btn');
-            document.getElementById(`filter-${status}`).classList.add('btn-primary');
+        function updateRiderStats(riders) {
+            const pending = riders.filter(r => r.document_status === 'pending').length;
+            const approved = riders.filter(r => r.document_status === 'approved').length;
+            const rejected = riders.filter(r => r.document_status === 'rejected').length;
+            const total = riders.length;
             
-            loadRiders();
+            const statsContainer = document.getElementById('rider-stats');
+            if (!statsContainer) return;
+            
+            statsContainer.innerHTML = `
+                <div style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 4px solid var(--admin-primary);">
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 600;">Total Riders</div>
+                    <div style="font-size: 2rem; font-weight: 700; color: var(--admin-primary);">${total}</div>
+                </div>
+                <div style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 4px solid #fbbf24;">
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 600;">⏳ Pending Review</div>
+                    <div style="font-size: 2rem; font-weight: 700; color: #f59e0b;">${pending}</div>
+                </div>
+                <div style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 4px solid #10b981;">
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 600;">✅ Approved</div>
+                    <div style="font-size: 2rem; font-weight: 700; color: #059669;">${approved}</div>
+                </div>
+                <div style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 4px solid #ef4444;">
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 600;">❌ Rejected</div>
+                    <div style="font-size: 2rem; font-weight: 700; color: #dc2626;">${rejected}</div>
+                </div>
+            `;
+        }
+        
+        function filterRidersByStatus(status) {
+            console.log('🔍 Filtering riders by status:', status);
+            currentRiderFilter = status;
+            
+            // Update button styles
+            document.querySelectorAll('.filter-tab').forEach(btn => {
+                btn.style.background = 'transparent';
+                btn.style.color = 'var(--text)';
+            });
+            
+            const filterBtn = document.getElementById(`filter-${status}`);
+            if (filterBtn) {
+                filterBtn.style.background = 'var(--admin-primary)';
+                filterBtn.style.color = 'white';
+            } else {
+                console.error(`❌ Filter button not found: filter-${status}`);
+            }
+            
+            displayRiders(allRidersData);
         }
         
         function displayRiders(riders) {
+            console.log('🎨 Displaying riders...', riders);
             const tbody = document.getElementById('riders-table-body');
             
+            if (!tbody) {
+                console.error('❌ riders-table-body element not found!');
+                return;
+            }
+            
             if (!riders || riders.length === 0) {
+                console.log('ℹ️ No riders to display');
                 tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">No riders found</td></tr>';
                 return;
             }
@@ -1676,60 +1753,172 @@
             let filteredRiders = riders;
             if (currentRiderFilter !== 'all') {
                 filteredRiders = riders.filter(r => r.document_status === currentRiderFilter);
+                console.log(`🔍 Filtered to ${currentRiderFilter}:`, filteredRiders.length, 'riders');
             }
             
-            tbody.innerHTML = filteredRiders.map(rider => {
-                const statusColors = {
-                    'pending': { bg: '#fef3c7', text: '#92400e', label: 'Pending' },
-                    'approved': { bg: '#d1fae5', text: '#065f46', label: 'Approved' },
-                    'rejected': { bg: '#fee2e2', text: '#991b1b', label: 'Rejected' }
+            if (filteredRiders.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem;">No ${currentRiderFilter} riders found</td></tr>`;
+                return;
+            }
+            
+            console.log('✏️ Rendering', filteredRiders.length, 'riders to table');
+            
+            tbody.innerHTML = filteredRiders.map((rider, index) => {
+                const statusConfig = {
+                    'pending': { 
+                        bg: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', 
+                        text: '#92400e', 
+                        label: '⏳ Pending',
+                        border: '#fbbf24'
+                    },
+                    'approved': { 
+                        bg: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)', 
+                        text: '#065f46', 
+                        label: '✅ Approved',
+                        border: '#10b981'
+                    },
+                    'rejected': { 
+                        bg: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)', 
+                        text: '#991b1b', 
+                        label: '❌ Rejected',
+                        border: '#ef4444'
+                    }
                 };
-                const statusStyle = statusColors[rider.document_status] || statusColors.pending;
+                const status = statusConfig[rider.document_status] || statusConfig.pending;
                 
                 return `
-                    <tr>
-                        <td><strong>${rider.id}</strong></td>
-                        <td>${rider.username}</td>
-                        <td>${rider.email}</td>
-                        <td class="hide-mobile">${rider.license_number || 'N/A'}</td>
-                        <td class="hide-mobile">${rider.vehicle_type || 'N/A'} - ${rider.vehicle_number || 'N/A'}</td>
-                        <td>
-                            <span style="background-color: ${statusStyle.bg}; color: ${statusStyle.text}; padding: 0.25rem 0.75rem; border-radius: 9999px; font-weight: 600; font-size: 0.75rem;">
-                                ${statusStyle.label}
+                    <tr style="border-bottom: 1px solid #f1f5f9; transition: all 0.2s; ${index % 2 === 0 ? 'background: #fafafa;' : 'background: white;'}">
+                        <td style="padding: 1.25rem 1rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="background: var(--admin-primary); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.85rem;">
+                                    ${rider.id}
+                                </div>
+                            </div>
+                        </td>
+                        <td style="padding: 1.25rem 1rem;">
+                            <div style="font-weight: 600; color: #1f2937; margin-bottom: 0.25rem;">${rider.username}</div>
+                            <div style="font-size: 0.85rem; color: #6b7280;">ID: ${rider.id}</div>
+                        </td>
+                        <td style="padding: 1.25rem 1rem;">
+                            <div style="color: #374151; font-size: 0.9rem;">${rider.email}</div>
+                        </td>
+                        <td class="hide-mobile" style="padding: 1.25rem 1rem;">
+                            <div style="font-size: 0.9rem; color: #374151;">${rider.license_number || '<span style="color: #9ca3af;">Not set</span>'}</div>
+                        </td>
+                        <td class="hide-mobile" style="padding: 1.25rem 1rem;">
+                            <div style="font-weight: 500; color: #374151;">${rider.vehicle_type || 'N/A'}</div>
+                            <div style="font-size: 0.85rem; color: #6b7280;">${rider.vehicle_number || 'N/A'}</div>
+                        </td>
+                        <td style="padding: 1.25rem 1rem;">
+                            <span style="background: ${status.bg}; color: ${status.text}; padding: 0.5rem 1rem; border-radius: 20px; font-weight: 600; font-size: 0.85rem; display: inline-block; border: 2px solid ${status.border}; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                ${status.label}
                             </span>
                         </td>
-                        <td class="hide-mobile">${rider.total_deliveries || 0}</td>
-                        <td>
-                            <button class="btn btn-sm" style="background: #6366f1; color: white; margin-bottom: 0.25rem;" onclick="showRiderDocuments(${rider.id})">
-                                📄 Documents
-                            </button>
-                            <br>
-                            ${rider.document_status === 'pending' ? `
-                                <button class="btn btn-sm" style="background: #10b981; color: white;" onclick="verifyRider(${rider.id}, true)">
-                                    ✓ Approve
+                        <td class="hide-mobile" style="padding: 1.25rem 1rem;">
+                            <div style="font-size: 1.1rem; font-weight: 600; color: var(--admin-primary);">${rider.total_deliveries || 0}</div>
+                            <div style="font-size: 0.75rem; color: #6b7280;">deliveries</div>
+                        </td>
+                        <td style="padding: 1.25rem 1rem;">
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <button type="button" class="btn btn-sm" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(99,102,241,0.3);" data-action="documents" data-rider-id="${rider.id}">
+                                    📄 View Docs
                                 </button>
-                                <button class="btn btn-sm" style="background: #dc2626; color: white; margin-left: 0.25rem;" onclick="verifyRider(${rider.id}, false)">
-                                    ✗ Reject
-                                </button>
-                            ` : rider.document_status === 'rejected' ? `
-                                <button class="btn btn-sm" style="background: #10b981; color: white;" onclick="verifyRider(${rider.id}, true)">
-                                    ✓ Approve
-                                </button>
-                            ` : `
-                                <button class="btn btn-sm" onclick="showRiderDetails(${rider.id})">
-                                    👁 View
-                                </button>
-                                <button class="btn btn-sm" style="background: #dc2626; color: white; margin-left: 0.25rem;" onclick="suspendRider(${rider.id})">
-                                    🚫 Suspend
-                                </button>
-                            `}
+                                ${rider.document_status === 'pending' ? `
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <button type="button" class="btn btn-sm" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; flex: 1; border: none; padding: 0.5rem 0.75rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(16,185,129,0.3);" data-action="approve" data-rider-id="${rider.id}">
+                                            ✓
+                                        </button>
+                                        <button type="button" class="btn btn-sm" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; flex: 1; border: none; padding: 0.5rem 0.75rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(239,68,68,0.3);" data-action="reject" data-rider-id="${rider.id}">
+                                            ✗
+                                        </button>
+                                    </div>
+                                ` : rider.document_status === 'rejected' ? `
+                                    <button type="button" class="btn btn-sm" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(16,185,129,0.3);" data-action="approve" data-rider-id="${rider.id}">
+                                        ✓ Re-approve
+                                    </button>
+                                ` : `
+                                    <button type="button" class="btn btn-sm" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(239,68,68,0.3);" data-action="suspend" data-rider-id="${rider.id}">
+                                        🚫 Suspend
+                                    </button>
+                                `}
+                            </div>
                         </td>
                     </tr>
                 `;
             }).join('');
+            
+            // Add event listeners to buttons using event delegation
+            console.log('🎯 Setting up button event listeners...');
+            attachRiderButtonListeners();
+        }
+        
+        function attachRiderButtonListeners() {
+            const tbody = document.getElementById('riders-table-body');
+            if (!tbody) {
+                console.error('❌ riders-table-body not found!');
+                return;
+            }
+            
+            console.log('📋 Found tbody element:', tbody);
+            
+            // Remove old listeners if any
+            tbody.removeEventListener('click', handleRiderButtonClick);
+            // Add new listener
+            tbody.addEventListener('click', handleRiderButtonClick);
+            console.log('✅ Button listeners attached to tbody');
+            
+            // Test: Log all buttons
+            const buttons = tbody.querySelectorAll('button[data-action]');
+            console.log(`🔘 Found ${buttons.length} action buttons in table`);
+        }
+        
+        function handleRiderButtonClick(event) {
+            console.log('🖱️ Click detected on tbody, target:', event.target);
+            
+            // Check if click is on a button or inside a button
+            const button = event.target.closest('button[data-action]');
+            
+            if (!button) {
+                console.log('⚠️ Click was not on an action button');
+                return;
+            }
+            
+            const action = button.getAttribute('data-action');
+            const riderId = parseInt(button.getAttribute('data-rider-id'));
+            
+            console.log(`✅ Button clicked: action=${action}, riderId=${riderId}`);
+            
+            event.preventDefault();
+            event.stopPropagation();
+            
+            switch (action) {
+                case 'documents':
+                    console.log('📄 Calling showRiderDocuments...');
+                    showRiderDocuments(riderId);
+                    break;
+                case 'approve':
+                    console.log('✅ Calling verifyRider (approve)...');
+                    verifyRider(riderId, true);
+                    break;
+                case 'reject':
+                    console.log('❌ Calling verifyRider (reject)...');
+                    verifyRider(riderId, false);
+                    break;
+                case 'view':
+                    console.log('👁️ Calling showRiderDetails...');
+                    showRiderDetails(riderId);
+                    break;
+                case 'suspend':
+                    console.log('🚫 Calling suspendRider...');
+                    suspendRider(riderId);
+                    break;
+                default:
+                    console.warn('⚠️ Unknown action:', action);
+            }
         }
         
         async function verifyRider(riderId, isApproved) {
+            console.log(`🔐 Verifying rider ${riderId}, approved: ${isApproved}`);
             const notes = prompt(isApproved ? 
                 'Enter approval notes (optional):' : 
                 'Enter rejection reason (required):'
@@ -1741,16 +1930,21 @@
             }
             
             try {
-                await adminApiCall(`/admin/riders/${riderId}/verify`, 'POST', {
-                    is_verified: isApproved,
-                    notes: notes || (isApproved ? 'Approved' : 'Rejected')
+                console.log('📤 Sending verification request...');
+                const result = await adminApiCall(`/admin/riders/${riderId}/verify`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        is_verified: isApproved,
+                        notes: notes || (isApproved ? 'Approved' : 'Rejected')
+                    })
                 });
                 
+                console.log('✅ Verification result:', result);
                 alert(`Rider ${isApproved ? 'approved' : 'rejected'} successfully`);
                 loadRiders();
             } catch (error) {
                 console.error('❌ Error verifying rider:', error);
-                alert('Failed to verify rider');
+                alert('Failed to verify rider: ' + error.message);
             }
         }
         
@@ -1759,16 +1953,19 @@
             if (!reason) return;
             
             try {
-                await adminApiCall(`/admin/riders/${riderId}/suspend`, 'POST', {
-                    is_suspended: true,
-                    reason: reason
+                await adminApiCall(`/admin/riders/${riderId}/suspend`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        is_suspended: true,
+                        reason: reason
+                    })
                 });
                 
                 alert('Rider suspended successfully');
                 loadRiders();
             } catch (error) {
                 console.error('❌ Error suspending rider:', error);
-                alert('Failed to suspend rider');
+                alert('Failed to suspend rider: ' + error.message);
             }
         }
         
@@ -1781,13 +1978,18 @@
         
         async function showRiderDocuments(riderId) {
             try {
+                console.log(`📄 Showing documents for rider ${riderId}`);
+                console.log('📊 All riders data:', allRidersData);
+                
                 // Find rider data
                 const rider = allRidersData.find(r => r.id === riderId);
                 if (!rider) {
+                    console.error(`❌ Rider ${riderId} not found in allRidersData`);
                     alert('Rider not found');
                     return;
                 }
                 
+                console.log('✅ Found rider:', rider);
                 currentModalRiderId = riderId;
                 
                 // Populate rider info
@@ -1808,7 +2010,7 @@
                 // Populate license photo
                 const licenseContainer = document.getElementById('licensePhotoContainer');
                 if (rider.license_photo_url) {
-                    licenseContainer.innerHTML = `<img src="http://localhost:8000${rider.license_photo_url}" style="width: 100%; height: auto; border-radius: 8px;" alt="License Photo">`;
+                    licenseContainer.innerHTML = `<img src="http://192.168.8.100:8000${rider.license_photo_url}" style="width: 100%; height: auto; border-radius: 8px;" alt="License Photo">`;
                 } else {
                     licenseContainer.innerHTML = '<span style="color: #9ca3af;">No photo uploaded</span>';
                 }
@@ -1816,7 +2018,7 @@
                 // Populate vehicle photo
                 const vehicleContainer = document.getElementById('vehiclePhotoContainer');
                 if (rider.vehicle_photo_url) {
-                    vehicleContainer.innerHTML = `<img src="http://localhost:8000${rider.vehicle_photo_url}" style="width: 100%; height: auto; border-radius: 8px;" alt="Vehicle Photo">`;
+                    vehicleContainer.innerHTML = `<img src="http://192.168.8.100:8000${rider.vehicle_photo_url}" style="width: 100%; height: auto; border-radius: 8px;" alt="Vehicle Photo">`;
                 } else {
                     vehicleContainer.innerHTML = '<span style="color: #9ca3af;">No photo uploaded</span>';
                 }

@@ -74,7 +74,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   };
 
   const handleLogin = () => {
-    navigation.navigate('Login');
+    // Don't navigate manually - just logout to clear tokens
+    // AuthNavigation will automatically show login screen
+    logout();
   };
 
   const customerMenuItems = [
@@ -443,7 +445,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.registerButton}
-              onPress={() => navigation.navigate('Register')}
+              onPress={() => {
+                // Clear any existing data and trigger auth state change
+                logout();
+              }}
             >
               <Text style={styles.registerButtonText}>Create Account</Text>
             </TouchableOpacity>

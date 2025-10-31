@@ -121,6 +121,14 @@ class ApiService {
     try {
       console.log('📦 Fetching customer orders...');
       const token = await StorageService.getToken();
+      const userRole = await StorageService.getItem('userRole');
+      
+      // Skip if user is admin - admins don't have customer orders
+      if (userRole === 'admin') {
+        console.log('⚠️ Skipping customer orders fetch - user is admin');
+        return [];
+      }
+      
       console.log('🔑 Current token:', token ? 'Present' : 'Missing');
       
       const response = await this.api.get('/api/customer/orders');
@@ -129,9 +137,20 @@ class ApiService {
     } catch (error: any) {
       console.error('❌ Get customer orders failed:', error.response?.status, error.message);
       if (error.response?.status === 401) {
-        console.error('🔒 Authentication failed - token may be expired or invalid');
-        const user = await StorageService.getUser();
-        console.log('👤 Current user:', user);
+        const userRole = await StorageService.getItem('userRole');
+        // Only show error if not admin (admins are expected to fail here)
+        if (userRole !== 'admin') {
+          console.error('🔒 Authentication failed - token may be expired or invalid');
+          const user = await StorageService.getUser();
+          console.log('👤 Current user:', user);
+        } else {
+          console.log('💡 Admin users don\'t have customer orders');
+        }
+      }
+      // Return empty array instead of throwing for admin users
+      const userRole = await StorageService.getItem('userRole');
+      if (userRole === 'admin' && error.response?.status === 401) {
+        return [];
       }
       throw error;
     }

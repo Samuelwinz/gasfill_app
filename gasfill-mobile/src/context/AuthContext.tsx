@@ -302,9 +302,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async () => {
     try {
       setIsLoading(true);
+      console.log('🚪 Logging out...');
+      
+      // Clear all user/rider tokens and data
       await StorageService.logout();
       await StorageService.removeItem('userRole');
       await StorageService.removeItem('rider');
+      
+      // Clear admin tokens and data
+      await StorageService.removeItem('gasfill_admin_token');
+      await StorageService.removeItem('admin_user');
+      
+      console.log('✅ All tokens and user data cleared');
+      
       setToken(null);
       setUser(null);
       setRider(null);
