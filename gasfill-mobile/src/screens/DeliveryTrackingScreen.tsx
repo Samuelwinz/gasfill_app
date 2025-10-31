@@ -61,6 +61,7 @@ interface OrderTracking {
     price: number;
   }>;
   total: number;
+  delivery_fee?: number;
   created_at: string;
 }
 
@@ -726,6 +727,13 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
                   </Text>
                 </View>
               ))}
+              <View style={styles.divider} />
+              <View style={styles.itemRow}>
+                <Text style={styles.itemName}>Delivery Fee</Text>
+                <Text style={[styles.itemPrice, { color: '#10b981', fontWeight: '700' }]}>
+                  GH₵ {(trackingData.delivery_fee || 10.0).toFixed(2)}
+                </Text>
+              </View>
               <View style={styles.divider} />
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>Total</Text>

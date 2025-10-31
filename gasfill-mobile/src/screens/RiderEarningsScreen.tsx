@@ -7,10 +7,19 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { getRiderEarnings, getRiderEarningsDetailed, requestPayment, EarningsData as ApiEarningsData } from '../services/riderApi';
+import { 
+  getRiderEarningsDetailed, 
+  requestPayment, 
+  getPaymentRequests,
+  getPayoutHistory,
+  updatePaymentRequest,
+  cancelPaymentRequest,
+  EarningsData as ApiEarningsData 
+} from '../services/riderApi';
 import { useRiderUpdates } from '../context/WebSocketContext';
 import Loading from '../components/Loading';
 import ErrorDisplay from '../components/ErrorDisplay';
@@ -22,6 +31,11 @@ const RiderEarningsScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [payoutLoading, setPayoutLoading] = useState(false);
+  const [pendingPaymentRequest, setPendingPaymentRequest] = useState<any>(null);
+  const [editingAmount, setEditingAmount] = useState(false);
+  const [newPayoutAmount, setNewPayoutAmount] = useState('');
+  const [payoutHistory, setPayoutHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // Subscribe to real-time earnings updates
   useRiderUpdates({
@@ -42,6 +56,12 @@ const RiderEarningsScreen: React.FC = () => {
 
   useEffect(() => {
     loadEarningsData();
+    if (activeTab === 'payout') {
+      loadPaymentRequests();
+    }
+    if (activeTab === 'history') {
+      loadPayoutHistory();
+    }
   }, [activeTab]);
 
   const loadEarningsData = async () => {
@@ -49,15 +69,10 @@ const RiderEarningsScreen: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      if (activeTab === 'history') {
-        const detailedData = await getRiderEarningsDetailed();
-        setEarningsData(detailedData);
-        console.log('✅ Detailed earnings loaded');
-      } else {
-        const data = await getRiderEarnings();
-        setEarningsData(data);
-        console.log('✅ Earnings summary loaded:', data);
-      }
+      // Always use detailed endpoint as it has all required fields
+      const detailedData = await getRiderEarningsDetailed();
+      setEarningsData(detailedData);
+      console.log('✅ Detailed earnings loaded for', activeTab, 'tab:', detailedData);
     } catch (err: any) {
       console.error('❌ Error loading earnings:', err);
       setError(err.message || 'Failed to load earnings');
@@ -66,9 +81,42 @@ const RiderEarningsScreen: React.FC = () => {
     }
   };
 
+  const loadPaymentRequests = async () => {
+    try {
+      const response = await getPaymentRequests('pending');
+      if (response.requests && response.requests.length > 0) {
+        setPendingPaymentRequest(response.requests[0]);
+        setNewPayoutAmount(response.requests[0].amount.toString());
+      } else {
+        setPendingPaymentRequest(null);
+      }
+    } catch (err: any) {
+      console.error('❌ Error loading payment requests:', err);
+    }
+  };
+
+  const loadPayoutHistory = async () => {
+    try {
+      setHistoryLoading(true);
+      const response = await getPayoutHistory();
+      setPayoutHistory(response.history || []);
+      console.log('✅ Payout history loaded:', response);
+    } catch (err: any) {
+      console.error('❌ Error loading payout history:', err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadEarningsData();
+    if (activeTab === 'payout') {
+      await loadPaymentRequests();
+    }
+    if (activeTab === 'history') {
+      await loadPayoutHistory();
+    }
     setRefreshing(false);
   };
 
@@ -82,11 +130,98 @@ const RiderEarningsScreen: React.FC = () => {
       Alert.alert(
         'Payout Requested',
         `Your payout request of ₵${amount.toFixed(2)} has been submitted successfully. Request ID: ${response.request_id}`,
-        [{ text: 'OK', onPress: () => loadEarningsData() }]
+        [{ text: 'OK', onPress: () => {
+          loadEarningsData();
+          loadPaymentRequests();
+        }}]
       );
     } catch (err: any) {
       console.error('❌ Error requesting payout:', err);
-      Alert.alert('Error', err.message || 'Failed to request payout');
+      
+      // Check if it's a duplicate request error
+      if (err.response?.data?.detail?.error === 'duplicate_request') {
+        const existingRequest = err.response.data.detail.existing_request;
+        Alert.alert(
+          'Pending Request Exists',
+          `You already have a pending payout request of ₵${existingRequest.amount.toFixed(2)}.\n\nWould you like to modify or cancel it?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Modify Amount', 
+              onPress: () => {
+                setPendingPaymentRequest(existingRequest);
+                setEditingAmount(true);
+                setNewPayoutAmount(existingRequest.amount.toString());
+              }
+            },
+            { 
+              text: 'Cancel Request', 
+              style: 'destructive',
+              onPress: () => handleCancelRequest(existingRequest.id)
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Error', err.response?.data?.detail || err.message || 'Failed to request payout');
+      }
+    } finally {
+      setPayoutLoading(false);
+    }
+  };
+
+  const handleUpdatePayoutAmount = async () => {
+    if (!pendingPaymentRequest) return;
+    
+    const amount = parseFloat(newPayoutAmount);
+    if (isNaN(amount) || amount < 100) {
+      Alert.alert('Invalid Amount', 'Please enter a valid amount (minimum ₵100.00)');
+      return;
+    }
+
+    const availableBalance = earningsData?.pending_earnings || 0;
+    if (amount > availableBalance) {
+      Alert.alert('Insufficient Balance', `Available balance: ₵${availableBalance.toFixed(2)}`);
+      return;
+    }
+
+    try {
+      setPayoutLoading(true);
+      const response = await updatePaymentRequest(pendingPaymentRequest.id, amount);
+      console.log('✅ Payout amount updated:', response);
+      
+      Alert.alert(
+        'Request Updated',
+        `Your payout request has been updated to ₵${amount.toFixed(2)}`,
+        [{ text: 'OK', onPress: () => {
+          setEditingAmount(false);
+          loadPaymentRequests();
+        }}]
+      );
+    } catch (err: any) {
+      console.error('❌ Error updating payout:', err);
+      Alert.alert('Error', err.response?.data?.detail || err.message || 'Failed to update payout');
+    } finally {
+      setPayoutLoading(false);
+    }
+  };
+
+  const handleCancelRequest = async (requestId: number) => {
+    try {
+      setPayoutLoading(true);
+      await cancelPaymentRequest(requestId);
+      console.log('✅ Payout request cancelled');
+      
+      Alert.alert(
+        'Request Cancelled',
+        'Your payout request has been cancelled successfully.',
+        [{ text: 'OK', onPress: () => {
+          setPendingPaymentRequest(null);
+          loadPaymentRequests();
+        }}]
+      );
+    } catch (err: any) {
+      console.error('❌ Error cancelling request:', err);
+      Alert.alert('Error', err.response?.data?.detail || err.message || 'Failed to cancel request');
     } finally {
       setPayoutLoading(false);
     }
@@ -97,25 +232,47 @@ const RiderEarningsScreen: React.FC = () => {
     
     const availableBalance = earningsData.pending_earnings || 0;
     
-    if (availableBalance < 50) {
+    if (availableBalance < 100) {
       Alert.alert(
         'Minimum Payout Amount',
-        'You need at least ₵50.00 to request a payout.',
+        'You need at least ₵100.00 to request a payout.',
         [{ text: 'OK' }]
       );
       return;
     }
 
-    Alert.alert(
+    // Show input dialog for custom amount
+    Alert.prompt(
       'Request Payout',
-      `Request payout of ₵${availableBalance.toFixed(2)}?`,
+      `Available balance: ₵${availableBalance.toFixed(2)}\n\nEnter payout amount (minimum ₵100.00):`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Confirm',
+          text: 'Request Full Amount',
           onPress: () => handleRequestPayout(availableBalance),
         },
-      ]
+        {
+          text: 'Request Custom',
+          onPress: (amountText?: string) => {
+            const amount = parseFloat(amountText || '0');
+            
+            if (isNaN(amount) || amount < 100) {
+              Alert.alert('Invalid Amount', 'Minimum payout amount is ₵100.00');
+              return;
+            }
+            
+            if (amount > availableBalance) {
+              Alert.alert('Insufficient Balance', `Available balance: ₵${availableBalance.toFixed(2)}`);
+              return;
+            }
+            
+            handleRequestPayout(amount);
+          },
+        },
+      ],
+      'plain-text',
+      '',
+      'numeric'
     );
   };
 
@@ -229,13 +386,17 @@ const RiderEarningsScreen: React.FC = () => {
   };
 
   const renderHistory = () => {
-    if (!earningsData?.earnings_breakdown || earningsData.earnings_breakdown.length === 0) {
+    if (historyLoading) {
+      return <Loading message="Loading payout history..." />;
+    }
+
+    if (!payoutHistory || payoutHistory.length === 0) {
       return (
         <View style={styles.emptyState}>
           <Ionicons name="receipt-outline" size={80} color="#d1d5db" />
-          <Text style={styles.emptyStateTitle}>No earnings history</Text>
+          <Text style={styles.emptyStateTitle}>No payout history</Text>
           <Text style={styles.emptyStateText}>
-            Your earnings history will appear here once you complete deliveries
+            Your completed payouts will appear here
           </Text>
         </View>
       );
@@ -243,41 +404,42 @@ const RiderEarningsScreen: React.FC = () => {
 
     return (
       <View style={styles.historyList}>
-        {earningsData.earnings_breakdown.map((item, index) => {
-          // Calculate breakdown
-          const orderTotal = item.gross_amount || 0;
-          const commissionRate = item.commission_rate || 0.15;
-          const commission = item.earning_type === 'delivery_commission' ? item.amount : (orderTotal * commissionRate);
-          const deliveryFee = item.earning_type === 'delivery_fee' ? item.amount : 10;
-          const isBonus = item.earning_type === 'daily_bonus' || item.earning_type === 'weekly_bonus';
-          const isService = item.earning_type === 'service_pickup' || item.earning_type === 'service_refill';
+        {/* Total Paid Summary */}
+        <View style={styles.totalPaidCard}>
+          <View style={styles.totalPaidHeader}>
+            <Ionicons name="checkmark-circle" size={32} color="#10b981" />
+            <View style={styles.totalPaidInfo}>
+              <Text style={styles.totalPaidLabel}>Total Paid Out</Text>
+              <Text style={styles.totalPaidAmount}>
+                ₵{payoutHistory.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Payout History List */}
+        {payoutHistory.map((payout, index) => {
+          const isCompleted = payout.status === 'approved' || payout.status === 'completed';
           
           return (
-            <View key={`earning-${item.id || index}`} style={styles.earningCard}>
+            <View key={`payout-${payout.id}-${index}`} style={styles.payoutCard}>
               {/* Header */}
-              <View style={styles.earningHeader}>
-                <View style={styles.earningHeaderLeft}>
+              <View style={styles.payoutHeader}>
+                <View style={styles.payoutHeaderLeft}>
                   <Ionicons
-                    name={
-                      isBonus ? 'trophy' :
-                      isService ? 'construct' :
-                      item.earning_type === 'delivery_fee' ? 'bicycle' :
-                      'cash'
-                    }
+                    name={isCompleted ? 'checkmark-circle' : 'time'}
                     size={24}
-                    color={
-                      isBonus ? '#f59e0b' :
-                      item.status === 'paid' ? '#10b981' : '#6b7280'
-                    }
+                    color={isCompleted ? '#10b981' : '#f59e0b'}
                   />
-                  <View style={styles.earningInfo}>
-                    <Text style={styles.earningTitle}>
-                      {isBonus || isService ? (item.description || item.earning_type) : `Order #${item.order_id || 'N/A'}`}
+                  <View style={styles.payoutHistoryInfo}>
+                    <Text style={styles.payoutTitle}>
+                      Payout #{payout.id}
                     </Text>
-                    <Text style={styles.earningDate}>
-                      {new Date(item.date).toLocaleDateString('en-US', {
+                    <Text style={styles.payoutDate}>
+                      {new Date(payout.processed_date).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
+                        year: 'numeric',
                         hour: '2-digit',
                         minute: '2-digit',
                       })}
@@ -285,78 +447,66 @@ const RiderEarningsScreen: React.FC = () => {
                   </View>
                 </View>
                 
-                <View style={styles.earningAmountSection}>
+                <View style={styles.payoutAmountSection}>
                   <Text style={[
-                    styles.earningTotalAmount,
-                    { color: item.status === 'paid' ? '#10b981' : '#f59e0b' }
+                    styles.payoutAmount,
+                    { color: isCompleted ? '#10b981' : '#f59e0b' }
                   ]}>
-                    ₵{(item.amount ?? 0).toFixed(2)}
+                    ₵{payout.amount.toFixed(2)}
                   </Text>
                   <View style={[
-                    styles.earningStatusBadge,
-                    { backgroundColor: item.status === 'paid' ? '#d1fae5' : '#fef3c7' }
+                    styles.payoutStatusBadge,
+                    { backgroundColor: isCompleted ? '#d1fae5' : '#fef3c7' }
                   ]}>
                     <Text style={[
-                      styles.earningStatusText,
-                      { color: item.status === 'paid' ? '#065f46' : '#92400e' }
+                      styles.payoutStatusText,
+                      { color: isCompleted ? '#065f46' : '#92400e' }
                     ]}>
-                      {item.status?.toUpperCase() || 'PENDING'}
+                      {payout.status?.toUpperCase()}
                     </Text>
                   </View>
                 </View>
               </View>
 
-              {/* Breakdown Details - Only for delivery earnings */}
-              {!isBonus && !isService && orderTotal > 0 && (
-                <View style={styles.earningBreakdown}>
-                  <Text style={styles.breakdownTitle}>💰 Earning Breakdown</Text>
-                  
-                  <View style={styles.breakdownItem}>
-                    <View style={styles.breakdownLeft}>
-                      <Text style={styles.breakdownDot}>•</Text>
-                      <Text style={styles.breakdownLabel}>Order Value</Text>
-                    </View>
-                    <Text style={styles.breakdownSubValue}>₵{orderTotal.toFixed(2)}</Text>
+              {/* Payment Details */}
+              <View style={styles.payoutDetails}>
+                <View style={styles.payoutDetailRow}>
+                  <View style={styles.payoutDetailLeft}>
+                    <Ionicons name="card-outline" size={16} color="#6b7280" />
+                    <Text style={styles.payoutDetailLabel}>Payment Method</Text>
                   </View>
-                  
-                  <View style={styles.breakdownItem}>
-                    <View style={styles.breakdownLeft}>
-                      <Text style={styles.breakdownDot}>•</Text>
-                      <Text style={styles.breakdownLabel}>Commission (15%)</Text>
-                    </View>
-                    <Text style={styles.breakdownValue}>₵{(orderTotal * 0.15).toFixed(2)}</Text>
-                  </View>
-                  
-                  <View style={styles.breakdownItem}>
-                    <View style={styles.breakdownLeft}>
-                      <Text style={styles.breakdownDot}>•</Text>
-                      <Text style={styles.breakdownLabel}>Delivery Fee</Text>
-                    </View>
-                    <Text style={styles.breakdownValue}>₵10.00</Text>
-                  </View>
-                  
-                  <View style={[styles.breakdownItem, styles.breakdownTotal]}>
-                    <Text style={styles.breakdownTotalLabel}>Your Earning</Text>
-                    <Text style={styles.breakdownTotalValue}>
-                      ₵{((orderTotal * 0.15) + 10).toFixed(2)}
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              {/* Service or Bonus Info */}
-              {(isBonus || isService) && item.description && (
-                <View style={styles.earningNote}>
-                  <Ionicons 
-                    name={isBonus ? "star" : "information-circle-outline"} 
-                    size={14} 
-                    color={isBonus ? "#f59e0b" : "#3b82f6"} 
-                  />
-                  <Text style={styles.earningNoteText}>
-                    {item.description}
+                  <Text style={styles.payoutDetailValue}>
+                    {payout.payment_method === 'mobile_money' ? 'Mobile Money' : 
+                     payout.payment_method === 'bank_transfer' ? 'Bank Transfer' : 
+                     payout.payment_method}
                   </Text>
                 </View>
-              )}
+
+                {payout.payment_reference && payout.payment_reference !== 'N/A' && (
+                  <View style={styles.payoutDetailRow}>
+                    <View style={styles.payoutDetailLeft}>
+                      <Ionicons name="document-text-outline" size={16} color="#6b7280" />
+                      <Text style={styles.payoutDetailLabel}>Reference</Text>
+                    </View>
+                    <Text style={styles.payoutDetailValue}>
+                      {payout.payment_reference}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.payoutDetailRow}>
+                  <View style={styles.payoutDetailLeft}>
+                    <Ionicons name="calendar-outline" size={16} color="#6b7280" />
+                    <Text style={styles.payoutDetailLabel}>Requested</Text>
+                  </View>
+                  <Text style={styles.payoutDetailValue}>
+                    {new Date(payout.requested_date).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </Text>
+                </View>
+              </View>
             </View>
           );
         })}
@@ -369,23 +519,124 @@ const RiderEarningsScreen: React.FC = () => {
     
     return (
       <View style={styles.payoutSection}>
+        {/* Show pending request if exists */}
+        {pendingPaymentRequest && (
+          <View style={styles.pendingRequestCard}>
+            <View style={styles.pendingRequestHeader}>
+              <Ionicons name="time-outline" size={24} color="#f59e0b" />
+              <Text style={styles.pendingRequestTitle}>Pending Payout Request</Text>
+            </View>
+            
+            <View style={styles.pendingRequestBody}>
+              {editingAmount ? (
+                <View style={styles.editAmountContainer}>
+                  <Text style={styles.editAmountLabel}>New Amount:</Text>
+                  <TextInput
+                    style={styles.amountInput}
+                    value={newPayoutAmount}
+                    onChangeText={setNewPayoutAmount}
+                    keyboardType="decimal-pad"
+                    placeholder="50.00"
+                  />
+                  <View style={styles.editButtonsRow}>
+                    <TouchableOpacity
+                      style={[styles.editButton, styles.cancelEditButton]}
+                      onPress={() => {
+                        setEditingAmount(false);
+                        setNewPayoutAmount(pendingPaymentRequest.amount.toString());
+                      }}
+                    >
+                      <Text style={styles.cancelEditButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.editButton, styles.saveEditButton]}
+                      onPress={handleUpdatePayoutAmount}
+                      disabled={payoutLoading}
+                    >
+                      <Text style={styles.saveEditButtonText}>
+                        {payoutLoading ? 'Saving...' : 'Save'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.pendingRequestInfo}>
+                    <Text style={styles.pendingRequestLabel}>Amount:</Text>
+                    <Text style={styles.pendingRequestAmount}>
+                      ₵{pendingPaymentRequest.amount.toFixed(2)}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.pendingRequestInfo}>
+                    <Text style={styles.pendingRequestLabel}>Requested:</Text>
+                    <Text style={styles.pendingRequestDate}>
+                      {new Date(pendingPaymentRequest.requested_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.pendingRequestActions}>
+                    <TouchableOpacity
+                      style={[styles.requestActionButton, styles.modifyButton]}
+                      onPress={() => setEditingAmount(true)}
+                      disabled={payoutLoading}
+                    >
+                      <Ionicons name="create-outline" size={16} color="#ffffff" />
+                      <Text style={styles.requestActionButtonText}>Modify Amount</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[styles.requestActionButton, styles.cancelButton]}
+                      onPress={() => {
+                        Alert.alert(
+                          'Cancel Request',
+                          'Are you sure you want to cancel this payout request?',
+                          [
+                            { text: 'No', style: 'cancel' },
+                            { 
+                              text: 'Yes, Cancel', 
+                              style: 'destructive',
+                              onPress: () => handleCancelRequest(pendingPaymentRequest.id)
+                            },
+                          ]
+                        );
+                      }}
+                      disabled={payoutLoading}
+                    >
+                      <Ionicons name="close-circle-outline" size={16} color="#ffffff" />
+                      <Text style={styles.requestActionButtonText}>Cancel Request</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        )}
+        
         <View style={styles.payoutInfo}>
           <Text style={styles.payoutInfoTitle}>Available for Payout</Text>
           <Text style={styles.payoutBalance}>
             ₵{pendingBalance.toFixed(2)}
           </Text>
           
-          <TouchableOpacity 
-            style={[styles.primaryButton, payoutLoading && styles.disabledButton]}
-            onPress={requestPayout}
-            disabled={payoutLoading || !earningsData || pendingBalance < 50}
-          >
-          <Ionicons name="cash-outline" size={20} color="#fff" />
-          <Text style={styles.primaryButtonText}>
-            {payoutLoading ? 'Processing...' : 'Request Payout'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+          {!pendingPaymentRequest && (
+            <TouchableOpacity 
+              style={[styles.primaryButton, payoutLoading && styles.disabledButton]}
+              onPress={requestPayout}
+              disabled={payoutLoading || !earningsData || pendingBalance < 50}
+            >
+              <Ionicons name="cash-outline" size={20} color="#fff" />
+              <Text style={styles.primaryButtonText}>
+                {payoutLoading ? 'Processing...' : 'Request Payout'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
       <View style={styles.payoutOptions}>
         <Text style={styles.sectionTitle}>Payout Information</Text>
@@ -1017,6 +1268,233 @@ const styles = StyleSheet.create({
     color: '#3b82f6',
     marginLeft: 6,
     flex: 1,
+  },
+  // Pending request styles
+  pendingRequestCard: {
+    backgroundColor: '#fffbeb',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+  },
+  pendingRequestHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  pendingRequestTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#92400e',
+    marginLeft: 8,
+  },
+  pendingRequestBody: {
+    marginTop: 8,
+  },
+  pendingRequestInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  pendingRequestLabel: {
+    fontSize: 14,
+    color: '#78350f',
+    fontWeight: '600',
+  },
+  pendingRequestAmount: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#92400e',
+  },
+  pendingRequestDate: {
+    fontSize: 14,
+    color: '#92400e',
+  },
+  pendingRequestActions: {
+    flexDirection: 'row',
+    marginTop: 16,
+    gap: 8,
+  },
+  requestActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    gap: 6,
+  },
+  modifyButton: {
+    backgroundColor: '#3b82f6',
+  },
+  cancelButton: {
+    backgroundColor: '#ef4444',
+  },
+  requestActionButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  editAmountContainer: {
+    paddingTop: 8,
+  },
+  editAmountLabel: {
+    fontSize: 14,
+    color: '#78350f',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  amountInput: {
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  editButtonsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelEditButton: {
+    backgroundColor: '#e5e7eb',
+  },
+  saveEditButton: {
+    backgroundColor: '#10b981',
+  },
+  cancelEditButtonText: {
+    color: '#6b7280',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  saveEditButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Payout History Styles
+  totalPaidCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  totalPaidHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  totalPaidInfo: {
+    flex: 1,
+  },
+  totalPaidLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  totalPaidAmount: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#10b981',
+  },
+  payoutCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  payoutHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  payoutHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  payoutHistoryInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  payoutTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  payoutDate: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  payoutAmountSection: {
+    alignItems: 'flex-end',
+  },
+  payoutAmount: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  payoutStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  payoutStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  payoutDetails: {
+    marginTop: 4,
+  },
+  payoutDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  payoutDetailLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  payoutDetailLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  payoutDetailValue: {
+    fontSize: 14,
+    color: '#1f2937',
+    fontWeight: '600',
   },
 });
 

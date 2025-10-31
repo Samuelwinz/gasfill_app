@@ -19,7 +19,7 @@ import { StorageService } from '../utils/storage';
 // For physical device/emulator, replace localhost with your computer's IP address
 // Example: const API_BASE_URL = 'http://192.168.1.100:8000'
 const API_BASE_URL = __DEV__ 
-  ? 'http://192.168.1.25:8000'  // Your local machine IP address
+  ? 'http://192.168.8.100:8000'  // Your local machine IP address
   : 'https://your-production-api.com'; // Production URL
 
 class ApiService {

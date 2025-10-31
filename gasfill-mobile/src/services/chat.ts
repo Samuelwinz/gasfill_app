@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ChatMessage, ChatRoom } from '../types';
 
-const API_BASE_URL = 'http://192.168.1.25:8000';
+const API_BASE_URL = 'http://192.168.8.100:8000';
 const TOKEN_KEY = 'gasfill_token_v1';
 
 class ChatService {

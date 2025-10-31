@@ -35,6 +35,9 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
 import ChatScreen from '../screens/ChatScreen';
 import CustomerChatListScreen from '../screens/CustomerChatListScreen';
+import RiderAccountSettingsScreen from '../screens/RiderAccountSettingsScreen';
+import RiderHelpSupportScreen from '../screens/RiderHelpSupportScreen';
+import CustomerHelpSupportScreen from '../screens/CustomerHelpSupportScreen';
 
 // Import services
 import { StorageService } from '../utils/storage';
@@ -395,6 +398,27 @@ function AppStack() {
       <Stack.Screen 
         name="RiderDeliveryMap" 
         component={RiderDeliveryMapScreen as any}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="RiderAccountSettings" 
+        component={RiderAccountSettingsScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="RiderHelpSupport" 
+        component={RiderHelpSupportScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="CustomerHelpSupport" 
+        component={CustomerHelpSupportScreen}
         options={{ 
           headerShown: false,
         }}

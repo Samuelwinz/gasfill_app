@@ -24,7 +24,13 @@ export interface Order {
     lat: number;
     lng: number;
   };
+  pickup_location?: {
+    lat: number;
+    lng: number;
+  };
+  pickup_address?: string;
   total: number;
+  delivery_fee?: number;
   delivery_type?: string;
   status: OrderStatus;
   payment_status?: PaymentStatus;

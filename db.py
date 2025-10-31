@@ -210,6 +210,17 @@ def init_db():
     except:
         cur.execute("ALTER TABLE orders ADD COLUMN rated_at TEXT")
     
+    # Migration: Add document URL columns to riders table if they don't exist
+    try:
+        cur.execute("SELECT license_photo_url FROM riders LIMIT 1")
+    except:
+        cur.execute("ALTER TABLE riders ADD COLUMN license_photo_url TEXT")
+    
+    try:
+        cur.execute("SELECT vehicle_photo_url FROM riders LIMIT 1")
+    except:
+        cur.execute("ALTER TABLE riders ADD COLUMN vehicle_photo_url TEXT")
+    
     conn.commit()
     conn.close()
 
@@ -985,7 +996,7 @@ def update_rider(rider_id: int, update_data: Dict[str, Any]) -> Optional[Dict[st
         'total_deliveries', 'successful_deliveries', 'earnings', 'commission_rate',
         'delivery_fee', 'is_verified', 'is_active', 'is_suspended',
         'verification_date', 'verification_notes', 'document_status',
-        'suspension_date', 'suspension_reason'
+        'suspension_date', 'suspension_reason', 'license_photo_url', 'vehicle_photo_url'
     ]
     
     for key in allowed_fields:
@@ -1256,7 +1267,7 @@ def clear_expired_assignments() -> List[str]:
 
 def _row_to_rider(row: sqlite3.Row) -> Dict[str, Any]:
     """Convert SQLite row to rider dict"""
-    return {
+    rider_dict = {
         'id': row['id'],
         'username': row['username'],
         'email': row['email'],
@@ -1286,6 +1297,19 @@ def _row_to_rider(row: sqlite3.Row) -> Dict[str, Any]:
         'created_at': row['created_at'],
         'updated_at': row['updated_at']
     }
+    
+    # Add document URLs if they exist
+    try:
+        rider_dict['license_photo_url'] = row['license_photo_url']
+    except (KeyError, IndexError):
+        rider_dict['license_photo_url'] = None
+    
+    try:
+        rider_dict['vehicle_photo_url'] = row['vehicle_photo_url']
+    except (KeyError, IndexError):
+        rider_dict['vehicle_photo_url'] = None
+    
+    return rider_dict
 
 # ============= RATINGS FUNCTIONS =============
 

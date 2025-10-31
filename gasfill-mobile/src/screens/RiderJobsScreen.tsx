@@ -36,13 +36,16 @@ import ApiService from '../services/api';
 
 interface RiderJobsScreenProps {
   navigation: any;
+  route?: any;
 }
 
-const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
+const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation, route }) => {
   const { rider } = useAuth();
   const { send } = useWebSocket();
   
-  const [activeTab, setActiveTab] = useState<'available' | 'active'>('available');
+  // Get initial tab from route params (from dashboard)
+  const initialTab = route?.params?.initialTab || 'available';
+  const [activeTab, setActiveTab] = useState<'available' | 'active'>(initialTab);
   const [availableJobs, setAvailableJobs] = useState<AvailableOrder[]>([]);
   const [activeJobs, setActiveJobs] = useState<ActiveOrder[]>([]);
   const [pendingJobs, setPendingJobs] = useState<ActiveOrder[]>([]);
@@ -59,6 +62,13 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
   const [orderRatings, setOrderRatings] = useState<Record<string | number, Rating[]>>({});
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeRatingId, setDisputeRatingId] = useState<string | null>(null);
+
+  // Set active tab when route params change
+  useEffect(() => {
+    if (route?.params?.initialTab) {
+      setActiveTab(route.params.initialTab);
+    }
+  }, [route?.params?.initialTab]);
 
   // Determine if rider should be tracking location (has active delivery orders)
   const hasActiveDelivery = activeJobs.some(
@@ -386,7 +396,7 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
         <View style={styles.jobFooter}>
           <View style={styles.earnings}>
             <Text style={styles.earningsLabel}>Delivery Fee</Text>
-            <Text style={styles.earningsAmount}>₵{job.delivery_fee}</Text>
+            <Text style={styles.earningsAmount}>₵{(job.delivery_fee ?? 10.0).toFixed(2)}</Text>
           </View>
           
           {/* Quick Map Button for in_transit orders */}
@@ -430,7 +440,12 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
       );
     }
 
-    const jobs = activeTab === 'available' ? availableJobs : activeJobs;
+    // Filter active jobs to exclude completed/delivered orders
+    const filteredActiveJobs = activeJobs.filter(
+      job => job.status !== 'delivered' && job.status !== 'cancelled'
+    );
+    
+    const jobs = activeTab === 'available' ? availableJobs : filteredActiveJobs;
     const emptyMessage = activeTab === 'available' 
       ? 'No available orders right now'
       : 'No active orders';
@@ -505,7 +520,7 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
           onPress={() => setActiveTab('active')}
         >
           <Text style={[styles.tabText, activeTab === 'active' && styles.activeTabText]}>
-            Active ({activeJobs.length})
+            Active ({activeJobs.filter(job => job.status !== 'delivered' && job.status !== 'cancelled').length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -591,6 +606,19 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
                 {selectedOrder.distance && (
                   <Text style={styles.modalSubtext}>{(selectedOrder.distance ?? 0).toFixed(1)} km away</Text>
                 )}
+              </View>
+
+              <View style={styles.modalSection}>
+                <View style={styles.locationHeader}>
+                  <Ionicons name="location" size={20} color="#10b981" />
+                  <Text style={styles.modalSectionTitle}>Pickup Location</Text>
+                </View>
+                <Text style={styles.modalText}>
+                  {(selectedOrder as ActiveOrder).pickup_address || 'GasFill Main Depot, Accra, Ghana'}
+                </Text>
+                <Text style={styles.modalSubtext}>
+                  📍 Collect gas cylinders from here before delivery
+                </Text>
               </View>
 
               <View style={styles.modalSection}>
@@ -1191,6 +1219,12 @@ const styles = StyleSheet.create({
     color: '#F57C00',
     fontSize: 13,
     fontWeight: '600',
+  },
+  locationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
   },
 });
 

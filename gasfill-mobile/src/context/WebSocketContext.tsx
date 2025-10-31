@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getWebSocketService, resetWebSocketService, WebSocketService } from '../services/websocket';
 
 // WebSocket server URL - update to match your backend
-const WS_URL = 'ws://192.168.1.25:8000/ws';
+const WS_URL = 'ws://192.168.8.100:8000/ws';
 
 // Storage keys - must match what AuthContext uses
 const TOKEN_KEY = 'gasfill_token_v1';
@@ -232,6 +232,7 @@ export const useRiderUpdates = (callbacks: {
   onNewOrder?: (data: any) => void;
   onOrderStatusUpdate?: (data: any) => void;
   onEarningsUpdate?: (data: any) => void;
+  onVerificationStatusUpdate?: (data: any) => void;
 }) => {
   const { subscribe } = useWebSocket();
   
@@ -255,6 +256,10 @@ export const useRiderUpdates = (callbacks: {
 
     if (callbacksRef.current.onEarningsUpdate) {
       unsubscribers.push(subscribe('earnings_updated', (data) => callbacksRef.current.onEarningsUpdate?.(data)));
+    }
+
+    if (callbacksRef.current.onVerificationStatusUpdate) {
+      unsubscribers.push(subscribe('verification_status_update', (data) => callbacksRef.current.onVerificationStatusUpdate?.(data)));
     }
 
     return () => {

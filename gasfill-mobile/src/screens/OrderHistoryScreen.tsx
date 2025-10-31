@@ -320,6 +320,19 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                     </Text>
                   ))}
                 </View>
+
+                {/* Pricing Breakdown */}
+                <View style={styles.pricingSection}>
+                  <View style={styles.pricingRow}>
+                    <Text style={styles.pricingLabel}>Items Total</Text>
+                    <Text style={styles.pricingValue}>GH₵ {order.total.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.pricingRow}>
+                    <Text style={styles.pricingLabel}>Delivery Fee</Text>
+                    <Text style={styles.deliveryFee}>GH₵ {(order.delivery_fee || 10.0).toFixed(2)}</Text>
+                  </View>
+                </View>
+
                 <View style={styles.footer}>
                   <View
                     style={[
@@ -628,6 +641,32 @@ const styles = StyleSheet.create({
     color: '#F57C00',
     fontSize: 15,
     fontWeight: '600',
+  },
+  pricingSection: {
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+  },
+  pricingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  pricingLabel: {
+    fontSize: 14,
+    color: '#616161',
+  },
+  pricingValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#424242',
+  },
+  deliveryFee: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#10b981',
   },
 });
 
