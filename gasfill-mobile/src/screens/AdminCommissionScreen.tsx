@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import adminAuthService from '../services/adminAuthService';
 
 interface EarningsOverview {
@@ -43,23 +44,31 @@ interface RiderEarnings {
 }
 
 const AdminCommissionScreen: React.FC = () => {
+  const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [overview, setOverview] = useState<EarningsOverview | null>(null);
+  const [riderStats, setRiderStats] = useState<RiderEarnings[]>([]);
+  const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month' | 'year'>('month');
   const [showRateModal, setShowRateModal] = useState(false);
   const [newCommissionRate, setNewCommissionRate] = useState('');
 
   useEffect(() => {
     fetchCommissionData();
-  }, []);
+  }, [selectedPeriod]);
 
   const fetchCommissionData = async () => {
     try {
-      const data = await adminAuthService.makeAdminRequest<EarningsOverview>(
-        '/api/admin/earnings/overview'
-      );
-      setOverview(data);
-      setNewCommissionRate((data.commission_structure.rider_commission_rate * 100).toString());
+      const [overviewData, statsData] = await Promise.all([
+        adminAuthService.makeAdminRequest<EarningsOverview>('/api/admin/earnings/overview'),
+        adminAuthService.makeAdminRequest<RiderEarnings[]>(
+          `/api/admin/earnings/statistics?period=${selectedPeriod}`
+        ),
+      ]);
+      
+      setOverview(overviewData);
+      setRiderStats(statsData);
+      setNewCommissionRate((overviewData.commission_structure.rider_commission_rate * 100).toString());
     } catch (error: any) {
       console.error('Error fetching commission data:', error);
       Alert.alert('Error', error.message || 'Failed to load commission data');
@@ -240,10 +249,16 @@ const AdminCommissionScreen: React.FC = () => {
         </View>
 
         {/* Pending Payments */}
-        <View style={styles.card}>
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => navigation.navigate('AdminPaymentRequests' as never)}
+          activeOpacity={0.7}
+        >
           <View style={styles.cardHeader}>
             <Ionicons name="time-outline" size={24} color="#F59E0B" />
             <Text style={styles.cardTitle}>Pending Payments</Text>
+            <View style={{ flex: 1 }} />
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </View>
           <View style={styles.pendingContainer}>
             <View style={styles.pendingBox}>
@@ -256,7 +271,10 @@ const AdminCommissionScreen: React.FC = () => {
               <Text style={styles.pendingLabel}>Total Amount</Text>
             </View>
           </View>
-        </View>
+          {overview.pending_payments.count > 0 && (
+            <Text style={styles.pendingAction}>Tap to review requests</Text>
+          )}
+        </TouchableOpacity>
 
         {/* Earnings by Type */}
         {Object.keys(overview.earnings_by_type).length > 0 && (
@@ -277,6 +295,80 @@ const AdminCommissionScreen: React.FC = () => {
                 </View>
               </View>
             ))}
+          </View>
+        )}
+
+        {/* Period Filter for Rider Stats */}
+        <View style={styles.periodFilterCard}>
+          <Text style={styles.periodFilterLabel}>Rider Statistics Period:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.periodButtons}>
+              {(['day', 'week', 'month', 'year'] as const).map((period) => (
+                <TouchableOpacity
+                  key={period}
+                  style={[
+                    styles.periodButton,
+                    selectedPeriod === period && styles.periodButtonActive,
+                  ]}
+                  onPress={() => setSelectedPeriod(period)}
+                >
+                  <Text
+                    style={[
+                      styles.periodButtonText,
+                      selectedPeriod === period && styles.periodButtonTextActive,
+                    ]}
+                  >
+                    {period.charAt(0).toUpperCase() + period.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+
+        {/* Top Riders */}
+        {riderStats.length > 0 && (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="trophy-outline" size={24} color="#F59E0B" />
+              <Text style={styles.cardTitle}>
+                Top Riders - {selectedPeriod.charAt(0).toUpperCase() + selectedPeriod.slice(1)}
+              </Text>
+            </View>
+            {riderStats.slice(0, 10).map((rider, index) => (
+              <TouchableOpacity
+                key={rider.rider_id}
+                style={styles.riderRow}
+                onPress={() =>
+                  navigation.navigate('AdminRiderEarnings' as never, {
+                    riderId: rider.rider_id,
+                    riderName: rider.rider_name,
+                  } as never)
+                }
+              >
+                <View style={styles.riderRank}>
+                  <Text style={styles.riderRankText}>#{index + 1}</Text>
+                </View>
+                <View style={styles.riderInfo}>
+                  <Text style={styles.riderName}>{rider.rider_name}</Text>
+                  <Text style={styles.riderDeliveries}>
+                    {rider.deliveries_count} {rider.deliveries_count === 1 ? 'delivery' : 'deliveries'} • Avg: ₵{rider.average_per_delivery.toFixed(2)}
+                  </Text>
+                </View>
+                <View style={styles.riderEarnings}>
+                  <Text style={styles.riderEarningsText}>₵{rider.total_earnings.toFixed(2)}</Text>
+                  <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                </View>
+              </TouchableOpacity>
+            ))}
+            {riderStats.length === 0 && (
+              <View style={styles.emptyRidersState}>
+                <Ionicons name="bicycle-outline" size={48} color="#9CA3AF" />
+                <Text style={styles.emptyRidersText}>
+                  No rider earnings for this period
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -555,6 +647,13 @@ const styles = StyleSheet.create({
     height: 60,
     backgroundColor: '#E5E7EB',
   },
+  pendingAction: {
+    marginTop: 12,
+    fontSize: 12,
+    color: '#F59E0B',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
   earningTypeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -694,6 +793,101 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFF',
+  },
+  periodFilterCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  periodFilterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+  },
+  periodButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  periodButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  periodButtonActive: {
+    backgroundColor: '#FF6B00',
+    borderColor: '#FF6B00',
+  },
+  periodButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  periodButtonTextActive: {
+    color: '#FFF',
+  },
+  riderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  riderRank: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  riderRankText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#F59E0B',
+  },
+  riderInfo: {
+    flex: 1,
+  },
+  riderName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  riderDeliveries: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  riderEarnings: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  riderEarningsText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#10B981',
+  },
+  emptyRidersState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyRidersText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
   },
 });
 

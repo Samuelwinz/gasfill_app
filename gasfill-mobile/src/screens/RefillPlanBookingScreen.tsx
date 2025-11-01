@@ -202,19 +202,13 @@ const RefillPlanBookingScreen: React.FC<RefillPlanBookingScreenProps> = ({ navig
           {
             text: 'View Orders',
             onPress: () => {
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'MainTabs', params: { screen: 'Orders' } }],
-              });
+              navigation.navigate('MainTabs' as never, { screen: 'Orders' } as never);
             },
           },
           {
             text: 'OK',
             onPress: () => {
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'MainTabs', params: { screen: 'Home' } }],
-              });
+              navigation.navigate('MainTabs' as never, { screen: 'Home' } as never);
             },
           },
         ]

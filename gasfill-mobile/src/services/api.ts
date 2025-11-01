@@ -107,6 +107,92 @@ class ApiService {
     }
   }
 
+  async calculateDeliveryFee(location: { lat: number; lng: number; order_total?: number }): Promise<{
+    delivery_fee: number;
+    distance_meters: number;
+    distance_km: number;
+    breakdown: {
+      base_fee: number;
+      base_distance: number;
+      additional_fee: number;
+      uncapped_fee?: number;
+      capped?: boolean;
+      max_fee?: number;
+      message: string;
+    };
+  }> {
+    try {
+      console.log('📍 Calculating delivery fee for location:', location);
+      const response = await this.api.post('/api/orders/calculate-fee', location);
+      console.log('💰 Delivery fee calculated:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Calculate delivery fee failed:', error);
+      // Return default fee on error
+      return {
+        delivery_fee: 10.0,
+        distance_meters: 0,
+        distance_km: 0,
+        breakdown: {
+          base_fee: 10.0,
+          base_distance: 500,
+          additional_fee: 0,
+          message: 'Using default fee - calculation failed'
+        }
+      };
+    }
+  }
+
+  async getMapLocations(): Promise<{
+    gas_stations: Array<{
+      id: string;
+      name: string;
+      address: string;
+      location: { lat: number; lng: number };
+      phone: string;
+      hours: string;
+      services: string[];
+    }>;
+    available_riders: Array<{
+      id: number;
+      name: string;
+      phone: string;
+      rating: number;
+      location: { lat: number; lng: number };
+      total_deliveries: number;
+      status: string;
+    }>;
+    timestamp: string;
+  }> {
+    try {
+      console.log('🗺️ Fetching map locations (gas stations & riders)...');
+      const response = await this.api.get('/api/map/locations');
+      console.log('✅ Map locations fetched:', {
+        stations: response.data.gas_stations?.length || 0,
+        riders: response.data.available_riders?.length || 0
+      });
+      return response.data;
+    } catch (error) {
+      console.error('❌ Get map locations failed:', error);
+      // Return default gas station location on error
+      return {
+        gas_stations: [
+          {
+            id: 'station_1',
+            name: 'GasFill Main Station',
+            address: 'Accra, Ghana',
+            location: { lat: 5.6037, lng: -0.1870 },
+            phone: '+233 201 022 153',
+            hours: '24/7',
+            services: ['6kg', '12.5kg', '37kg', 'Refills', 'Exchange']
+          }
+        ],
+        available_riders: [],
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
   async getOrders(): Promise<Order[]> {
     try {
       const response = await this.api.get('/api/orders');
@@ -172,6 +258,18 @@ class ApiService {
       return response.data;
     } catch (error) {
       console.error('Update order status failed:', error);
+      throw error;
+    }
+  }
+
+  async cancelOrder(orderId: string): Promise<Order> {
+    try {
+      console.log('🚫 Cancelling order:', orderId);
+      const response = await this.api.patch(`/api/orders/${orderId}/status`, { status: 'cancelled' });
+      console.log('✅ Order cancelled successfully');
+      return response.data;
+    } catch (error) {
+      console.error('Cancel order failed:', error);
       throw error;
     }
   }

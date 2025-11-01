@@ -28,6 +28,21 @@ export default function AuthNavigation() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // One-time migration to fix userRole storage format
+  const migrateUserRole = async () => {
+    try {
+      const userRole = await AsyncStorage.getItem('userRole');
+      if (userRole && !userRole.startsWith('"') && !userRole.startsWith('{')) {
+        // It's a plain string, convert to JSON format
+        console.log('🔧 Migrating userRole format...');
+        await AsyncStorage.setItem('userRole', JSON.stringify(userRole));
+        console.log('✅ userRole migration complete');
+      }
+    } catch (error) {
+      console.error('Error migrating userRole:', error);
+    }
+  };
+
   const checkAuthStatus = async () => {
     try {
       const token = await StorageService.getToken();
@@ -59,6 +74,9 @@ export default function AuthNavigation() {
 
   useEffect(() => {
     const initAuth = async () => {
+      // Run migration first
+      await migrateUserRole();
+      
       const authState = await checkAuthStatus();
       setIsAuthenticated(authState);
       setLoading(false);

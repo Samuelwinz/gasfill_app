@@ -51,12 +51,19 @@ class PaystackService {
   // Check if backend server is available
   static async getBackendStatus(): Promise<{ available: boolean; message: string }> {
     try {
+      // Add timeout to prevent long waits
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
       const response = await fetch(`${this.BACKEND_URL}/health`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
@@ -70,11 +77,20 @@ class PaystackService {
           message: 'Backend server responded with error',
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Backend status check error:', error);
+      
+      // Provide specific error messages
+      let message = 'Cannot connect to backend server.';
+      if (error.name === 'AbortError') {
+        message = 'Connection timed out. Server may be offline or unreachable.';
+      } else if (error.message?.includes('Network request failed')) {
+        message = 'Network error. Check your connection and ensure payment server is running on ' + this.BACKEND_URL;
+      }
+      
       return {
         available: false,
-        message: 'Cannot connect to backend server. Please ensure it is running.',
+        message,
       };
     }
   }
@@ -95,7 +111,10 @@ class PaystackService {
 
       console.log('Initializing payment through backend server...');
 
-      // Call backend server to initialize payment
+      // Call backend server to initialize payment with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout for payment init
+
       const response = await fetch(`${this.BACKEND_URL}/api/payments/initialize`, {
         method: 'POST',
         headers: {
@@ -110,7 +129,10 @@ class PaystackService {
           callback_url: payment.callback_url,
           metadata: payment.metadata,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const result = await response.json();
 
@@ -216,12 +238,19 @@ class PaystackService {
     try {
       console.log('Verifying payment through backend server...');
 
+      // Add timeout for verification request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
       const response = await fetch(`${this.BACKEND_URL}/api/payments/verify/${reference}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const result = await response.json();
 

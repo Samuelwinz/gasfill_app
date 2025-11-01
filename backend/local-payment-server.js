@@ -138,12 +138,38 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Payment server is running' });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const PORT = process.env.PORT || 3001;
+
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Payment server running on http://localhost:${PORT}`);
+  console.log(`🌐 Network: http://192.168.8.100:${PORT}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
   console.log(`💳 Payment endpoint: http://localhost:${PORT}/api/payments/initialize`);
   console.log(`🔍 Verify endpoint: http://localhost:${PORT}/api/payments/verify/:reference`);
+  console.log('');
+  console.log('✅ Ready to accept payment requests!');
+});
+
+// Error handling
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use!`);
+    console.log('💡 Try one of these:');
+    console.log(`   1. Kill the process using port ${PORT}`);
+    console.log(`   2. Use a different port: PORT=3002 node local-payment-server.js`);
+  } else {
+    console.error('❌ Server error:', error);
+  }
+  process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\n🛑 Shutting down payment server...');
+  server.close(() => {
+    console.log('✅ Server closed successfully');
+    process.exit(0);
+  });
 });
 
 module.exports = app;

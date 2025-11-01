@@ -20,6 +20,7 @@ import { updateRiderProfile, changeRiderPassword, uploadRiderDocuments } from '.
 import { StorageService } from '../utils/storage';
 import { getRiderProfile } from '../services/riderApi';
 import Loading from '../components/Loading';
+import { useAuth } from '../context/AuthContext';
 
 // Backend configuration
 const API_BASE_URL = __DEV__ 
@@ -28,6 +29,7 @@ const API_BASE_URL = __DEV__
 
 const RiderAccountSettingsScreen: React.FC = () => {
   const navigation = useNavigation();
+  const { logout } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<any>(null);
@@ -177,11 +179,8 @@ const RiderAccountSettingsScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await AsyncStorage.multiRemove(['token', 'userRole', 'rider_status']);
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Welcome' as never }],
-              });
+              // Use AuthContext logout which handles all cleanup and navigation
+              await logout();
             } catch (err) {
               console.error('Error during logout:', err);
             }

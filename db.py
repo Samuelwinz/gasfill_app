@@ -285,6 +285,12 @@ def _row_to_order(row: sqlite3.Row) -> Dict[str, Any]:
     except (KeyError, IndexError):
         order_dict['customer_location'] = None
     
+    # Add delivery_fee if it exists
+    try:
+        order_dict['delivery_fee'] = row['delivery_fee'] if row['delivery_fee'] is not None else 10.0
+    except (KeyError, IndexError):
+        order_dict['delivery_fee'] = 10.0
+    
     return order_dict
 
 def create_order(order: Dict[str, Any]) -> Dict[str, Any]:
@@ -293,8 +299,8 @@ def create_order(order: Dict[str, Any]) -> Dict[str, Any]:
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute('''INSERT OR REPLACE INTO orders
-        (id, items, total, customer_email, customer_name, customer_phone, customer_address, delivery_type, status, payment_status, payment_reference, created_at, updated_at, rider_id, tracking_info, customer_location)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        (id, items, total, customer_email, customer_name, customer_phone, customer_address, delivery_type, status, payment_status, payment_reference, created_at, updated_at, rider_id, tracking_info, customer_location, delivery_fee)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ''', (
         order.get('id'),
         json.dumps(order.get('items') or []),
@@ -311,7 +317,8 @@ def create_order(order: Dict[str, Any]) -> Dict[str, Any]:
         order.get('updated_at'),
         order.get('rider_id'),
         json.dumps(order.get('tracking_info')) if order.get('tracking_info') is not None else None,
-        order.get('customer_location')
+        order.get('customer_location'),
+        order.get('delivery_fee', 10.0)
     ))
     conn.commit()
     cur.execute('SELECT * FROM orders WHERE id=?', (order.get('id'),))

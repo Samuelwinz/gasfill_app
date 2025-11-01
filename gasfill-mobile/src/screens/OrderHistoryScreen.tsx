@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,10 +44,66 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [orderRatings, setOrderRatings] = useState<Record<string, Rating[]>>({});
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeRatingId, setDisputeRatingId] = useState<string | null>(null);
+  
+  // Cancellation states
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+  
+  // Track which orders have been prompted for rating
+  const [ratingPromptedOrders, setRatingPromptedOrders] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadOrders();
+    loadRatingPromptedOrders();
   }, [isAuthenticated]);
+
+  // Check for newly delivered orders that need rating
+  useEffect(() => {
+    checkForUnratedDeliveries();
+  }, [orders, orderRatings, ratingPromptedOrders]);
+
+  const loadRatingPromptedOrders = async () => {
+    try {
+      const prompted = await StorageService.getItem('ratingPromptedOrders');
+      if (prompted && typeof prompted === 'string') {
+        setRatingPromptedOrders(new Set(JSON.parse(prompted)));
+      }
+    } catch (err) {
+      console.error('Failed to load rating prompted orders:', err);
+    }
+  };
+
+  const markOrderAsPrompted = async (orderId: string) => {
+    try {
+      const newSet = new Set(ratingPromptedOrders);
+      newSet.add(orderId);
+      setRatingPromptedOrders(newSet);
+      await StorageService.setItem('ratingPromptedOrders', JSON.stringify(Array.from(newSet)));
+    } catch (err) {
+      console.error('Failed to save rating prompted order:', err);
+    }
+  };
+
+  const checkForUnratedDeliveries = () => {
+    // Find delivered orders that haven't been rated by customer and haven't been prompted yet
+    const unratedDelivered = orders.find(order => {
+      if (order.status.toLowerCase() !== 'delivered') return false;
+      if (ratingPromptedOrders.has(order.id)) return false;
+      
+      const ratings = orderRatings[order.id] || [];
+      const hasCustomerRating = ratings.some(r => r.reviewer_type === 'customer');
+      
+      return !hasCustomerRating;
+    });
+
+    // Show rating modal for the first unrated delivered order
+    if (unratedDelivered && !showRatingModal) {
+      console.log('[OrderHistory] Auto-showing rating for delivered order:', unratedDelivered.id);
+      setSelectedOrderForRating(unratedDelivered);
+      loadOrderRatings(unratedDelivered.id);
+      setShowRatingModal(true);
+      markOrderAsPrompted(unratedDelivered.id);
+    }
+  };
 
   const loadOrders = async (isRefreshing = false) => {
     try {
@@ -66,6 +123,13 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           for (const order of apiOrders) {
             await StorageService.addOrder(order);
           }
+          
+          // Load ratings for delivered orders to check if they need rating
+          const deliveredOrders = apiOrders.filter(o => o.status.toLowerCase() === 'delivered');
+          for (const order of deliveredOrders) {
+            loadOrderRatings(order.id);
+          }
+          
           return;
         } catch (apiError) {
           console.log('[OrderHistory] API failed, loading from local storage:', apiError);
@@ -76,6 +140,12 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       const localOrders = await StorageService.loadOrders();
       console.log('[OrderHistory] Loaded from local storage:', localOrders.length, 'orders');
       setOrders(localOrders);
+      
+      // Load ratings for delivered orders
+      const deliveredOrders = localOrders.filter(o => o.status.toLowerCase() === 'delivered');
+      for (const order of deliveredOrders) {
+        loadOrderRatings(order.id);
+      }
 
     } catch (error: any) {
       console.error('[OrderHistory] Error loading orders:', error);
@@ -150,6 +220,59 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     } catch (err: any) {
       throw new Error(err.message || 'Failed to submit dispute');
     }
+  };
+
+  const handleCancelOrder = async (order: Order) => {
+    // Only allow cancellation for pending and assigned orders
+    if (!['pending', 'assigned'].includes(order.status.toLowerCase())) {
+      setToast({
+        visible: true,
+        message: 'This order cannot be cancelled at this stage.',
+        type: 'error',
+      });
+      return;
+    }
+
+    Alert.alert(
+      'Cancel Order',
+      `Are you sure you want to cancel order ${order.id}?`,
+      [
+        {
+          text: 'No',
+          style: 'cancel',
+        },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setCancellingOrderId(order.id);
+              
+              // Cancel the order
+              await ApiService.cancelOrder(order.id);
+              
+              setToast({
+                visible: true,
+                message: 'Order cancelled successfully.',
+                type: 'success',
+              });
+              
+              // Refresh orders
+              await loadOrders(true);
+            } catch (err: any) {
+              console.error('Cancel order error:', err);
+              setToast({
+                visible: true,
+                message: err.message || 'Failed to cancel order. Please try again.',
+                type: 'error',
+              });
+            } finally {
+              setCancellingOrderId(null);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const getStatusStyle = (status: string) => {
@@ -360,6 +483,27 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                   >
                     <Ionicons name="location" size={18} color="#ffffff" />
                     <Text style={styles.trackButtonText}>Track Order</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Cancel Order Button for pending/assigned orders */}
+                {['pending', 'assigned'].includes(order.status.toLowerCase()) && (
+                  <TouchableOpacity 
+                    style={[
+                      styles.cancelButton,
+                      cancellingOrderId === order.id && styles.cancelButtonDisabled
+                    ]}
+                    onPress={() => handleCancelOrder(order)}
+                    disabled={cancellingOrderId === order.id}
+                  >
+                    {cancellingOrderId === order.id ? (
+                      <ActivityIndicator size="small" color="#F44336" />
+                    ) : (
+                      <>
+                        <Ionicons name="close-circle" size={18} color="#F44336" />
+                        <Text style={styles.cancelButtonText}>Cancel Order</Text>
+                      </>
+                    )}
                   </TouchableOpacity>
                 )}
 
@@ -667,6 +811,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#10b981',
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFEBEE',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+  },
+  cancelButtonDisabled: {
+    opacity: 0.6,
+  },
+  cancelButtonText: {
+    color: '#F44336',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
 

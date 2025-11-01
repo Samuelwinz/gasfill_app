@@ -157,6 +157,12 @@ export interface EarningsData {
     gross_amount?: number;
     commission_rate?: number;
   }>;
+  earnings_by_type?: {
+    [key: string]: {
+      total: number;
+      count: number;
+    };
+  };
 }
 
 export interface OrderStatusUpdate {

@@ -288,6 +288,55 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation, route }) 
     }
   };
 
+  const handleCancelOrder = async (order: ActiveOrder) => {
+    // Only allow cancellation for assigned orders (before pickup)
+    if (!['assigned'].includes(order.status.toLowerCase())) {
+      Alert.alert(
+        'Cannot Cancel',
+        'You can only cancel orders before pickup. Please contact support if you need assistance.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Cancel Order',
+      `Are you sure you want to cancel order #${order.id}? This action cannot be undone and may affect your rating.`,
+      [
+        {
+          text: 'No, Keep Order',
+          style: 'cancel',
+        },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setActionLoading(true);
+              
+              // Cancel the order using the API
+              await ApiService.cancelOrder(String(order.id));
+              
+              Alert.alert(
+                'Order Cancelled',
+                'The order has been cancelled successfully.',
+                [{ text: 'OK', onPress: () => {
+                  setShowDetailsModal(false);
+                  loadJobs();
+                }}]
+              );
+            } catch (err: any) {
+              console.error('❌ Error cancelling order:', err);
+              Alert.alert('Error', err.message || 'Failed to cancel order. Please try again.');
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const loadOrderRatings = async (orderId: string | number) => {
     try {
       const ratings = await ApiService.getOrderRatings(String(orderId));
@@ -718,14 +767,25 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation, route }) 
                   </TouchableOpacity>
 
                   {(selectedOrder as ActiveOrder).status === 'assigned' && (
-                    <TouchableOpacity
-                      style={[styles.primaryButton, actionLoading && styles.disabledButton]}
-                      onPress={() => handleUpdateStatus(selectedOrder as ActiveOrder, 'pickup')}
-                      disabled={actionLoading}
-                    >
-                      <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                      <Text style={styles.primaryButtonText}>Confirm Pickup</Text>
-                    </TouchableOpacity>
+                    <>
+                      <TouchableOpacity
+                        style={[styles.primaryButton, actionLoading && styles.disabledButton]}
+                        onPress={() => handleUpdateStatus(selectedOrder as ActiveOrder, 'pickup')}
+                        disabled={actionLoading}
+                      >
+                        <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                        <Text style={styles.primaryButtonText}>Confirm Pickup</Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity
+                        style={[styles.cancelButton, actionLoading && styles.disabledButton]}
+                        onPress={() => handleCancelOrder(selectedOrder as ActiveOrder)}
+                        disabled={actionLoading}
+                      >
+                        <Ionicons name="close-circle" size={20} color="#ef4444" />
+                        <Text style={styles.cancelButtonText}>Cancel Order</Text>
+                      </TouchableOpacity>
+                    </>
                   )}
 
                   {(selectedOrder as ActiveOrder).status === 'pickup' && (
@@ -1225,6 +1285,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginBottom: 8,
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+    borderWidth: 2,
+    borderColor: '#ef4444',
+  },
+  cancelButtonText: {
+    color: '#ef4444',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

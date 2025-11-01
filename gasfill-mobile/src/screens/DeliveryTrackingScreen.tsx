@@ -141,6 +141,36 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
     }
   });
 
+  // Subscribe to order status updates via WebSocket
+  useWebSocketEvent('order_status_update', (data) => {
+    console.log('[DeliveryTracking] Order status update:', data);
+    
+    // Only update if this is for our order
+    if (data.order_id === orderId) {
+      console.log('[DeliveryTracking] ✅ Order status changed to:', data.status);
+      
+      setTrackingData(prev => {
+        if (!prev) return prev;
+        
+        const newStatus = data.status;
+        const previousStatus = prev.status;
+        
+        // Auto-show rating modal when order is delivered
+        if (newStatus.toLowerCase() === 'delivered' && previousStatus.toLowerCase() !== 'delivered') {
+          console.log('[DeliveryTracking] 🎉 Order delivered! Auto-showing rating modal');
+          setTimeout(() => {
+            setShowRatingModal(true);
+          }, 1000); // Small delay for better UX
+        }
+        
+        return {
+          ...prev,
+          status: newStatus,
+        };
+      });
+    }
+  });
+
   const loadTrackingData = useCallback(async (isRefreshing = false) => {
     // Prevent multiple simultaneous loads
     if (isLoadingRef.current) {

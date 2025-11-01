@@ -39,6 +39,9 @@ import CustomerChatListScreen from '../screens/CustomerChatListScreen';
 import RiderAccountSettingsScreen from '../screens/RiderAccountSettingsScreen';
 import RiderHelpSupportScreen from '../screens/RiderHelpSupportScreen';
 import CustomerHelpSupportScreen from '../screens/CustomerHelpSupportScreen';
+import AdminCommissionScreen from '../screens/AdminCommissionScreen';
+import AdminRiderEarningsScreen from '../screens/AdminRiderEarningsScreen';
+import AdminPaymentRequestsScreen from '../screens/AdminPaymentRequestsScreen';
 
 // Import services
 import { StorageService } from '../utils/storage';
@@ -182,8 +185,8 @@ function AdminTabs() {
             case 'Riders':
               iconName = focused ? 'bicycle' : 'bicycle-outline';
               break;
-            case 'Orders':
-              iconName = focused ? 'receipt' : 'receipt-outline';
+            case 'Commission':
+              iconName = focused ? 'wallet' : 'wallet-outline';
               break;
             case 'Settings':
               iconName = focused ? 'settings' : 'settings-outline';
@@ -216,9 +219,9 @@ function AdminTabs() {
         options={{ title: 'Riders' }}
       />
       <Tab.Screen 
-        name="Orders" 
-        component={AdminDashboard}
-        options={{ title: 'Orders' }}
+        name="Commission" 
+        component={AdminCommissionScreen}
+        options={{ title: 'Commission' }}
       />
       <Tab.Screen 
         name="Settings" 
@@ -308,6 +311,20 @@ function AppStack() {
         options={{ 
           headerShown: true,
           title: 'Rider Verification',
+        }}
+      />
+      <Stack.Screen 
+        name="AdminRiderEarnings" 
+        component={AdminRiderEarningsScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="AdminPaymentRequests" 
+        component={AdminPaymentRequestsScreen}
+        options={{ 
+          headerShown: false,
         }}
       />
       <Stack.Screen 

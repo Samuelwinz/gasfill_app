@@ -31,7 +31,7 @@ const getPaymentConfig = (): PaymentConfig => {
     
     // Backend URL for payment processing
     backendUrl: isDevelopment
-      ? 'http://192.168.1.25:3000' // Local payment server (run local-payment-server.js)
+      ? 'http://192.168.8.100:3001' // Local payment server (run: node backend/local-payment-server.js)
       : 'https://your-production-backend.com', // Production backend
     
     // Supported payment options

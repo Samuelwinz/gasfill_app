@@ -33,6 +33,25 @@ interface LocationPickerModalProps {
   onClose: () => void;
   onConfirm: (location: { lat: number; lng: number }) => void;
   initialLocation?: { lat: number; lng: number } | null;
+  gasStations?: Array<{
+    id: string;
+    name: string;
+    address: string;
+    location: { lat: number; lng: number };
+    phone: string;
+    hours: string;
+    services: string[];
+  }>;
+  availableRiders?: Array<{
+    id: number;
+    name: string;
+    phone: string;
+    rating: number;
+    location: { lat: number; lng: number };
+    total_deliveries: number;
+    status: string;
+  }>;
+  showMarkers?: boolean;
 }
 
 const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
@@ -40,6 +59,9 @@ const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
   onClose,
   onConfirm,
   initialLocation,
+  gasStations = [],
+  availableRiders = [],
+  showMarkers = true,
 }) => {
   const [selectedLocation, setSelectedLocation] = useState(
     initialLocation || { lat: 5.6037, lng: -0.1870 } // Default to Accra, Ghana
@@ -124,6 +146,7 @@ const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
           }}
           onPress={handleMapPress}
         >
+          {/* Customer Delivery Location Marker */}
           <Marker
             coordinate={{
               latitude: selectedLocation.lat,
@@ -136,6 +159,46 @@ const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
               <Ionicons name="location" size={40} color="#dc2626" />
             </View>
           </Marker>
+
+          {/* Gas Stations Markers */}
+          {showMarkers && gasStations.map((station) => (
+            <Marker
+              key={station.id}
+              coordinate={{
+                latitude: station.location.lat,
+                longitude: station.location.lng,
+              }}
+              title={station.name}
+              description={`${station.address} • ${station.hours}`}
+            >
+              <View style={locationPickerStyles.stationMarker}>
+                <Ionicons name="business" size={28} color="#ffffff" />
+                <View style={locationPickerStyles.stationBadge}>
+                  <Ionicons name="flame" size={12} color="#f59e0b" />
+                </View>
+              </View>
+            </Marker>
+          ))}
+
+          {/* Available Riders Markers */}
+          {showMarkers && availableRiders.map((rider) => (
+            <Marker
+              key={`rider_${rider.id}`}
+              coordinate={{
+                latitude: rider.location.lat,
+                longitude: rider.location.lng,
+              }}
+              title={`${rider.name} ⭐${rider.rating.toFixed(1)}`}
+              description={`Available • ${rider.total_deliveries} deliveries`}
+            >
+              <View style={locationPickerStyles.riderMarker}>
+                <Ionicons name="bicycle" size={24} color="#ffffff" />
+                <View style={locationPickerStyles.riderOnlineBadge}>
+                  <View style={locationPickerStyles.onlinePulse} />
+                </View>
+              </View>
+            </Marker>
+          ))}
         </MapView>
 
         {/* Bottom Card */}
@@ -150,6 +213,40 @@ const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
           <Text style={locationPickerStyles.instructionText}>
             Tap or drag the marker to adjust your delivery location
           </Text>
+
+          {/* Map Legend */}
+          {showMarkers && (gasStations.length > 0 || availableRiders.length > 0) && (
+            <View style={locationPickerStyles.legendContainer}>
+              <Text style={locationPickerStyles.legendTitle}>Map Legend:</Text>
+              <View style={locationPickerStyles.legendRow}>
+                <View style={locationPickerStyles.legendItem}>
+                  <View style={locationPickerStyles.legendMarkerRed}>
+                    <Ionicons name="location" size={16} color="#dc2626" />
+                  </View>
+                  <Text style={locationPickerStyles.legendText}>Your Location</Text>
+                </View>
+                {gasStations.length > 0 && (
+                  <View style={locationPickerStyles.legendItem}>
+                    <View style={locationPickerStyles.legendMarkerBlue}>
+                      <Ionicons name="business" size={16} color="#3b82f6" />
+                    </View>
+                    <Text style={locationPickerStyles.legendText}>Gas Station</Text>
+                  </View>
+                )}
+                {availableRiders.length > 0 && (
+                  <View style={locationPickerStyles.legendItem}>
+                    <View style={locationPickerStyles.legendMarkerGreen}>
+                      <Ionicons name="bicycle" size={16} color="#10b981" />
+                    </View>
+                    <Text style={locationPickerStyles.legendText}>Available Rider</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={locationPickerStyles.legendSubtext}>
+                {availableRiders.length} rider{availableRiders.length !== 1 ? 's' : ''} available nearby
+              </Text>
+            </View>
+          )}
 
           <TouchableOpacity
             style={locationPickerStyles.confirmButton}
@@ -190,6 +287,32 @@ const CheckoutScreen: React.FC = () => {
   const [deliveryType, setDeliveryType] = useState<'standard' | 'express'>('standard');
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'mobile_money'>('card');
   const [geocoding, setGeocoding] = useState(false);
+  
+  // Dynamic delivery fee
+  const [calculatedDeliveryFee, setCalculatedDeliveryFee] = useState(10.0);
+  const [distanceInfo, setDistanceInfo] = useState<{ meters: number; km: number } | null>(null);
+  const [calculatingFee, setCalculatingFee] = useState(false);
+
+  // Map locations (gas stations and riders)
+  const [gasStations, setGasStations] = useState<Array<{
+    id: string;
+    name: string;
+    address: string;
+    location: { lat: number; lng: number };
+    phone: string;
+    hours: string;
+    services: string[];
+  }>>([]);
+  const [availableRiders, setAvailableRiders] = useState<Array<{
+    id: number;
+    name: string;
+    phone: string;
+    rating: number;
+    location: { lat: number; lng: number };
+    total_deliveries: number;
+    status: string;
+  }>>([]);
+  const [showMapMarkers, setShowMapMarkers] = useState(true);
 
   // Toast state
   const [toast, setToast] = useState({
@@ -212,6 +335,7 @@ const CheckoutScreen: React.FC = () => {
       ]);
     }
     loadUserData();
+    loadMapLocations(); // Load gas stations and riders
   }, [cart, orderPlaced]);
 
   const loadUserData = () => {
@@ -223,16 +347,82 @@ const CheckoutScreen: React.FC = () => {
     }
   };
 
+  const loadMapLocations = async () => {
+    try {
+      console.log('🗺️ Loading map locations...');
+      const data = await ApiService.getMapLocations();
+      setGasStations(data.gas_stations || []);
+      setAvailableRiders(data.available_riders || []);
+      console.log(`✅ Loaded ${data.gas_stations?.length || 0} stations and ${data.available_riders?.length || 0} riders`);
+    } catch (error) {
+      console.error('❌ Failed to load map locations:', error);
+      // Set default gas station even on error
+      setGasStations([
+        {
+          id: 'station_1',
+          name: 'GasFill Main Station',
+          address: 'Accra, Ghana',
+          location: { lat: 5.6037, lng: -0.1870 },
+          phone: '+233 201 022 153',
+          hours: '24/7',
+          services: ['6kg', '12.5kg', '37kg', 'Refills', 'Exchange']
+        }
+      ]);
+    }
+  };
+
   const getSubtotal = () => {
     return cartTotal;
   };
 
   const getDeliveryFee = () => {
-    return DELIVERY_FEES[deliveryType];
+    // For express delivery, add ₵15 to the calculated fee
+    if (deliveryType === 'express') {
+      return calculatedDeliveryFee + 15;
+    }
+    return calculatedDeliveryFee;
   };
 
   const getTotalAmount = () => {
     return getSubtotal() + getDeliveryFee();
+  };
+
+  const calculateDeliveryFee = async (location: { lat: number; lng: number }) => {
+    try {
+      setCalculatingFee(true);
+      console.log('📍 Calculating delivery fee for:', location);
+      
+      // Include order total for 50% cap calculation
+      const orderTotal = getSubtotal();
+      const feeData = await ApiService.calculateDeliveryFee({
+        ...location,
+        order_total: orderTotal
+      });
+      
+      setCalculatedDeliveryFee(feeData.delivery_fee);
+      setDistanceInfo({
+        meters: feeData.distance_meters,
+        km: feeData.distance_km
+      });
+      
+      const capMessage = feeData.breakdown?.capped 
+        ? ` (capped at 50% of ₵${orderTotal.toFixed(2)})`
+        : '';
+      
+      console.log(`💰 Fee calculated: ₵${feeData.delivery_fee} for ${feeData.distance_km}km${capMessage}`);
+      
+      setToast({
+        visible: true,
+        message: `Delivery fee: ₵${feeData.delivery_fee.toFixed(2)} (${feeData.distance_km.toFixed(2)}km from station)${capMessage}`,
+        type: 'info',
+      });
+    } catch (error) {
+      console.error('Error calculating delivery fee:', error);
+      // Keep default fee on error
+      setCalculatedDeliveryFee(10.0);
+    } finally {
+      setCalculatingFee(false);
+    }
   };
 
   const handleOpenLocationPicker = async () => {
@@ -251,9 +441,12 @@ const CheckoutScreen: React.FC = () => {
     }
   };
 
-  const handleConfirmLocation = (location: { lat: number; lng: number }) => {
+  const handleConfirmLocation = async (location: { lat: number; lng: number }) => {
     setDeliveryLocation(location);
     setShowLocationPicker(false);
+    
+    // Calculate delivery fee based on selected location
+    await calculateDeliveryFee(location);
     
     // Show success message
     setToast({
@@ -290,6 +483,9 @@ const CheckoutScreen: React.FC = () => {
         
         // Set the location
         setDeliveryLocation({ lat: result.lat, lng: result.lng });
+        
+        // Calculate delivery fee for geocoded location
+        await calculateDeliveryFee({ lat: result.lat, lng: result.lng });
         
         // Show success with formatted address
         Alert.alert(
@@ -551,8 +747,22 @@ const CheckoutScreen: React.FC = () => {
               <Text style={styles.priceValue}>GH₵ {getSubtotal().toFixed(2)}</Text>
             </View>
             <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Delivery Fee</Text>
-              <Text style={styles.priceValue}>GH₵ {getDeliveryFee().toFixed(2)}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.priceLabel}>Delivery Fee</Text>
+                {distanceInfo && (
+                  <Text style={styles.distanceInfo}>
+                    {distanceInfo.km.toFixed(2)}km from depot
+                  </Text>
+                )}
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.priceValue}>
+                  GH₵ {getDeliveryFee().toFixed(2)}
+                </Text>
+                {calculatingFee && (
+                  <ActivityIndicator size="small" color="#1e40af" style={{ marginTop: 4 }} />
+                )}
+              </View>
             </View>
             <View style={[styles.priceRow, styles.totalRow]}>
               <Text style={styles.totalLabel}>Total</Text>
@@ -798,6 +1008,9 @@ const CheckoutScreen: React.FC = () => {
         onClose={() => setShowLocationPicker(false)}
         onConfirm={handleConfirmLocation}
         initialLocation={deliveryLocation}
+        gasStations={gasStations}
+        availableRiders={availableRiders}
+        showMarkers={showMapMarkers}
       />
     </SafeAreaView>
   );
@@ -908,6 +1121,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#0f172a',
+  },
+  distanceInfo: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 2,
   },
   totalRow: {
     marginTop: 8,
@@ -1244,6 +1462,138 @@ const locationPickerStyles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  stationMarker: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    position: 'relative',
+  },
+  stationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+  },
+  riderMarker: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#10b981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    position: 'relative',
+  },
+  riderOnlineBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#10b981',
+  },
+  onlinePulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10b981',
+  },
+  legendContainer: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  legendTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 8,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendMarkerRed: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#dc2626',
+  },
+  legendMarkerBlue: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  legendMarkerGreen: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#10b981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  legendText: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  legendSubtext: {
+    fontSize: 11,
+    color: '#10b981',
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
 

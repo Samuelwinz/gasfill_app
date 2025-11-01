@@ -232,10 +232,10 @@ const RiderEarningsScreen: React.FC = () => {
     
     const availableBalance = earningsData.pending_earnings || 0;
     
-    if (availableBalance < 100) {
+    if (availableBalance < 50) {
       Alert.alert(
         'Minimum Payout Amount',
-        'You need at least ₵100.00 to request a payout.',
+        'You need at least ₵50.00 to request a payout.',
         [{ text: 'OK' }]
       );
       return;
@@ -244,7 +244,7 @@ const RiderEarningsScreen: React.FC = () => {
     // Show input dialog for custom amount
     Alert.prompt(
       'Request Payout',
-      `Available balance: ₵${availableBalance.toFixed(2)}\n\nEnter payout amount (minimum ₵100.00):`,
+      `Available balance: ₵${availableBalance.toFixed(2)}\n\nEnter payout amount (minimum ₵50.00):`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -256,8 +256,8 @@ const RiderEarningsScreen: React.FC = () => {
           onPress: (amountText?: string) => {
             const amount = parseFloat(amountText || '0');
             
-            if (isNaN(amount) || amount < 100) {
-              Alert.alert('Invalid Amount', 'Minimum payout amount is ₵100.00');
+            if (isNaN(amount) || amount < 50) {
+              Alert.alert('Invalid Amount', 'Minimum payout amount is ₵50.00');
               return;
             }
             
@@ -286,6 +286,35 @@ const RiderEarningsScreen: React.FC = () => {
     const monthEarnings = earningsData.month_earnings ?? 0;
     const totalEarnings = earningsData.total_earnings ?? 0;
     const paidEarnings = earningsData.paid_earnings ?? 0;
+    
+    // Calculate performance metrics
+    const totalDeliveries = earningsData.earnings_breakdown?.filter(e => 
+      e.earning_type === 'delivery_commission'
+    ).length ?? 0;
+    
+    const todayDeliveries = earningsData.earnings_breakdown?.filter(e => {
+      if (e.earning_type !== 'delivery_commission') return false;
+      const earningDate = new Date(e.date);
+      const today = new Date();
+      return earningDate.toDateString() === today.toDateString();
+    }).length ?? 0;
+    
+    const weekDeliveries = earningsData.earnings_breakdown?.filter(e => {
+      if (e.earning_type !== 'delivery_commission') return false;
+      const earningDate = new Date(e.date);
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      return earningDate >= weekAgo;
+    }).length ?? 0;
+    
+    // Bonus progress (5 deliveries/day for ₵50, 25 deliveries/week for ₵200)
+    const dailyBonusProgress = Math.min((todayDeliveries / 5) * 100, 100);
+    const weeklyBonusProgress = Math.min((weekDeliveries / 25) * 100, 100);
+    
+    // Average earning per delivery
+    const avgEarningPerDelivery = totalDeliveries > 0 
+      ? totalEarnings / totalDeliveries 
+      : 0;
 
     return (
       <View>
@@ -308,7 +337,109 @@ const RiderEarningsScreen: React.FC = () => {
             ₵{pendingEarnings.toFixed(2)}
           </Text>
           <Text style={styles.walletSubtext}>Ready for withdrawal</Text>
+          
+          {/* Delivery count indicator */}
+          <View style={styles.deliveryCountRow}>
+            <View style={styles.deliveryCountBadge}>
+              <Ionicons name="bicycle" size={14} color="#ffffff" />
+              <Text style={styles.deliveryCountText}>
+                {todayDeliveries} today • {weekDeliveries} this week
+              </Text>
+            </View>
+          </View>
         </View>
+        
+        {/* Performance Stats */}
+        <View style={styles.performanceCard}>
+          <Text style={styles.sectionTitle}>Performance Metrics</Text>
+          
+          <View style={styles.performanceGrid}>
+            <View style={styles.performanceItem}>
+              <Ionicons name="flash" size={24} color="#f59e0b" />
+              <Text style={styles.performanceValue}>{totalDeliveries}</Text>
+              <Text style={styles.performanceLabel}>Total Deliveries</Text>
+            </View>
+            
+            <View style={styles.performanceItem}>
+              <Ionicons name="cash" size={24} color="#10b981" />
+              <Text style={styles.performanceValue}>₵{avgEarningPerDelivery.toFixed(2)}</Text>
+              <Text style={styles.performanceLabel}>Avg per Delivery</Text>
+            </View>
+            
+            <View style={styles.performanceItem}>
+              <Ionicons name="trending-up" size={24} color="#3b82f6" />
+              <Text style={styles.performanceValue}>
+                {totalDeliveries > 0 ? '100%' : '0%'}
+              </Text>
+              <Text style={styles.performanceLabel}>Success Rate</Text>
+            </View>
+          </View>
+        </View>
+        
+        {/* Bonus Progress */}
+        {(dailyBonusProgress > 0 || weeklyBonusProgress > 0) && (
+          <View style={styles.bonusCard}>
+            <Text style={styles.sectionTitle}>Bonus Progress</Text>
+            
+            {/* Daily Bonus */}
+            <View style={styles.bonusItem}>
+              <View style={styles.bonusHeader}>
+                <View style={styles.bonusInfo}>
+                  <Ionicons name="trophy" size={20} color="#f59e0b" />
+                  <Text style={styles.bonusTitle}>Daily Bonus</Text>
+                </View>
+                <Text style={styles.bonusAmount}>
+                  {todayDeliveries}/5 • ₵50.00
+                </Text>
+              </View>
+              <View style={styles.progressBarContainer}>
+                <View 
+                  style={[
+                    styles.progressBarFill, 
+                    { 
+                      width: `${dailyBonusProgress}%`,
+                      backgroundColor: dailyBonusProgress >= 100 ? '#10b981' : '#f59e0b'
+                    }
+                  ]} 
+                />
+              </View>
+              <Text style={styles.bonusSubtext}>
+                {dailyBonusProgress >= 100 
+                  ? '🎉 Bonus unlocked!' 
+                  : `${5 - todayDeliveries} more deliveries to unlock`}
+              </Text>
+            </View>
+            
+            {/* Weekly Bonus */}
+            <View style={styles.bonusItem}>
+              <View style={styles.bonusHeader}>
+                <View style={styles.bonusInfo}>
+                  <Ionicons name="star" size={20} color="#3b82f6" />
+                  <Text style={styles.bonusTitle}>Weekly Bonus</Text>
+                </View>
+                <Text style={styles.bonusAmount}>
+                  {weekDeliveries}/25 • ₵200.00
+                </Text>
+              </View>
+              <View style={styles.progressBarContainer}>
+                <View 
+                  style={[
+                    styles.progressBarFill, 
+                    { 
+                      width: `${weeklyBonusProgress}%`,
+                      backgroundColor: weeklyBonusProgress >= 100 ? '#10b981' : '#3b82f6'
+                    }
+                  ]} 
+                />
+              </View>
+              <Text style={styles.bonusSubtext}>
+                {weeklyBonusProgress >= 100 
+                  ? '🎉 Bonus unlocked!' 
+                  : `${25 - weekDeliveries} more deliveries to unlock`}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Earnings Overview */}
         <View style={styles.earningsGrid}>
@@ -516,6 +647,9 @@ const RiderEarningsScreen: React.FC = () => {
 
   const renderPayout = () => {
     const pendingBalance = earningsData?.pending_earnings ?? 0;
+    const totalEarnings = earningsData?.total_earnings ?? 0;
+    const paidEarnings = earningsData?.paid_earnings ?? 0;
+    const earningsByType = earningsData?.earnings_by_type || {};
     
     return (
       <View style={styles.payoutSection}>
@@ -618,6 +752,7 @@ const RiderEarningsScreen: React.FC = () => {
           </View>
         )}
         
+        {/* Available Balance Card */}
         <View style={styles.payoutInfo}>
           <Text style={styles.payoutInfoTitle}>Available for Payout</Text>
           <Text style={styles.payoutBalance}>
@@ -638,42 +773,174 @@ const RiderEarningsScreen: React.FC = () => {
           )}
         </View>
 
-      <View style={styles.payoutOptions}>
-        <Text style={styles.sectionTitle}>Payout Information</Text>
-        
-        <View style={styles.infoCard}>
-          <Ionicons name="information-circle-outline" size={24} color="#3b82f6" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoTitle}>Minimum Amount</Text>
-            <Text style={styles.infoText}>₵50.00 minimum payout</Text>
+        {/* Earnings Summary Card */}
+        {totalEarnings > 0 && (
+          <View style={styles.earningBreakdown}>
+            <Text style={styles.breakdownTitle}>Earnings Summary</Text>
+            
+            {/* Total Earnings */}
+            <View style={styles.breakdownItem}>
+              <View style={styles.breakdownLeft}>
+                <Text style={styles.breakdownDot}>💵</Text>
+                <Text style={styles.breakdownLabel}>Total Earnings</Text>
+              </View>
+              <Text style={styles.breakdownValue}>₵{totalEarnings.toFixed(2)}</Text>
+            </View>
+            
+            {/* Paid Out */}
+            <View style={styles.breakdownItem}>
+              <View style={styles.breakdownLeft}>
+                <Text style={styles.breakdownDot}>✓</Text>
+                <Text style={styles.breakdownLabel}>Paid Out</Text>
+              </View>
+              <Text style={styles.breakdownValue}>-₵{paidEarnings.toFixed(2)}</Text>
+            </View>
+            
+            {/* Pending Balance */}
+            <View style={styles.breakdownTotal}>
+              <View style={styles.breakdownItem}>
+                <View style={styles.breakdownLeft}>
+                  <Text style={styles.breakdownDot}>🎯</Text>
+                  <Text style={styles.breakdownTotalLabel}>Pending Balance</Text>
+                </View>
+                <Text style={[styles.breakdownValue, { fontWeight: '700', color: '#f59e0b' }]}>
+                  ₵{pendingBalance.toFixed(2)}
+                </Text>
+              </View>
+            </View>
+            
+            {/* Earnings Sources Breakdown */}
+            {Object.keys(earningsByType).length > 0 && (
+              <>
+                <View style={styles.breakdownDivider} />
+                <Text style={[styles.breakdownTitle, { marginTop: 12, marginBottom: 8 }]}>
+                  Earnings Sources
+                </Text>
+                
+                {earningsByType.delivery_commission && (
+                  <View style={styles.breakdownItem}>
+                    <View style={styles.breakdownLeft}>
+                      <Text style={styles.breakdownDot}>💰</Text>
+                      <Text style={styles.breakdownLabel}>
+                        Delivery Commission ({earningsByType.delivery_commission.count} orders)
+                      </Text>
+                    </View>
+                    <Text style={styles.breakdownValue}>
+                      ₵{earningsByType.delivery_commission.total.toFixed(2)}
+                    </Text>
+                  </View>
+                )}
+                
+                {earningsByType.delivery_fee && (
+                  <View style={styles.breakdownItem}>
+                    <View style={styles.breakdownLeft}>
+                      <Text style={styles.breakdownDot}>🚚</Text>
+                      <Text style={styles.breakdownLabel}>
+                        Delivery Fees ({earningsByType.delivery_fee.count} deliveries)
+                      </Text>
+                    </View>
+                    <Text style={styles.breakdownValue}>
+                      ₵{earningsByType.delivery_fee.total.toFixed(2)}
+                    </Text>
+                  </View>
+                )}
+                
+                {earningsByType.service_pickup_fee && (
+                  <View style={styles.breakdownItem}>
+                    <View style={styles.breakdownLeft}>
+                      <Text style={styles.breakdownDot}>📦</Text>
+                      <Text style={styles.breakdownLabel}>
+                        Service Pickup Fees
+                      </Text>
+                    </View>
+                    <Text style={styles.breakdownValue}>
+                      ₵{earningsByType.service_pickup_fee.total.toFixed(2)}
+                    </Text>
+                  </View>
+                )}
+                
+                {earningsByType.service_refill_fee && (
+                  <View style={styles.breakdownItem}>
+                    <View style={styles.breakdownLeft}>
+                      <Text style={styles.breakdownDot}>🔄</Text>
+                      <Text style={styles.breakdownLabel}>
+                        Service Refill Fees
+                      </Text>
+                    </View>
+                    <Text style={styles.breakdownValue}>
+                      ₵{earningsByType.service_refill_fee.total.toFixed(2)}
+                    </Text>
+                  </View>
+                )}
+                
+                {earningsByType.daily_bonus && (
+                  <View style={styles.breakdownItem}>
+                    <View style={styles.breakdownLeft}>
+                      <Text style={styles.breakdownDot}>🏆</Text>
+                      <Text style={styles.breakdownLabel}>
+                        Daily Bonuses ({earningsByType.daily_bonus.count}×)
+                      </Text>
+                    </View>
+                    <Text style={styles.breakdownValue}>
+                      ₵{earningsByType.daily_bonus.total.toFixed(2)}
+                    </Text>
+                  </View>
+                )}
+                
+                {earningsByType.weekly_bonus && (
+                  <View style={styles.breakdownItem}>
+                    <View style={styles.breakdownLeft}>
+                      <Text style={styles.breakdownDot}>⭐</Text>
+                      <Text style={styles.breakdownLabel}>
+                        Weekly Bonuses ({earningsByType.weekly_bonus.count}×)
+                      </Text>
+                    </View>
+                    <Text style={styles.breakdownValue}>
+                      ₵{earningsByType.weekly_bonus.total.toFixed(2)}
+                    </Text>
+                  </View>
+                )}
+              </>
+            )}
           </View>
-        </View>
+        )}
 
-        <View style={styles.infoCard}>
-          <Ionicons name="time-outline" size={24} color="#f59e0b" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoTitle}>Processing Time</Text>
-            <Text style={styles.infoText}>2-3 business days</Text>
+        <View style={styles.payoutOptions}>
+          <Text style={styles.sectionTitle}>Payout Information</Text>
+          
+          <View style={styles.infoCard}>
+            <Ionicons name="information-circle-outline" size={24} color="#3b82f6" />
+            <View style={styles.infoContent}>
+              <Text style={styles.infoTitle}>Minimum Amount</Text>
+              <Text style={styles.infoText}>₵50.00 minimum payout</Text>
+            </View>
           </View>
-        </View>
 
-        <View style={styles.infoCard}>
-          <Ionicons name="card-outline" size={24} color="#10b981" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoTitle}>Payment Method</Text>
-            <Text style={styles.infoText}>Bank transfer or Mobile Money</Text>
+          <View style={styles.infoCard}>
+            <Ionicons name="time-outline" size={24} color="#f59e0b" />
+            <View style={styles.infoContent}>
+              <Text style={styles.infoTitle}>Processing Time</Text>
+              <Text style={styles.infoText}>2-3 business days</Text>
+            </View>
           </View>
-        </View>
 
-        <View style={styles.infoCard}>
-          <Ionicons name="cash-outline" size={24} color="#6b7280" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoTitle}>Fees</Text>
-            <Text style={styles.infoText}>No fees for payouts over ₵100</Text>
+          <View style={styles.infoCard}>
+            <Ionicons name="card-outline" size={24} color="#10b981" />
+            <View style={styles.infoContent}>
+              <Text style={styles.infoTitle}>Payment Method</Text>
+              <Text style={styles.infoText}>Bank transfer or Mobile Money</Text>
+            </View>
+          </View>
+
+          <View style={styles.infoCard}>
+            <Ionicons name="cash-outline" size={24} color="#6b7280" />
+            <View style={styles.infoContent}>
+              <Text style={styles.infoTitle}>Fees</Text>
+              <Text style={styles.infoText}>No fees for payouts over ₵100</Text>
+            </View>
           </View>
         </View>
       </View>
-    </View>
     );
   };
 
@@ -1245,6 +1512,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
   },
+  breakdownDivider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    marginVertical: 12,
+  },
   breakdownTotalLabel: {
     fontSize: 14,
     fontWeight: '600',
@@ -1495,6 +1767,113 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1f2937',
     fontWeight: '600',
+  },
+  // Delivery count styles
+  deliveryCountRow: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  deliveryCountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+    alignSelf: 'flex-start',
+  },
+  deliveryCountText: {
+    fontSize: 12,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  // Performance styles
+  performanceCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  performanceGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  performanceItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  performanceValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  performanceLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  // Bonus progress styles
+  bonusCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  bonusItem: {
+    marginBottom: 20,
+  },
+  bonusHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  bonusInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bonusTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  bonusAmount: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#6b7280',
+  },
+  progressBarContainer: {
+    height: 8,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  bonusSubtext: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontStyle: 'italic',
   },
 });
 

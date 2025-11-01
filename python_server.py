@@ -186,8 +186,8 @@ class DeliveryUpdate(BaseModel):
 
 # Order status flow constants
 ORDER_STATUS_FLOW = {
-    "pending": ["assigned"],  # Customer creates order, awaits assignment
-    "assigned": ["pickup", "picked_up", "pending"],  # Rider accepts, can go to pickup or cancel back (support both pickup and picked_up)
+    "pending": ["assigned", "cancelled"],  # Customer creates order, can be cancelled or assigned
+    "assigned": ["pickup", "picked_up", "pending", "cancelled"],  # Rider accepts, can go to pickup, cancel back, or rider can cancel
     "pickup": ["in_transit", "assigned"],  # Rider collecting cylinder from depot
     "picked_up": ["in_transit", "assigned"],  # Legacy status - same as pickup
     "in_transit": ["delivered", "pickup", "picked_up"],  # Rider delivering to customer
@@ -311,6 +311,63 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify password against hash"""
     return hash_password(plain_password) == hashed_password
+
+def calculate_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """
+    Calculate distance between two coordinates using Haversine formula
+    Returns distance in meters
+    """
+    from math import radians, sin, cos, sqrt, atan2
+    
+    # Earth's radius in meters
+    R = 6371000
+    
+    # Convert to radians
+    lat1_rad = radians(lat1)
+    lat2_rad = radians(lat2)
+    delta_lat = radians(lat2 - lat1)
+    delta_lng = radians(lng2 - lng1)
+    
+    # Haversine formula
+    a = sin(delta_lat / 2) ** 2 + cos(lat1_rad) * cos(lat2_rad) * sin(delta_lng / 2) ** 2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    distance = R * c
+    
+    return distance
+
+def calculate_delivery_fee(distance_meters: float, order_total: float = 0) -> float:
+    """
+    Calculate delivery fee based on distance from customer to gas station
+    Base fee: 10 GHS for first 500 meters
+    Additional: 2 GHS per additional 500 meters
+    Maximum: 50% of order total (gas price cap)
+    
+    Args:
+        distance_meters: Distance from customer location to gas station in meters
+        order_total: Total value of gas order (to apply 50% cap)
+    
+    Returns:
+        Delivery fee in GHS, capped at 50% of order total
+    """
+    BASE_DISTANCE = 500  # meters
+    BASE_FEE = 10.0  # GHS
+    ADDITIONAL_FEE_PER_500M = 2.0  # GHS
+    MAX_FEE_PERCENTAGE = 0.5  # 50% of order total
+    
+    if distance_meters <= BASE_DISTANCE:
+        calculated_fee = BASE_FEE
+    else:
+        # Calculate additional 500m increments
+        additional_distance = distance_meters - BASE_DISTANCE
+        additional_increments = (additional_distance + BASE_DISTANCE - 1) // BASE_DISTANCE  # Ceiling division
+        calculated_fee = BASE_FEE + (additional_increments * ADDITIONAL_FEE_PER_500M)
+    
+    # Apply 50% cap based on order total
+    if order_total > 0:
+        max_fee = order_total * MAX_FEE_PERCENTAGE
+        calculated_fee = min(calculated_fee, max_fee)
+    
+    return round(calculated_fee, 2)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create JWT access token"""
@@ -739,7 +796,29 @@ async def create_order(order_data: OrderCreate):
     print(f"  - customer_name: {order_data.customer_name}")
     print(f"  - customer_address: {order_data.customer_address}")
     print(f"  - customer_location: {order_data.customer_location}")
+    print(f"  - order_total: ₵{order_data.total}")
     print(f"  - customer_location type: {type(order_data.customer_location)}")
+    
+    # Calculate delivery fee based on distance from gas station to customer
+    delivery_fee = 10.0  # Default delivery fee
+    
+    if order_data.customer_location:
+        # Gas Station/Depot location (GasFill Main Station - Accra, Ghana)
+        station_lat = 5.6037
+        station_lng = -0.1870
+        
+        customer_lat = order_data.customer_location.get("lat")
+        customer_lng = order_data.customer_location.get("lng")
+        
+        if customer_lat and customer_lng:
+            # Calculate distance in meters from gas station to customer
+            distance_meters = calculate_distance(station_lat, station_lng, customer_lat, customer_lng)
+            
+            # Calculate delivery fee based on distance, capped at 50% of order total
+            delivery_fee = calculate_delivery_fee(distance_meters, order_data.total)
+            
+            print(f"📍 Distance from gas station to customer: {distance_meters:.2f} meters ({distance_meters/1000:.2f} km)")
+            print(f"💰 Calculated delivery fee: ₵{delivery_fee} (max 50% of ₵{order_data.total})")
     
     order = {
         "id": f"ORD-{order_counter}",
@@ -751,7 +830,7 @@ async def create_order(order_data: OrderCreate):
         "customer_location": json.dumps(order_data.customer_location) if order_data.customer_location else None,
         "delivery_type": order_data.delivery_type or "standard",
         "total": order_data.total,
-        "delivery_fee": 10.0,  # Default delivery fee
+        "delivery_fee": delivery_fee,
         "status": "pending",
         "payment_status": "pending",
         "created_at": utc_now().isoformat(),
@@ -765,10 +844,186 @@ async def create_order(order_data: OrderCreate):
     
     print(f"✅ Order created: {result.get('id')}")
     print(f"✅ Returned customer_location: {result.get('customer_location')}")
+    print(f"✅ Delivery fee: ₵{result.get('delivery_fee')}")
     
     order_counter += 1
     
     return result
+
+@app.post("/api/orders/calculate-fee")
+async def calculate_order_delivery_fee(location_data: dict):
+    """Calculate delivery fee based on customer location and order total
+    
+    Expects:
+        location_data: {
+            "lat": float,
+            "lng": float,
+            "order_total": float (optional, for 50% cap)
+        }
+    """
+    try:
+        # Gas Station/Depot location (GasFill Main Station - Accra, Ghana)
+        station_lat = 5.6037
+        station_lng = -0.1870
+        
+        customer_lat = location_data.get("lat")
+        customer_lng = location_data.get("lng")
+        order_total = location_data.get("order_total", 0)  # Get order total for 50% cap
+        
+        if not customer_lat or not customer_lng:
+            return {
+                "delivery_fee": 10.0,
+                "distance_meters": 0,
+                "message": "Using default fee - location not provided"
+            }
+        
+        # Calculate distance in meters from gas station to customer
+        distance_meters = calculate_distance(station_lat, station_lng, customer_lat, customer_lng)
+        
+        # Calculate delivery fee based on distance, capped at 50% of order total
+        delivery_fee = calculate_delivery_fee(distance_meters, order_total)
+        
+        # Calculate what the fee would be without cap for transparency
+        uncapped_fee = calculate_delivery_fee(distance_meters, 0)
+        was_capped = uncapped_fee != delivery_fee
+        
+        print(f"📍 Fee calculation: Distance {distance_meters:.2f}m ({distance_meters/1000:.2f}km)")
+        print(f"💰 Delivery fee: ₵{delivery_fee}" + (f" (capped from ₵{uncapped_fee})" if was_capped else ""))
+        
+        return {
+            "delivery_fee": delivery_fee,
+            "distance_meters": round(distance_meters, 2),
+            "distance_km": round(distance_meters / 1000, 2),
+            "breakdown": {
+                "base_fee": 10.0,
+                "base_distance": 500,
+                "additional_fee": round(delivery_fee - 10.0, 2) if delivery_fee > 10.0 else 0,
+                "uncapped_fee": round(uncapped_fee, 2) if was_capped else None,
+                "capped": was_capped,
+                "max_fee": round(order_total * 0.5, 2) if order_total > 0 else None,
+                "message": f"₵10 base fee for first 500m + ₵2 per 500m (max 50% of order total)"
+            }
+        }
+    except Exception as e:
+        print(f"❌ Error calculating delivery fee: {e}")
+        return {
+            "delivery_fee": 10.0,
+            "distance_meters": 0,
+            "error": str(e)
+        }
+
+@app.get("/api/map/locations")
+async def get_map_locations():
+    """
+    Get gas stations and available riders for map display
+    Returns all gas station locations and currently available riders with their locations
+    """
+    try:
+        # Gas station location (GasFill Main Station - Accra, Ghana)
+        gas_stations = [
+            {
+                "id": "station_1",
+                "name": "GasFill Main Station",
+                "address": "Accra, Ghana",
+                "location": {
+                    "lat": 5.6037,
+                    "lng": -0.1870
+                },
+                "phone": "+233 201 022 153",
+                "hours": "24/7",
+                "services": ["6kg", "12.5kg", "37kg", "Refills", "Exchange"]
+            }
+        ]
+        
+        # Get all available riders with their current locations
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                r.id,
+                r.username,
+                r.phone,
+                r.rating,
+                r.status,
+                r.current_location,
+                r.is_verified,
+                COUNT(DISTINCT o.id) as total_deliveries
+            FROM riders r
+            LEFT JOIN orders o ON o.rider_id = r.id AND o.status = 'delivered'
+            WHERE r.status = 'available' AND r.is_verified = 1
+            GROUP BY r.id
+        """)
+        
+        riders_data = cursor.fetchall()
+        conn.close()
+        
+        available_riders = []
+        for rider in riders_data:
+            rider_id, username, phone, rating, status, current_location, is_verified, total_deliveries = rider
+            
+            # Parse current_location if it exists
+            location = None
+            if current_location:
+                try:
+                    import json
+                    location_data = json.loads(current_location)
+                    location = {
+                        "lat": location_data.get("lat") or location_data.get("latitude"),
+                        "lng": location_data.get("lng") or location_data.get("longitude")
+                    }
+                except:
+                    # If location parsing fails, use station location as fallback
+                    location = {
+                        "lat": 5.6037,
+                        "lng": -0.1870
+                    }
+            else:
+                # Default to station location if no current location
+                location = {
+                    "lat": 5.6037,
+                    "lng": -0.1870
+                }
+            
+            available_riders.append({
+                "id": rider_id,
+                "name": username,
+                "phone": phone,
+                "rating": round(rating, 2) if rating else 4.0,
+                "location": location,
+                "total_deliveries": total_deliveries,
+                "status": "available"
+            })
+        
+        return {
+            "gas_stations": gas_stations,
+            "available_riders": available_riders,
+            "timestamp": utc_now().isoformat()
+        }
+    
+    except Exception as e:
+        print(f"❌ Error getting map locations: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return basic data even if there's an error
+        return {
+            "gas_stations": [
+                {
+                    "id": "station_1",
+                    "name": "GasFill Main Station",
+                    "address": "Accra, Ghana",
+                    "location": {
+                        "lat": 5.6037,
+                        "lng": -0.1870
+                    },
+                    "phone": "+233 201 022 153",
+                    "hours": "24/7",
+                    "services": ["6kg", "12.5kg", "37kg", "Refills", "Exchange"]
+                }
+            ],
+            "available_riders": [],
+            "error": str(e)
+        }
 
 @app.get("/api/orders")
 async def get_orders(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -853,6 +1108,19 @@ async def update_order_status(order_id: str, status_update: OrderStatusUpdate):
             status_code=404,
             detail="Order not found"
         )
+    
+    # Send WebSocket notification about status change
+    try:
+        status_notification = {
+            "type": "order_status_update",
+            "order_id": order_id,
+            "status": status_update.status,
+            "timestamp": utc_now().isoformat()
+        }
+        await manager.broadcast(json.dumps(status_notification))
+        print(f"✅ Broadcasted order status update: {order_id} -> {status_update.status}")
+    except Exception as e:
+        print(f"⚠️ Failed to broadcast status update: {e}")
     
     # Send push notification to customer about status change
     try:
@@ -2009,50 +2277,70 @@ async def get_rider_earnings(rider_id: int, current_admin: dict = Depends(get_cu
     # Get all delivered orders for this rider
     rider_orders = [o for o in orders_db if o.get("rider_id") == rider_id and o.get("status") == "delivered"]
     
-    # Calculate earnings
+    # Calculate earnings using actual delivery fees
     total_deliveries = len(rider_orders)
     commission_rate = rider.get("commission_rate", 0.8)  # 80% default
-    delivery_fee = rider.get("delivery_fee", 10.0)
-    earnings_per_delivery = delivery_fee * commission_rate
-    total_earnings = total_deliveries * earnings_per_delivery
+    
+    # Calculate total earnings from actual delivery fees
+    total_earnings = 0
+    for order in rider_orders:
+        order_delivery_fee = order.get("delivery_fee", 10.0)
+        rider_earning = order_delivery_fee * commission_rate
+        total_earnings += rider_earning
+    
+    # Calculate average delivery fee
+    avg_delivery_fee = (sum(o.get("delivery_fee", 10.0) for o in rider_orders) / total_deliveries) if total_deliveries > 0 else 10.0
+    earnings_per_delivery = avg_delivery_fee * commission_rate
     
     # Calculate today's earnings
     today = datetime.now().date()
     today_deliveries = [o for o in rider_orders if datetime.fromisoformat(o["created_at"]).date() == today]
-    today_earnings = len(today_deliveries) * earnings_per_delivery
+    today_earnings = 0
+    for order in today_deliveries:
+        order_delivery_fee = order.get("delivery_fee", 10.0)
+        rider_earning = order_delivery_fee * commission_rate
+        today_earnings += rider_earning
     
     # Calculate this week's earnings
     week_start = datetime.now() - timedelta(days=datetime.now().weekday())
     week_deliveries = [o for o in rider_orders if datetime.fromisoformat(o["created_at"]) >= week_start]
-    week_earnings = len(week_deliveries) * earnings_per_delivery
+    week_earnings = 0
+    for order in week_deliveries:
+        order_delivery_fee = order.get("delivery_fee", 10.0)
+        rider_earning = order_delivery_fee * commission_rate
+        week_earnings += rider_earning
     
     # Calculate this month's earnings
     month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     month_deliveries = [o for o in rider_orders if datetime.fromisoformat(o["created_at"]) >= month_start]
-    month_earnings = len(month_deliveries) * earnings_per_delivery
+    month_earnings = 0
+    for order in month_deliveries:
+        order_delivery_fee = order.get("delivery_fee", 10.0)
+        rider_earning = order_delivery_fee * commission_rate
+        month_earnings += rider_earning
     
     return {
         "rider_id": rider_id,
         "username": rider["username"],
-        "total_earnings": total_earnings,
-        "today_earnings": today_earnings,
-        "week_earnings": week_earnings,
-        "month_earnings": month_earnings,
+        "total_earnings": round(total_earnings, 2),
+        "today_earnings": round(today_earnings, 2),
+        "week_earnings": round(week_earnings, 2),
+        "month_earnings": round(month_earnings, 2),
         "total_deliveries": total_deliveries,
         "today_deliveries": len(today_deliveries),
         "week_deliveries": len(week_deliveries),
         "month_deliveries": len(month_deliveries),
         "commission_rate": commission_rate,
-        "delivery_fee": delivery_fee,
-        "earnings_per_delivery": earnings_per_delivery,
+        "avg_delivery_fee": round(avg_delivery_fee, 2),
+        "earnings_per_delivery": round(earnings_per_delivery, 2),
         "recent_deliveries": [
             {
                 "order_id": o["id"],
                 "customer_name": o.get("customer_name", "Unknown"),
                 "delivery_address": o.get("delivery_address", "Unknown"),
                 "total": o.get("total", 0),
-                "delivery_fee": delivery_fee,
-                "rider_earnings": earnings_per_delivery,
+                "delivery_fee": o.get("delivery_fee", 10.0),
+                "rider_earnings": round(o.get("delivery_fee", 10.0) * commission_rate, 2),
                 "delivered_at": o.get("updated_at", o.get("created_at"))
             }
             for o in rider_orders[-10:]  # Last 10 deliveries
@@ -2282,12 +2570,16 @@ async def get_rider_dashboard(current_rider: dict = Depends(get_current_rider)):
     print(f"   Total deliveries: {len([o for o in rider_orders if o['status'] == 'delivered'])}")
     
     # Calculate earnings with 80% commission
-    # Each delivered order earns rider 80% of delivery fee
-    rider_earnings_per_delivery = commission_structure.delivery_fee * commission_structure.rider_commission_rate
+    # Each delivered order earns rider 80% of its actual delivery fee
+    delivered_orders = [order for order in rider_orders if order["status"] == "delivered"]
+    total_delivered_orders = len(delivered_orders)
     
-    # Calculate total earnings from delivered orders
-    total_delivered_orders = len([order for order in rider_orders if order["status"] == "delivered"])
-    total_order_earnings = total_delivered_orders * rider_earnings_per_delivery
+    # Calculate total earnings from delivered orders using actual delivery fees
+    total_order_earnings = 0
+    for order in delivered_orders:
+        order_delivery_fee = order.get("delivery_fee", 10.0)  # Use order's actual delivery fee
+        rider_earning = order_delivery_fee * commission_structure.rider_commission_rate
+        total_order_earnings += rider_earning
     
     # Calculate service earnings
     completed_services = len([s for s in rider_services if s["status"] == "completed"])
@@ -2296,18 +2588,27 @@ async def get_rider_dashboard(current_rider: dict = Depends(get_current_rider)):
     
     total_earnings = total_order_earnings + service_earnings
     
-    # Calculate today's earnings
-    today_delivered = len(completed_today_orders)
-    today_earnings = (today_delivered * rider_earnings_per_delivery) + \
+    # Calculate today's earnings using actual delivery fees
+    today_order_earnings = 0
+    for order in completed_today_orders:
+        order_delivery_fee = order.get("delivery_fee", 10.0)
+        rider_earning = order_delivery_fee * commission_structure.rider_commission_rate
+        today_order_earnings += rider_earning
+    
+    today_earnings = today_order_earnings + \
                     (len(completed_services_today) * (commission_structure.service_pickup_fee + commission_structure.service_refill_fee))
     
-    print(f"\n� EARNINGS:")
+    # Calculate average delivery fee for display
+    avg_delivery_fee = (sum(o.get("delivery_fee", 10.0) for o in delivered_orders) / total_delivered_orders) if total_delivered_orders > 0 else 10.0
+    avg_earnings_per_delivery = avg_delivery_fee * commission_structure.rider_commission_rate
+    
+    print(f"\n💰 EARNINGS:")
     print(f"   Commission rate: {commission_structure.rider_commission_rate * 100}%")
-    print(f"   Delivery fee: ₵{commission_structure.delivery_fee}")
-    print(f"   Earnings per delivery: ₵{rider_earnings_per_delivery}")
+    print(f"   Average delivery fee: ₵{avg_delivery_fee:.2f}")
+    print(f"   Average earnings per delivery: ₵{avg_earnings_per_delivery:.2f}")
     print(f"   Total deliveries: {total_delivered_orders}")
-    print(f"   Total earnings: ₵{total_earnings}")
-    print(f"   Today's earnings: ₵{today_earnings}")
+    print(f"   Total earnings: ₵{total_earnings:.2f}")
+    print(f"   Today's earnings: ₵{today_earnings:.2f}")
     print(f"{'='*60}\n")
     
     # Return in format expected by mobile app
@@ -2320,8 +2621,8 @@ async def get_rider_dashboard(current_rider: dict = Depends(get_current_rider)):
         "completed_today": len(completed_today_orders) + len(completed_services_today),
         "rating": current_rider["rating"],
         "commission_rate": commission_structure.rider_commission_rate,
-        "delivery_fee": commission_structure.delivery_fee,
-        "earnings_per_delivery": round(rider_earnings_per_delivery, 2),
+        "delivery_fee": round(avg_delivery_fee, 2),  # Average delivery fee
+        "earnings_per_delivery": round(avg_earnings_per_delivery, 2),  # Average earnings
         "is_verified": current_rider.get("is_verified", False),
         "document_status": current_rider.get("document_status", "pending"),
         "verification_notes": current_rider.get("verification_notes", ""),
@@ -2355,10 +2656,8 @@ async def get_rider_analytics(
     all_orders = db.get_all_orders()
     rider_orders = [o for o in all_orders if o.get("rider_id") == rider_id]
     
-    # Calculate earnings per delivery (assuming fixed delivery fee of 20 GHS)
-    delivery_fee = 20.0
+    # Get commission rate
     commission_rate = rider.get("commission_rate", 0.8)
-    rider_earnings_per_delivery = delivery_fee * commission_rate
     
     # Date filtering based on period (make timezone-aware)
     now = datetime.now(timezone.utc)
@@ -2396,12 +2695,140 @@ async def get_rider_analytics(
     total_deliveries = len(completed_orders)
     completion_rate = (len(completed_orders) / len(rider_orders) * 100) if rider_orders else 0
     
-    # Calculate earnings (timezone-aware dates)
+    # Calculate earnings using actual earnings records from earnings_db
+    # Get all earnings for this rider
+    rider_earnings = [e for e in earnings_db if e["rider_id"] == rider_id]
+    
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = start_date if period == "week" else now - timedelta(days=7)
     week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = start_date if period == "month" else now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
+    # Calculate earnings from actual earnings records
+    today_earnings = 0
+    week_earnings = 0
+    month_earnings = 0
+    total_earnings = 0
+    
+    for earning in rider_earnings:
+        try:
+            earning_date_str = earning.get("date")
+            if earning_date_str and isinstance(earning_date_str, str):
+                earning_date = datetime.fromisoformat(earning_date_str.replace('Z', '+00:00'))
+                # Ensure timezone-aware
+                if earning_date.tzinfo is None:
+                    earning_date = earning_date.replace(tzinfo=timezone.utc)
+                
+                earning_amount = earning.get("amount", 0)
+                total_earnings += earning_amount
+                
+                if earning_date >= today_start:
+                    today_earnings += earning_amount
+                if earning_date >= week_start:
+                    week_earnings += earning_amount
+                if earning_date >= month_start:
+                    month_earnings += earning_amount
+        except (ValueError, AttributeError, TypeError):
+            continue
+    
+    earnings_summary = {
+        "today": round(today_earnings, 2),
+        "week": round(week_earnings, 2),
+        "month": round(month_earnings, 2),
+        "total": round(total_earnings, 2)
+    }
+    
+    # Earnings trend (daily breakdown from actual earnings records)
+    earnings_trend = {}
+    for earning in rider_earnings:
+        try:
+            earning_date_str = earning.get("date")
+            if earning_date_str and isinstance(earning_date_str, str):
+                earning_date = datetime.fromisoformat(earning_date_str.replace('Z', '+00:00'))
+                # Ensure timezone-aware
+                if earning_date.tzinfo is None:
+                    earning_date = earning_date.replace(tzinfo=timezone.utc)
+                
+                # Only include earnings from the current period
+                if earning_date >= start_date:
+                    date_key = earning_date.strftime("%Y-%m-%d")
+                    if date_key not in earnings_trend:
+                        earnings_trend[date_key] = {"date": date_key, "amount": 0, "deliveries": 0}
+                    
+                    earnings_trend[date_key]["amount"] += round(earning.get("amount", 0), 2)
+                    
+                    # Count deliveries (only for delivery-related earnings)
+                    if earning.get("earning_type") in ["delivery_commission", "delivery_fee"]:
+                        # Check if we already counted this order
+                        order_id = earning.get("order_id")
+                        if order_id and f"order_{order_id}" not in earnings_trend.get(date_key, {}).get("_counted_orders", set()):
+                            if "_counted_orders" not in earnings_trend[date_key]:
+                                earnings_trend[date_key]["_counted_orders"] = set()
+                            earnings_trend[date_key]["_counted_orders"].add(f"order_{order_id}")
+                            earnings_trend[date_key]["deliveries"] += 1
+        except (ValueError, AttributeError, TypeError):
+            continue
+    
+    # Remove the _counted_orders tracking before returning
+    for trend in earnings_trend.values():
+        if "_counted_orders" in trend:
+            del trend["_counted_orders"]
+    
+    earnings_trend_list = sorted(earnings_trend.values(), key=lambda x: x["date"])
+    
+    # Rating distribution
+    ratings = [o.get("rating") for o in completed_orders if o.get("rating")]
+    rating_counts = Counter(ratings)
+    rating_distribution = {
+        "five_star": rating_counts.get(5, 0),
+        "four_star": rating_counts.get(4, 0),
+        "three_star": rating_counts.get(3, 0),
+        "two_star": rating_counts.get(2, 0),
+        "one_star": rating_counts.get(1, 0)
+    }
+    
+    # Peak hours analysis from actual earnings
+    peak_hours = {}
+    for earning in rider_earnings:
+        try:
+            earning_date_str = earning.get("date")
+            if earning_date_str and isinstance(earning_date_str, str):
+                earning_date = datetime.fromisoformat(earning_date_str.replace('Z', '+00:00'))
+                # Ensure timezone-aware
+                if earning_date.tzinfo is None:
+                    earning_date = earning_date.replace(tzinfo=timezone.utc)
+                
+                hour = earning_date.hour
+                if hour not in peak_hours:
+                    peak_hours[hour] = {"hour": hour, "deliveries": 0, "earnings": 0, "_counted_orders": set()}
+                
+                peak_hours[hour]["earnings"] += round(earning.get("amount", 0), 2)
+                
+                # Count deliveries (avoid double counting)
+                if earning.get("earning_type") in ["delivery_commission", "delivery_fee"]:
+                    order_id = earning.get("order_id")
+                    if order_id and f"order_{order_id}" not in peak_hours[hour]["_counted_orders"]:
+                        peak_hours[hour]["_counted_orders"].add(f"order_{order_id}")
+                        peak_hours[hour]["deliveries"] += 1
+        except (ValueError, AttributeError, TypeError):
+            continue
+    
+    # Remove tracking sets and prepare final list
+    for hour_data in peak_hours.values():
+        if "_counted_orders" in hour_data:
+            del hour_data["_counted_orders"]
+    
+    peak_hours_list = sorted(peak_hours.values(), key=lambda x: x["deliveries"], reverse=True)[:10]
+    
+    # Performance metrics
+    avg_rating = sum(ratings) / len(ratings) if ratings else 0
+    on_time_deliveries = [o for o in completed_orders if not o.get("late", False)]
+    on_time_percentage = (len(on_time_deliveries) / len(completed_orders) * 100) if completed_orders else 100
+    
+    # Calculate average earning per delivery from actual earnings
+    avg_earning_per_delivery = round(total_earnings / total_deliveries, 2) if total_deliveries > 0 else 0
+    
+    # Calculate completed deliveries by period for delivery stats
     today_completed = []
     week_completed = []
     month_completed = []
@@ -2423,69 +2850,6 @@ async def get_rider_analytics(
         except (ValueError, AttributeError, TypeError):
             continue
     
-    earnings_summary = {
-        "today": len(today_completed) * rider_earnings_per_delivery,
-        "week": len(week_completed) * rider_earnings_per_delivery,
-        "month": len(month_completed) * rider_earnings_per_delivery,
-        "total": total_deliveries * rider_earnings_per_delivery
-    }
-    
-    # Earnings trend (daily breakdown)
-    earnings_trend = {}
-    for order in completed_period:
-        try:
-            created_at = order.get("created_at")
-            if created_at and isinstance(created_at, str):
-                order_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                # Ensure timezone-aware
-                if order_date.tzinfo is None:
-                    order_date = order_date.replace(tzinfo=timezone.utc)
-                date_key = order_date.strftime("%Y-%m-%d")
-                if date_key not in earnings_trend:
-                    earnings_trend[date_key] = {"date": date_key, "amount": 0, "deliveries": 0}
-                earnings_trend[date_key]["amount"] += rider_earnings_per_delivery
-                earnings_trend[date_key]["deliveries"] += 1
-        except (ValueError, AttributeError, TypeError):
-            continue
-    
-    earnings_trend_list = sorted(earnings_trend.values(), key=lambda x: x["date"])
-    
-    # Rating distribution
-    ratings = [o.get("rating") for o in completed_orders if o.get("rating")]
-    rating_counts = Counter(ratings)
-    rating_distribution = {
-        "five_star": rating_counts.get(5, 0),
-        "four_star": rating_counts.get(4, 0),
-        "three_star": rating_counts.get(3, 0),
-        "two_star": rating_counts.get(2, 0),
-        "one_star": rating_counts.get(1, 0)
-    }
-    
-    # Peak hours analysis
-    peak_hours = {}
-    for order in completed_orders:
-        try:
-            created_at = order.get("created_at")
-            if created_at and isinstance(created_at, str):
-                order_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                # Ensure timezone-aware
-                if order_date.tzinfo is None:
-                    order_date = order_date.replace(tzinfo=timezone.utc)
-                hour = order_date.hour
-                if hour not in peak_hours:
-                    peak_hours[hour] = {"hour": hour, "deliveries": 0, "earnings": 0}
-                peak_hours[hour]["deliveries"] += 1
-                peak_hours[hour]["earnings"] += rider_earnings_per_delivery
-        except (ValueError, AttributeError, TypeError):
-            continue
-    
-    peak_hours_list = sorted(peak_hours.values(), key=lambda x: x["deliveries"], reverse=True)[:10]
-    
-    # Performance metrics
-    avg_rating = sum(ratings) / len(ratings) if ratings else 0
-    on_time_deliveries = [o for o in completed_orders if not o.get("late", False)]
-    on_time_percentage = (len(on_time_deliveries) / len(completed_orders) * 100) if completed_orders else 100
-    
     analytics_data = {
         "period": period,
         "earnings_summary": earnings_summary,
@@ -2504,7 +2868,8 @@ async def get_rider_analytics(
             "total_ratings": len(ratings),
             "on_time_percentage": round(on_time_percentage, 2),
             "average_delivery_time": 30,  # TODO: Calculate from actual data
-            "customer_satisfaction": round(avg_rating / 5 * 100, 2) if avg_rating else 0
+            "customer_satisfaction": round(avg_rating / 5 * 100, 2) if avg_rating else 0,
+            "average_earning_per_delivery": avg_earning_per_delivery
         },
         "earnings_trend": earnings_trend_list,
         "rating_distribution": rating_distribution,
@@ -3503,10 +3868,11 @@ async def get_detailed_earnings(current_rider: dict = Depends(get_current_rider)
     ]
     
     # Calculate pending and paid earnings
-    # Pending earnings = total earnings that haven't been paid out yet
+    # Pending earnings = sum of all earnings_db records minus approved payments
+    total_actual_earnings = sum(e["amount"] for e in rider_earnings)
     paid_out_amount = sum(p["amount"] for p in pending_payments_db 
                          if p["rider_id"] == current_rider["id"] and p["status"] == "approved")
-    pending_earnings = current_rider["earnings"] - paid_out_amount
+    pending_earnings = total_actual_earnings - paid_out_amount
     
     # Add status to each earning for frontend
     earnings_with_status = []
@@ -3523,7 +3889,7 @@ async def get_detailed_earnings(current_rider: dict = Depends(get_current_rider)
         earnings_with_status.append(earning_copy)
     
     return {
-        "total_earnings": current_rider["earnings"],
+        "total_earnings": total_actual_earnings,
         "today_earnings": today_earnings,
         "week_earnings": week_earnings,
         "month_earnings": month_earnings,

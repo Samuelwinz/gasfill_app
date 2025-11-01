@@ -47,8 +47,8 @@ class AdminAuthService {
         // Store admin user data
         await AsyncStorage.setItem('admin_user', JSON.stringify(response.data.user));
         
-        // Store admin role for navigation
-        await AsyncStorage.setItem('userRole', 'admin');
+        // Store admin role for navigation (as JSON for consistency)
+        await AsyncStorage.setItem('userRole', JSON.stringify('admin'));
         
         console.log('✅ Admin token and role stored successfully');
       }
