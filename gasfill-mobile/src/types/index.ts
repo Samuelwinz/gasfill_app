@@ -20,7 +20,17 @@ export interface Order {
   customer_email?: string;
   customer_phone?: string;
   customer_address?: string;
+  customer_location?: {
+    lat: number;
+    lng: number;
+  };
+  pickup_location?: {
+    lat: number;
+    lng: number;
+  };
+  pickup_address?: string;
   total: number;
+  delivery_fee?: number;
   delivery_type?: string;
   status: OrderStatus;
   payment_status?: PaymentStatus;
@@ -30,6 +40,10 @@ export interface Order {
   rider_name?: string;
   rider_phone?: string;
   rider_rating?: number;
+  rider_location?: {
+    lat: number;
+    lng: number;
+  };
   tracking_info?: TrackingInfo;
 }
 
@@ -113,6 +127,14 @@ export interface OrderCreateRequest {
   customer_address?: string;
   total: number;
   delivery_type?: string;
+  delivery_location?: {
+    lat: number;
+    lng: number;
+  };
+  customer_location?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 // Pickup/Refill Service Types
@@ -364,6 +386,12 @@ export interface ChatMessage {
     longitude: number;
     address?: string;
   };
+  location_data?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    address?: string;
+  };
   is_read: boolean;
   is_delivered: boolean;
   created_at: string;
@@ -393,6 +421,7 @@ export interface ChatParticipant {
   name: string;
   avatar?: string;
   user_type: 'customer' | 'rider' | 'support';
+  type: 'customer' | 'rider' | 'support'; // Alias for user_type
   is_online: boolean;
   is_typing?: boolean;
   last_seen?: string;

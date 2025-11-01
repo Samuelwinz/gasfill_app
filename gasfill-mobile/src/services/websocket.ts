@@ -4,7 +4,24 @@
  */
 
 export interface WebSocketMessage {
-  type: 'new_order_assigned' | 'order_status_updated' | 'earnings_updated' | 'rider_location_updated' | 'ping' | 'pong';
+  type: 
+    | 'new_order_assigned' 
+    | 'order_status_updated' 
+    | 'earnings_updated' 
+    | 'rider_location_updated' 
+    | 'rider_location_update'  // Client -> Server
+    | 'rider_location'         // Server -> Client
+    | 'ping' 
+    | 'pong'
+    | 'chat_message'
+    | 'chat_typing'
+    | 'chat_join_room'
+    | 'chat_leave_room'
+    | 'chat_mark_read'
+    | 'chat_message_delivered'
+    | 'chat_typing_start'
+    | 'chat_typing_stop'
+    | 'chat_send_message';
   data?: any;
   timestamp?: string;
 }
@@ -184,14 +201,18 @@ export class WebSocketService {
    */
   private emit(event: string, data: any) {
     const callbacks = this.listeners.get(event);
+    console.log(`[WebSocket] 🎯 Emitting '${event}' - ${callbacks ? callbacks.size : 0} listeners`);
     if (callbacks) {
       callbacks.forEach(callback => {
         try {
+          console.log(`[WebSocket] 📤 Calling listener for '${event}'`);
           callback(data);
         } catch (error) {
           console.error(`[WebSocket] Error in event callback for ${event}:`, error);
         }
       });
+    } else {
+      console.warn(`[WebSocket] ⚠️ No listeners registered for event '${event}'`);
     }
   }
 
@@ -199,13 +220,15 @@ export class WebSocketService {
    * Handle incoming WebSocket message
    */
   private handleMessage(message: WebSocketMessage) {
-    console.log('[WebSocket] Received:', message);
+    console.log('[WebSocket] 🔔 RAW MESSAGE:', JSON.stringify(message, null, 2));
 
     // Handle pong response
     if (message.type === 'pong') {
       return;
     }
 
+    console.log('[WebSocket] 📢 EMITTING EVENT:', message.type, 'with data:', message.data);
+    
     // Emit specific event type
     this.emit(message.type, message.data);
     

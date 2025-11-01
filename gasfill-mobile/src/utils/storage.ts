@@ -120,7 +120,16 @@ export class StorageService {
   static async getItem<T>(key: string): Promise<T | null> {
     try {
       const value = await AsyncStorage.getItem(key);
-      return value ? JSON.parse(value) : null;
+      if (!value) return null;
+      
+      // Try to parse as JSON, but if it fails, return the raw string
+      try {
+        return JSON.parse(value);
+      } catch (parseError) {
+        // If JSON parse fails, it's likely a plain string value
+        // Return it as-is (cast to T for TypeScript)
+        return value as unknown as T;
+      }
     } catch (error) {
       console.error(`Error getting item ${key}:`, error);
       return null;

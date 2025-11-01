@@ -23,7 +23,7 @@ const products = [
     description: 'Perfect for small households',
     price: 80, 
     category: 'gas-cylinder',
-    image: '' 
+    image: require('../../assets/images/6kg.png')
   },
   { 
     id: '12kg', 
@@ -31,7 +31,7 @@ const products = [
     description: 'Most popular size for families',
     price: 150, 
     category: 'gas-cylinder',
-    image: '' 
+    image: require('../../assets/images/12kg.png')
   },
   { 
     id: '15kg', 
@@ -39,7 +39,7 @@ const products = [
     description: 'Large size for heavy usage',
     price: 180, 
     category: 'gas-cylinder',
-    image: '' 
+    image: require('../../assets/images/15kg.png')
   },
 ];
 
@@ -98,9 +98,10 @@ const ProductsScreen: React.FC = () => {
             ]}
             onPress={() => handleSelectSize('6kg')}
           >
-            <View style={styles.cylinderIconContainer}>
-              <Ionicons name="water" size={60} color="#0A2540" />
-            </View>
+            <Image 
+              source={products[0].image} 
+              style={styles.cylinderImage}
+            />
             <Text style={styles.sizeText}>6kg</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -111,9 +112,10 @@ const ProductsScreen: React.FC = () => {
             ]}
             onPress={() => handleSelectSize('12kg')}
           >
-            <View style={styles.cylinderIconContainer}>
-              <Ionicons name="water" size={80} color="#FF6F00" />
-            </View>
+            <Image 
+              source={products[1].image} 
+              style={styles.cylinderImage}
+            />
             <Text style={styles.sizeText}>12kg</Text>
           </TouchableOpacity>
         </View>
@@ -129,9 +131,10 @@ const ProductsScreen: React.FC = () => {
             ]}
             onPress={() => handleSelectSize('15kg')}
           >
-            <View style={styles.cylinderIconContainerLarge}>
-              <Ionicons name="water" size={100} color="#FFC107" />
-            </View>
+            <Image 
+              source={products[2].image} 
+              style={styles.cylinderImageLarge}
+            />
             <Text style={styles.sizeText}>15kg</Text>
           </TouchableOpacity>
 
@@ -142,7 +145,7 @@ const ProductsScreen: React.FC = () => {
             </TouchableOpacity>
             <TouchableOpacity style={styles.optionCard}>
               <Text style={styles.priceText}>
-                ₵{selectedSize === '6kg' ? '80' : selectedSize === '12.5kg' ? '150' : '180'}
+                {selectedSize === '6kg' ? 'GH₵ 80.00' : selectedSize === '12kg' ? 'GH₵ 150.00' : selectedSize === '15kg' ? 'GH₵ 180.00' : '—'}
               </Text>
               <Text style={styles.optionText}>Price</Text>
             </TouchableOpacity>

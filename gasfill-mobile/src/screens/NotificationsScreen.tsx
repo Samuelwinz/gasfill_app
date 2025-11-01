@@ -19,7 +19,7 @@ interface NotificationsScreenProps {
 }
 
 const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ navigation }) => {
-  const { user, rider } = useAuth();
+  const { user, rider, token } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
@@ -30,67 +30,27 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ navigation })
 
   const loadNotifications = async () => {
     try {
-      // TODO: Replace with actual API call
-      // const response = await apiService.getNotifications();
-      // setNotifications(response.data);
-      
-      // Mock notifications for demonstration
-      const mockNotifications: Notification[] = [
-        {
-          id: '1',
-          user_id: user?.id || rider?.id || 0,
-          type: 'order_delivered',
-          title: 'Order Delivered',
-          message: 'Your gas cylinder has been delivered successfully!',
-          is_read: false,
-          created_at: new Date().toISOString(),
-          icon: 'checkmark-circle',
-        },
-        {
-          id: '2',
-          user_id: user?.id || rider?.id || 0,
-          type: 'order_in_transit',
-          title: 'Order In Transit',
-          message: 'Your rider is on the way with your order.',
-          is_read: false,
-          created_at: new Date(Date.now() - 3600000).toISOString(),
-          icon: 'bicycle',
-        },
-        {
-          id: '3',
-          user_id: user?.id || rider?.id || 0,
-          type: 'payment_received',
-          title: 'Payment Confirmed',
-          message: 'Your payment of ₵50.00 has been received.',
-          is_read: true,
-          created_at: new Date(Date.now() - 7200000).toISOString(),
-          icon: 'card',
-        },
-        {
-          id: '4',
-          user_id: user?.id || rider?.id || 0,
-          type: 'promotion',
-          title: '🎉 Special Offer',
-          message: 'Get 20% off on your next refill! Limited time only.',
-          is_read: true,
-          created_at: new Date(Date.now() - 86400000).toISOString(),
-          icon: 'gift',
-        },
-        {
-          id: '5',
-          user_id: user?.id || rider?.id || 0,
-          type: 'new_job',
-          title: 'New Delivery Request',
-          message: 'New delivery request available in your area.',
-          is_read: false,
-          created_at: new Date(Date.now() - 1800000).toISOString(),
-          icon: 'flame',
-        },
-      ];
+      if (!token) {
+        console.log('No auth token available');
+        return;
+      }
 
-      setNotifications(mockNotifications);
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/notifications`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setNotifications(data);
+      } else {
+        console.error('Failed to load notifications:', response.status);
+        setNotifications([]);
+      }
     } catch (error) {
       console.error('Error loading notifications:', error);
+      setNotifications([]);
     }
   };
 
@@ -102,12 +62,23 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ navigation })
 
   const markAsRead = async (notificationId: string) => {
     try {
-      // TODO: Call API to mark as read
-      // await apiService.markNotificationAsRead(notificationId);
-      
-      setNotifications(prev =>
-        prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
+      if (!token) return;
+
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_API_URL}/api/notifications/${notificationId}/read`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
       );
+      
+      if (response.ok) {
+        setNotifications(prev =>
+          prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
+        );
+      }
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
@@ -115,12 +86,23 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ navigation })
 
   const markAllAsRead = async () => {
     try {
-      // TODO: Call API to mark all as read
-      // await apiService.markAllNotificationsAsRead();
-      
-      setNotifications(prev =>
-        prev.map(n => ({ ...n, is_read: true }))
+      if (!token) return;
+
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_API_URL}/api/notifications/read-all`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
       );
+      
+      if (response.ok) {
+        setNotifications(prev =>
+          prev.map(n => ({ ...n, is_read: true }))
+        );
+      }
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }

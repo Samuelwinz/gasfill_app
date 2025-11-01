@@ -4,19 +4,20 @@ GasFill Python Backend Server
 A modern FastAPI server for the GasFill LPG delivery application
 """
 
-from fastapi import FastAPI, HTTPException, Depends, status, Request
+from fastapi import FastAPI, HTTPException, Depends, status, Request, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, EmailStr
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 import uvicorn
 import jwt
 import hashlib
 import secrets
 import hmac
 import requests
+import asyncio
 from datetime import datetime, timedelta, UTC
 import json
 import os
@@ -60,6 +61,11 @@ app.add_middleware(
 # Static file serving
 current_dir = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=current_dir), name="static")
+
+# Serve uploaded files (chat images, documents, etc.)
+uploads_dir = current_dir / "uploads"
+uploads_dir.mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 # Utility Functions
 def safe_parse_datetime(date_string: str) -> Optional[datetime]:
@@ -133,6 +139,7 @@ rider_counter = 1
 earnings_db: List[Dict] = []  # List of earning entries
 pending_payments_db: List[Dict] = []  # Pending payments to riders
 payment_history_db: List[Dict] = []  # Completed payments history
+support_tickets_db: List[Dict] = []  # Support tickets from users/riders
 
 # Data Models
 class UserRegister(BaseModel):
@@ -179,8 +186,8 @@ class DeliveryUpdate(BaseModel):
 
 # Order status flow constants
 ORDER_STATUS_FLOW = {
-    "pending": ["assigned"],  # Customer creates order, awaits assignment
-    "assigned": ["pickup", "picked_up", "pending"],  # Rider accepts, can go to pickup or cancel back (support both pickup and picked_up)
+    "pending": ["assigned", "cancelled"],  # Customer creates order, can be cancelled or assigned
+    "assigned": ["pickup", "picked_up", "pending", "cancelled"],  # Rider accepts, can go to pickup, cancel back, or rider can cancel
     "pickup": ["in_transit", "assigned"],  # Rider collecting cylinder from depot
     "picked_up": ["in_transit", "assigned"],  # Legacy status - same as pickup
     "in_transit": ["delivered", "pickup", "picked_up"],  # Rider delivering to customer
@@ -206,6 +213,7 @@ class OrderCreate(BaseModel):
     customer_email: Optional[str] = None
     customer_phone: Optional[str] = None
     customer_address: Optional[str] = None
+    customer_location: Optional[Dict[str, float]] = None  # {lat, lng} or {latitude, longitude}
     total: float
     delivery_type: Optional[str] = "standard"
 
@@ -284,10 +292,13 @@ class CommissionStructure(BaseModel):
     weekly_bonus: float = 200.0  # Weekly bonus amount
 
 class PaymentRequest(BaseModel):
-    rider_id: int
     amount: float
+    rider_id: Optional[int] = None  # Will be set from current_rider if not provided
     payment_method: str = "mobile_money"  # mobile_money, bank_transfer, cash
-    recipient_details: Dict[str, Any]
+    recipient_details: Optional[Dict[str, Any]] = None  # Will use rider's details if not provided
+
+class PaymentProcessRequest(BaseModel):
+    action: str  # "approve" or "reject"
 
 # Initialize commission structure with default values
 commission_structure = CommissionStructure()
@@ -300,6 +311,63 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify password against hash"""
     return hash_password(plain_password) == hashed_password
+
+def calculate_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """
+    Calculate distance between two coordinates using Haversine formula
+    Returns distance in meters
+    """
+    from math import radians, sin, cos, sqrt, atan2
+    
+    # Earth's radius in meters
+    R = 6371000
+    
+    # Convert to radians
+    lat1_rad = radians(lat1)
+    lat2_rad = radians(lat2)
+    delta_lat = radians(lat2 - lat1)
+    delta_lng = radians(lng2 - lng1)
+    
+    # Haversine formula
+    a = sin(delta_lat / 2) ** 2 + cos(lat1_rad) * cos(lat2_rad) * sin(delta_lng / 2) ** 2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    distance = R * c
+    
+    return distance
+
+def calculate_delivery_fee(distance_meters: float, order_total: float = 0) -> float:
+    """
+    Calculate delivery fee based on distance from customer to gas station
+    Base fee: 10 GHS for first 500 meters
+    Additional: 2 GHS per additional 500 meters
+    Maximum: 50% of order total (gas price cap)
+    
+    Args:
+        distance_meters: Distance from customer location to gas station in meters
+        order_total: Total value of gas order (to apply 50% cap)
+    
+    Returns:
+        Delivery fee in GHS, capped at 50% of order total
+    """
+    BASE_DISTANCE = 500  # meters
+    BASE_FEE = 10.0  # GHS
+    ADDITIONAL_FEE_PER_500M = 2.0  # GHS
+    MAX_FEE_PERCENTAGE = 0.5  # 50% of order total
+    
+    if distance_meters <= BASE_DISTANCE:
+        calculated_fee = BASE_FEE
+    else:
+        # Calculate additional 500m increments
+        additional_distance = distance_meters - BASE_DISTANCE
+        additional_increments = (additional_distance + BASE_DISTANCE - 1) // BASE_DISTANCE  # Ceiling division
+        calculated_fee = BASE_FEE + (additional_increments * ADDITIONAL_FEE_PER_500M)
+    
+    # Apply 50% cap based on order total
+    if order_total > 0:
+        max_fee = order_total * MAX_FEE_PERCENTAGE
+        calculated_fee = min(calculated_fee, max_fee)
+    
+    return round(calculated_fee, 2)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create JWT access token"""
@@ -339,13 +407,13 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         if email is None:
             return None
         
-        # Check different databases based on role
+        # Check database based on role
         if role == "rider":
-            user = riders_db.get(email)
+            user = db.get_rider_by_email(email)
             if user:
                 user["role"] = "rider"
         else:
-            user = users_db.get(email)
+            user = db.get_user_by_email(email)
         
         return user
     except jwt.PyJWTError:
@@ -370,7 +438,7 @@ def get_current_rider(credentials: HTTPAuthorizationCredentials = Depends(securi
                 detail="Invalid rider token"
             )
         
-        rider = riders_db.get(email)
+        rider = db.get_rider_by_email(email)
         if not rider:
             raise HTTPException(
                 status_code=401,
@@ -378,6 +446,48 @@ def get_current_rider(credentials: HTTPAuthorizationCredentials = Depends(securi
             )
         
         return rider
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token"
+        )
+
+def get_current_user_flexible(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Get current user (customer or rider) from JWT token"""
+    if not credentials:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required"
+        )
+    
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        role: str = payload.get("role", "customer")
+        
+        if email is None:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token"
+            )
+        
+        # Check database based on role
+        if role == "rider":
+            user = db.get_rider_by_email(email)
+            if user:
+                user["role"] = "rider"
+        else:
+            user = db.get_user_by_email(email)
+            if user:
+                user["role"] = role or "customer"
+        
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="User not found"
+            )
+        
+        return user
     except jwt.PyJWTError:
         raise HTTPException(
             status_code=401,
@@ -400,29 +510,25 @@ async def health_check():
 async def register_user(user_data: UserRegister):
     """Register a new user"""
     # Check if user already exists
-    if user_data.email in users_db:
+    existing_user = db.get_user_by_email(user_data.email)
+    if existing_user:
         raise HTTPException(
             status_code=400,
             detail="User already exists"
         )
     
-    # Create new user
-    user_id = len(users_db) + 1
+    # Create new user in database
     hashed_password = hash_password(user_data.password)
     
-    user = {
-        "id": user_id,
+    user = db.create_user({
         "username": user_data.username,
         "email": user_data.email,
         "password": hashed_password,
         "phone": user_data.phone,
         "address": user_data.address,
         "role": user_data.role,
-        "created_at": utc_now().isoformat(),
         "is_active": True
-    }
-    
-    users_db[user_data.email] = user
+    })
     
     # Create access token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -451,7 +557,7 @@ async def login_user(login_data: dict):
     if not email or not password:
         raise HTTPException(status_code=400, detail="Email and password required")
     
-    user = users_db.get(email)
+    user = db.get_user_by_email(email)
     
     if not user:
         raise HTTPException(
@@ -493,7 +599,7 @@ async def admin_login(admin_data: AdminLogin):
             detail="Invalid admin key"
         )
     
-    user = users_db.get(admin_data.email)
+    user = db.get_user_by_email(admin_data.email)
     
     if not user or not verify_password(admin_data.password, user["password"]):
         raise HTTPException(
@@ -526,13 +632,47 @@ async def admin_login(admin_data: AdminLogin):
         }
     }
 
+@app.get("/api/users/list")
+async def list_all_users():
+    """List all registered customers (for debugging/testing)"""
+    customers = []
+    for email, user in users_db.items():
+        customers.append({
+            "id": user.get("id"),
+            "email": email,
+            "name": user.get("name") or user.get("username"),
+            "phone": user.get("phone"),
+            "address": user.get("address"),
+            "role": user.get("role", "customer"),
+            "created_at": user.get("created_at")
+        })
+    
+    riders = []
+    for email, rider in riders_db.items():
+        riders.append({
+            "id": rider.get("id"),
+            "email": email,
+            "username": rider.get("username"),
+            "phone": rider.get("phone"),
+            "vehicle_type": rider.get("vehicle_type"),
+            "status": rider.get("status"),
+            "rating": rider.get("rating"),
+            "created_at": rider.get("created_at")
+        })
+    
+    return {
+        "total_customers": len(customers),
+        "total_riders": len(riders),
+        "customers": customers,
+        "riders": riders
+    }
+
 @app.post("/api/auth/rider-register")
 async def rider_register(rider_data: RiderRegister):
     """Register a new rider"""
-    global rider_counter
-    
     # Check if rider already exists
-    if rider_data.email in riders_db:
+    existing_rider = db.get_rider_by_email(rider_data.email)
+    if existing_rider:
         raise HTTPException(
             status_code=400,
             detail="Rider with this email already exists"
@@ -541,9 +681,8 @@ async def rider_register(rider_data: RiderRegister):
     # Hash password
     hashed_password = hash_password(rider_data.password)
     
-    # Create rider record
-    rider = {
-        "id": rider_counter,
+    # Create rider record in database
+    rider = db.create_rider({
         "username": rider_data.username,
         "email": rider_data.email,
         "password": hashed_password,
@@ -553,20 +692,19 @@ async def rider_register(rider_data: RiderRegister):
         "vehicle_number": rider_data.vehicle_number,
         "emergency_contact": rider_data.emergency_contact,
         "area_coverage": rider_data.area_coverage,
-        "status": "offline",  # "available", "busy", "offline"
+        "status": "offline",
         "location": None,
         "rating": 5.0,
         "total_deliveries": 0,
         "successful_deliveries": 0,
         "earnings": 0.0,
-        "created_at": utc_now().isoformat(),
-        "updated_at": utc_now().isoformat(),
+        "commission_rate": 0.8,
+        "delivery_fee": 10.0,
         "is_verified": False,
-        "is_active": True
-    }
-    
-    riders_db[rider_data.email] = rider
-    rider_counter += 1
+        "is_active": True,
+        "is_suspended": False,
+        "document_status": "pending"
+    })
     
     # Create access token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -591,7 +729,7 @@ async def rider_register(rider_data: RiderRegister):
 @app.post("/api/auth/rider-login")
 async def rider_login(rider_data: RiderLogin):
     """Rider login"""
-    rider = riders_db.get(rider_data.email)
+    rider = db.get_rider_by_email(rider_data.email)
     
     if not rider or not verify_password(rider_data.password, rider["password"]):
         raise HTTPException(
@@ -654,6 +792,34 @@ async def create_order(order_data: OrderCreate):
     """Create a new order"""
     global order_counter
     
+    print(f"📦 Creating order with data:")
+    print(f"  - customer_name: {order_data.customer_name}")
+    print(f"  - customer_address: {order_data.customer_address}")
+    print(f"  - customer_location: {order_data.customer_location}")
+    print(f"  - order_total: ₵{order_data.total}")
+    print(f"  - customer_location type: {type(order_data.customer_location)}")
+    
+    # Calculate delivery fee based on distance from gas station to customer
+    delivery_fee = 10.0  # Default delivery fee
+    
+    if order_data.customer_location:
+        # Gas Station/Depot location (GasFill Main Station - Accra, Ghana)
+        station_lat = 5.6037
+        station_lng = -0.1870
+        
+        customer_lat = order_data.customer_location.get("lat")
+        customer_lng = order_data.customer_location.get("lng")
+        
+        if customer_lat and customer_lng:
+            # Calculate distance in meters from gas station to customer
+            distance_meters = calculate_distance(station_lat, station_lng, customer_lat, customer_lng)
+            
+            # Calculate delivery fee based on distance, capped at 50% of order total
+            delivery_fee = calculate_delivery_fee(distance_meters, order_data.total)
+            
+            print(f"📍 Distance from gas station to customer: {distance_meters:.2f} meters ({distance_meters/1000:.2f} km)")
+            print(f"💰 Calculated delivery fee: ₵{delivery_fee} (max 50% of ₵{order_data.total})")
+    
     order = {
         "id": f"ORD-{order_counter}",
         "items": [item.model_dump() for item in order_data.items],
@@ -661,19 +827,203 @@ async def create_order(order_data: OrderCreate):
         "customer_phone": order_data.customer_phone or "",
         "customer_address": order_data.customer_address or "To be provided",
         "customer_email": order_data.customer_email or "guest",
+        "customer_location": json.dumps(order_data.customer_location) if order_data.customer_location else None,
         "delivery_type": order_data.delivery_type or "standard",
         "total": order_data.total,
+        "delivery_fee": delivery_fee,
         "status": "pending",
         "payment_status": "pending",
         "created_at": utc_now().isoformat(),
         "updated_at": utc_now().isoformat()
     }
     
+    print(f"💾 Saving order with customer_location: {order['customer_location']}")
+    
     # Save to database
     result = db.create_order(order)
+    
+    print(f"✅ Order created: {result.get('id')}")
+    print(f"✅ Returned customer_location: {result.get('customer_location')}")
+    print(f"✅ Delivery fee: ₵{result.get('delivery_fee')}")
+    
     order_counter += 1
     
     return result
+
+@app.post("/api/orders/calculate-fee")
+async def calculate_order_delivery_fee(location_data: dict):
+    """Calculate delivery fee based on customer location and order total
+    
+    Expects:
+        location_data: {
+            "lat": float,
+            "lng": float,
+            "order_total": float (optional, for 50% cap)
+        }
+    """
+    try:
+        # Gas Station/Depot location (GasFill Main Station - Accra, Ghana)
+        station_lat = 5.6037
+        station_lng = -0.1870
+        
+        customer_lat = location_data.get("lat")
+        customer_lng = location_data.get("lng")
+        order_total = location_data.get("order_total", 0)  # Get order total for 50% cap
+        
+        if not customer_lat or not customer_lng:
+            return {
+                "delivery_fee": 10.0,
+                "distance_meters": 0,
+                "message": "Using default fee - location not provided"
+            }
+        
+        # Calculate distance in meters from gas station to customer
+        distance_meters = calculate_distance(station_lat, station_lng, customer_lat, customer_lng)
+        
+        # Calculate delivery fee based on distance, capped at 50% of order total
+        delivery_fee = calculate_delivery_fee(distance_meters, order_total)
+        
+        # Calculate what the fee would be without cap for transparency
+        uncapped_fee = calculate_delivery_fee(distance_meters, 0)
+        was_capped = uncapped_fee != delivery_fee
+        
+        print(f"📍 Fee calculation: Distance {distance_meters:.2f}m ({distance_meters/1000:.2f}km)")
+        print(f"💰 Delivery fee: ₵{delivery_fee}" + (f" (capped from ₵{uncapped_fee})" if was_capped else ""))
+        
+        return {
+            "delivery_fee": delivery_fee,
+            "distance_meters": round(distance_meters, 2),
+            "distance_km": round(distance_meters / 1000, 2),
+            "breakdown": {
+                "base_fee": 10.0,
+                "base_distance": 500,
+                "additional_fee": round(delivery_fee - 10.0, 2) if delivery_fee > 10.0 else 0,
+                "uncapped_fee": round(uncapped_fee, 2) if was_capped else None,
+                "capped": was_capped,
+                "max_fee": round(order_total * 0.5, 2) if order_total > 0 else None,
+                "message": f"₵10 base fee for first 500m + ₵2 per 500m (max 50% of order total)"
+            }
+        }
+    except Exception as e:
+        print(f"❌ Error calculating delivery fee: {e}")
+        return {
+            "delivery_fee": 10.0,
+            "distance_meters": 0,
+            "error": str(e)
+        }
+
+@app.get("/api/map/locations")
+async def get_map_locations():
+    """
+    Get gas stations and available riders for map display
+    Returns all gas station locations and currently available riders with their locations
+    """
+    try:
+        # Gas station location (GasFill Main Station - Accra, Ghana)
+        gas_stations = [
+            {
+                "id": "station_1",
+                "name": "GasFill Main Station",
+                "address": "Accra, Ghana",
+                "location": {
+                    "lat": 5.6037,
+                    "lng": -0.1870
+                },
+                "phone": "+233 201 022 153",
+                "hours": "24/7",
+                "services": ["6kg", "12.5kg", "37kg", "Refills", "Exchange"]
+            }
+        ]
+        
+        # Get all available riders with their current locations
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                r.id,
+                r.username,
+                r.phone,
+                r.rating,
+                r.status,
+                r.current_location,
+                r.is_verified,
+                COUNT(DISTINCT o.id) as total_deliveries
+            FROM riders r
+            LEFT JOIN orders o ON o.rider_id = r.id AND o.status = 'delivered'
+            WHERE r.status = 'available' AND r.is_verified = 1
+            GROUP BY r.id
+        """)
+        
+        riders_data = cursor.fetchall()
+        conn.close()
+        
+        available_riders = []
+        for rider in riders_data:
+            rider_id, username, phone, rating, status, current_location, is_verified, total_deliveries = rider
+            
+            # Parse current_location if it exists
+            location = None
+            if current_location:
+                try:
+                    import json
+                    location_data = json.loads(current_location)
+                    location = {
+                        "lat": location_data.get("lat") or location_data.get("latitude"),
+                        "lng": location_data.get("lng") or location_data.get("longitude")
+                    }
+                except:
+                    # If location parsing fails, use station location as fallback
+                    location = {
+                        "lat": 5.6037,
+                        "lng": -0.1870
+                    }
+            else:
+                # Default to station location if no current location
+                location = {
+                    "lat": 5.6037,
+                    "lng": -0.1870
+                }
+            
+            available_riders.append({
+                "id": rider_id,
+                "name": username,
+                "phone": phone,
+                "rating": round(rating, 2) if rating else 4.0,
+                "location": location,
+                "total_deliveries": total_deliveries,
+                "status": "available"
+            })
+        
+        return {
+            "gas_stations": gas_stations,
+            "available_riders": available_riders,
+            "timestamp": utc_now().isoformat()
+        }
+    
+    except Exception as e:
+        print(f"❌ Error getting map locations: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return basic data even if there's an error
+        return {
+            "gas_stations": [
+                {
+                    "id": "station_1",
+                    "name": "GasFill Main Station",
+                    "address": "Accra, Ghana",
+                    "location": {
+                        "lat": 5.6037,
+                        "lng": -0.1870
+                    },
+                    "phone": "+233 201 022 153",
+                    "hours": "24/7",
+                    "services": ["6kg", "12.5kg", "37kg", "Refills", "Exchange"]
+                }
+            ],
+            "available_riders": [],
+            "error": str(e)
+        }
 
 @app.get("/api/orders")
 async def get_orders(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -711,7 +1061,7 @@ async def get_customer_orders(credentials: HTTPAuthorizationCredentials = Depend
         # Add rider info if order has a rider assigned
         rider_id = order.get("rider_id")
         if rider_id:
-            rider = riders_db.get(rider_id)
+            rider = db.get_rider_by_id(rider_id)
             if rider:
                 enriched_order["rider_name"] = rider.get("username")
                 enriched_order["rider_phone"] = rider.get("phone")
@@ -750,7 +1100,7 @@ async def get_order(order_id: str, credentials: HTTPAuthorizationCredentials = D
 
 @app.patch("/api/orders/{order_id}/status")
 async def update_order_status(order_id: str, status_update: OrderStatusUpdate):
-    """Update order status"""
+    """Update order status and send push notification"""
     order = db.update_order_status(order_id, status_update.status)
     
     if not order:
@@ -759,13 +1109,401 @@ async def update_order_status(order_id: str, status_update: OrderStatusUpdate):
             detail="Order not found"
         )
     
+    # Send WebSocket notification about status change
+    try:
+        status_notification = {
+            "type": "order_status_update",
+            "order_id": order_id,
+            "status": status_update.status,
+            "timestamp": utc_now().isoformat()
+        }
+        await manager.broadcast(json.dumps(status_notification))
+        print(f"✅ Broadcasted order status update: {order_id} -> {status_update.status}")
+    except Exception as e:
+        print(f"⚠️ Failed to broadcast status update: {e}")
+    
+    # Send push notification to customer about status change
+    try:
+        # Get customer user ID from email
+        customer = db.get_user_by_email(order["customer_email"])
+        if customer:
+            status_messages = {
+                "pending": "Your order has been received and is being processed",
+                "assigned": "A rider has been assigned to your order",
+                "pickup": "Your rider is on the way to pick up your order",
+                "in_transit": "Your order is on its way",
+                "delivered": "Your order has been delivered",
+                "cancelled": "Your order has been cancelled"
+            }
+            
+            message_body = status_messages.get(
+                status_update.status,
+                f"Order status updated to {status_update.status}"
+            )
+            
+            # Import the send function (will be defined later in the file)
+            if 'send_push_notification' in globals():
+                await send_push_notification(
+                    customer["id"],
+                    f"Order {order_id} Update",
+                    message_body,
+                    {
+                        "type": "order_update",
+                        "order_id": order_id,
+                        "status": status_update.status,
+                        "channel": "orders"
+                    }
+                )
+    except Exception as e:
+        print(f"⚠️  Failed to send push notification: {e}")
+    
     return order
+
+@app.patch("/api/orders/{order_id}/location")
+async def update_order_location(order_id: str, location_data: dict):
+    """Update order delivery location"""
+    order = db.get_order_by_id(order_id)
+    
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail="Order not found"
+        )
+    
+    # Only allow location updates for pending or assigned orders
+    if order["status"] not in ["pending", "assigned"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot update location for order with status: {order['status']}"
+        )
+    
+    # Get customer_location from request
+    customer_location = location_data.get("customer_location")
+    
+    if not customer_location:
+        raise HTTPException(
+            status_code=400,
+            detail="customer_location is required"
+        )
+    
+    print(f"📍 Updating location for order {order_id}: {customer_location}")
+    
+    # Update order in database
+    import sqlite3
+    conn = sqlite3.connect(db.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    # Convert location to JSON string for storage
+    location_json = json.dumps(customer_location)
+    
+    cur.execute(
+        'UPDATE orders SET customer_location=?, updated_at=? WHERE id=?',
+        (location_json, utc_now().isoformat(), order_id)
+    )
+    conn.commit()
+    
+    # Fetch updated order
+    cur.execute('SELECT * FROM orders WHERE id=?', (order_id,))
+    row = cur.fetchone()
+    conn.close()
+    
+    updated_order = db._row_to_order(row) if row else None
+    
+    print(f"✅ Location updated successfully for order {order_id}")
+    
+    return updated_order
 
 @app.delete("/api/orders/{order_id}")
 async def delete_order(order_id: str):
     """Delete an order"""
     db.delete_order(order_id)
     return {"message": "Order deleted successfully"}
+
+@app.get("/api/order/tracking/{order_id}")
+async def get_order_tracking(order_id: str):
+    """Get real-time order tracking information"""
+    order = db.get_order_by_id(order_id)
+    
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail="Order not found"
+        )
+    
+    # Get rider information if assigned
+    rider_info = None
+    rider_location = None
+    if order.get("rider_id"):
+        rider = db.get_rider_by_id(order["rider_id"])
+        if rider:
+            # Parse rider location if it exists
+            rider_loc_data = rider.get("location")
+            if rider_loc_data:
+                if isinstance(rider_loc_data, str):
+                    try:
+                        rider_loc_data = json.loads(rider_loc_data)
+                    except:
+                        rider_loc_data = None
+                
+                if rider_loc_data and "latitude" in rider_loc_data and "longitude" in rider_loc_data:
+                    rider_location = {
+                        "lat": rider_loc_data["latitude"],
+                        "lng": rider_loc_data["longitude"]
+                    }
+            
+            rider_info = {
+                "id": rider["id"],
+                "name": rider["username"],
+                "phone": rider["phone"],
+                "vehicle_type": rider["vehicle_type"],
+                "vehicle_number": rider["vehicle_number"],
+                "rating": rider["rating"],
+                "location": rider.get("location"),
+                "status": rider.get("status", "offline")
+            }
+    
+    # Get status history from order (if exists) or create from current status
+    status_history = order.get("status_history", [
+        {
+            "status": order["status"],
+            "timestamp": order.get("updated_at", order["created_at"]),
+            "note": "Current status"
+        }
+    ])
+    
+    # Parse customer location from order
+    customer_location = None
+    customer_loc_data = order.get("customer_location")
+    
+    print(f"🔍 DEBUG - Raw customer_location from DB: {customer_loc_data}")
+    print(f"🔍 DEBUG - customer_location type: {type(customer_loc_data)}")
+    
+    if customer_loc_data:
+        if isinstance(customer_loc_data, str):
+            try:
+                customer_loc_data = json.loads(customer_loc_data)
+                print(f"🔍 DEBUG - Parsed customer_location: {customer_loc_data}")
+            except Exception as e:
+                print(f"❌ ERROR - Failed to parse customer_location JSON: {e}")
+                customer_loc_data = None
+        
+        # Support both formats: {lat, lng} and {latitude, longitude}
+        if customer_loc_data:
+            if "lat" in customer_loc_data and "lng" in customer_loc_data:
+                customer_location = {
+                    "lat": customer_loc_data["lat"],
+                    "lng": customer_loc_data["lng"]
+                }
+                print(f"✅ Customer location (lat/lng format): {customer_location}")
+            elif "latitude" in customer_loc_data and "longitude" in customer_loc_data:
+                customer_location = {
+                    "lat": customer_loc_data["latitude"],
+                    "lng": customer_loc_data["longitude"]
+                }
+                print(f"✅ Customer location (latitude/longitude format): {customer_location}")
+            else:
+                print(f"⚠️ WARNING - Unknown customer_location format: {customer_loc_data}")
+    else:
+        print(f"⚠️ WARNING - No customer_location in order")
+    
+    # Default pickup location (GasFill Main Depot - Accra, Ghana)
+    # TODO: Make this configurable per outlet/region
+    pickup_location = {
+        "lat": 5.6037,  # Accra, Ghana
+        "lng": -0.1870
+    }
+    pickup_address = "GasFill Main Depot, Accra, Ghana"
+    
+    # Build tracking response
+    tracking_data = {
+        "order_id": order["id"],
+        "status": order["status"],
+        "customer_name": order["customer_name"],
+        "customer_address": order.get("delivery_address") or order.get("customer_address"),
+        "customer_phone": order.get("customer_phone", ""),
+        "delivery_address": order.get("delivery_address") or order.get("customer_address"),
+        "items": order["items"],
+        "total_amount": order.get("total_amount") or order.get("total", 0),
+        "total": order.get("total_amount") or order.get("total", 0),
+        "payment_method": order.get("payment_method", "cash"),
+        "payment_status": order.get("payment_status", "pending"),
+        "created_at": order["created_at"],
+        "updated_at": order.get("updated_at", order["created_at"]),
+        "estimated_delivery": order.get("estimated_delivery"),
+        "estimated_arrival": order.get("estimated_delivery"),
+        "rating": order.get("rating"),
+        "rating_comment": order.get("rating_comment"),
+        "rated_at": order.get("rated_at"),
+        "rider": rider_info,
+        "rider_name": rider_info["name"] if rider_info else None,
+        "rider_phone": rider_info["phone"] if rider_info else None,
+        "rider_rating": rider_info["rating"] if rider_info else None,
+        "rider_location": rider_location,
+        "customer_location": customer_location,
+        "pickup_location": pickup_location,
+        "pickup_address": pickup_address,
+        "status_history": status_history,
+        "tracking_updates": order.get("tracking_updates", [])
+    }
+    
+    return tracking_data
+
+@app.put("/api/rider/location")
+async def update_rider_location(
+    location_data: dict,
+    current_rider: dict = Depends(get_current_rider)
+):
+    """Update rider's current location during delivery"""
+    rider_id = current_rider.get("id") or current_rider.get("rider_id")
+    
+    # Update rider's location in database
+    location = {
+        "latitude": location_data.get("latitude"),
+        "longitude": location_data.get("longitude"),
+        "accuracy": location_data.get("accuracy"),
+        "timestamp": utc_now().isoformat()
+    }
+    
+    # Update rider location using raw SQL
+    import sqlite3
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        UPDATE riders 
+        SET location = ?, updated_at = ?
+        WHERE id = ?
+    """, (json.dumps(location), utc_now().isoformat(), rider_id))
+    conn.commit()
+    conn.close()
+    
+    # If rider has an active order, add tracking update
+    active_order_id = location_data.get("order_id")
+    if active_order_id:
+        order = db.get_order_by_id(active_order_id)
+        if order and order.get("rider_id") == rider_id:
+            # Get existing tracking updates
+            tracking_updates = order.get("tracking_updates", [])
+            if isinstance(tracking_updates, str):
+                try:
+                    tracking_updates = json.loads(tracking_updates)
+                except:
+                    tracking_updates = []
+            
+            # Add new location update
+            tracking_updates.append({
+                "latitude": location["latitude"],
+                "longitude": location["longitude"],
+                "timestamp": location["timestamp"],
+                "accuracy": location.get("accuracy")
+            })
+            
+            # Keep only last 50 updates to avoid bloat
+            if len(tracking_updates) > 50:
+                tracking_updates = tracking_updates[-50:]
+            
+            # Update order with new tracking data
+            conn = sqlite3.connect(db.DB_PATH)
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE orders 
+                SET tracking_updates = ?
+                WHERE id = ?
+            """, (json.dumps(tracking_updates), active_order_id))
+            conn.commit()
+            conn.close()
+    
+    return {
+        "success": True,
+        "location": location,
+        "message": "Location updated successfully"
+    }
+
+@app.post("/api/orders/{order_id}/rating")
+async def rate_order(
+    order_id: str,
+    rating_data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Submit rating for a completed order"""
+    order = db.get_order_by_id(order_id)
+    
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail="Order not found"
+        )
+    
+    # Verify order belongs to user
+    if order.get("customer_email") != current_user.get("email"):
+        raise HTTPException(
+            status_code=403,
+            detail="You can only rate your own orders"
+        )
+    
+    # Verify order is delivered
+    if order.get("status") != "delivered":
+        raise HTTPException(
+            status_code=400,
+            detail="Can only rate delivered orders"
+        )
+    
+    rating = rating_data.get("rating")
+    comment = rating_data.get("comment", "")
+    
+    if not rating or rating < 1 or rating > 5:
+        raise HTTPException(
+            status_code=400,
+            detail="Rating must be between 1 and 5"
+        )
+    
+    # Update order with rating
+    import sqlite3
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    
+    rating_info = {
+        "rating": rating,
+        "comment": comment,
+        "rated_at": utc_now().isoformat(),
+        "rated_by": current_user.get("id")
+    }
+    
+    cur.execute("""
+        UPDATE orders 
+        SET rating = ?, rating_comment = ?, rated_at = ?
+        WHERE id = ?
+    """, (rating, comment, rating_info["rated_at"], order_id))
+    
+    # Update rider's average rating if rider exists
+    if order.get("rider_id"):
+        rider = db.get_rider_by_id(order["rider_id"])
+        if rider:
+            # Get all ratings for this rider
+            cur.execute("""
+                SELECT rating FROM orders 
+                WHERE rider_id = ? AND rating IS NOT NULL
+            """, (order["rider_id"],))
+            
+            ratings = cur.fetchall()
+            if ratings:
+                avg_rating = sum(r[0] for r in ratings) / len(ratings)
+                
+                # Update rider's rating
+                cur.execute("""
+                    UPDATE riders 
+                    SET rating = ?, total_deliveries = ?
+                    WHERE id = ?
+                """, (avg_rating, len(ratings), order["rider_id"]))
+    
+    conn.commit()
+    conn.close()
+    
+    return {
+        "success": True,
+        "rating": rating_info,
+        "message": "Thank you for your rating!"
+    }
 
 @app.get("/api/stats")
 async def get_stats():
@@ -1005,6 +1743,20 @@ async def accept_service(
     current_rider: dict = Depends(get_current_rider)
 ):
     """Rider accepts a service request"""
+    # Check if rider is verified
+    if not current_rider.get("is_verified", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Your account is not verified yet. Please wait for admin approval before accepting services."
+        )
+    
+    # Check if rider is suspended
+    if current_rider.get("is_suspended", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Your account is suspended. Contact support for assistance."
+        )
+    
     # Find the service
     service = next((s for s in services_db if s["id"] == service_id), None)
     if not service:
@@ -1315,10 +2067,11 @@ async def get_service_assignments(current_admin: dict = Depends(get_current_admi
 async def get_admin_dashboard(current_admin: dict = Depends(get_current_admin)):
     """Get admin dashboard overview"""
     all_orders = db.get_all_orders()
-    total_users = len(users_db)
+    all_users = db.get_all_users()
+    total_users = len(all_users)
     total_orders = len(all_orders)
     total_services = len(services_db)
-    active_users = len([u for u in users_db.values() if u.get("is_active", True)])
+    active_users = len([u for u in all_users if u.get("is_active", True)])
     pending_orders = len([o for o in all_orders if o["status"] == "pending"])
     pending_services = len([s for s in services_db if s["status"] == "pending"])
     
@@ -1334,7 +2087,7 @@ async def get_admin_dashboard(current_admin: dict = Depends(get_current_admin)):
         "users": {
             "total": total_users,
             "active": active_users,
-            "new_this_month": len([u for u in users_db.values() 
+            "new_this_month": len([u for u in all_users 
                                  if datetime.fromisoformat(u["created_at"]).month == datetime.now().month])
         },
         "orders": {
@@ -1360,11 +2113,14 @@ async def get_admin_dashboard(current_admin: dict = Depends(get_current_admin)):
 @app.get("/api/admin/users")
 async def get_all_users(current_admin: dict = Depends(get_current_admin)):
     """Get all users for admin dashboard"""
+    users = db.get_all_users()
+    all_orders = db.get_all_orders()
+    
     users_list = []
-    for email, user in users_db.items():
+    for user in users:
         # Count user's orders and services
-        user_orders = len([o for o in orders_db if o.get("customer_email") == email])
-        user_services = len([s for s in services_db if s.get("customer_email") == email])
+        user_orders = len([o for o in all_orders if o.get("customer_email") == user["email"]])
+        user_services = len([s for s in services_db if s.get("customer_email") == user["email"]])
         
         users_list.append({
             "id": user["id"],
@@ -1390,10 +2146,271 @@ async def get_all_services(current_admin: dict = Depends(get_current_admin)):
     """Get all service requests for admin dashboard"""
     return services_db
 
+@app.get("/api/admin/riders")
+async def get_all_riders(current_admin: dict = Depends(get_current_admin)):
+    """Get all riders for admin dashboard"""
+    riders = db.get_all_riders()
+    all_orders = db.get_all_orders()
+    
+    riders_list = []
+    for rider in riders:
+        # Count rider's deliveries
+        rider_deliveries = len([o for o in all_orders if o.get("rider_id") == rider.get("id") and o.get("status") == "delivered"])
+        
+        riders_list.append({
+            "id": rider.get("id"),
+            "email": rider.get("email"),
+            "username": rider.get("username"),
+            "phone": rider.get("phone"),
+            "vehicle_type": rider.get("vehicle_type"),
+            "vehicle_number": rider.get("vehicle_number"),
+            "license_number": rider.get("license_number"),
+            "status": rider.get("status", "available"),
+            "rating": rider.get("rating", 0.0),
+            "total_deliveries": rider_deliveries,
+            "earnings": rider.get("earnings", 0.0),
+            "area_coverage": rider.get("area_coverage"),
+            "is_active": rider.get("is_active", True),
+            "is_verified": rider.get("is_verified", False),
+            "is_suspended": rider.get("is_suspended", False),
+            "document_status": rider.get("document_status", "pending"),
+            "verification_date": rider.get("verification_date"),
+            "suspension_reason": rider.get("suspension_reason"),
+            "created_at": rider.get("created_at"),
+            "license_photo_url": rider.get("license_photo_url"),
+            "vehicle_photo_url": rider.get("vehicle_photo_url")
+        })
+    
+    return riders_list
+
+@app.post("/api/admin/riders/{rider_id}/verify")
+async def verify_rider(rider_id: int, verification_data: dict, current_admin: dict = Depends(get_current_admin)):
+    """Verify rider documents and approve for deliveries"""
+    rider = db.get_rider_by_id(rider_id)
+    
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    
+    is_verified = verification_data.get("is_verified", True)
+    notes = verification_data.get("notes", "")
+    document_status = "approved" if is_verified else "rejected"
+    
+    # Update rider verification status
+    db.update_rider(rider_id, {
+        "is_verified": is_verified,
+        "verification_date": utc_now().isoformat(),
+        "verification_notes": notes,
+        "document_status": document_status
+    })
+    
+    updated_rider = db.get_rider_by_id(rider_id)
+    
+    # Send WebSocket notification to rider
+    try:
+        notification_message = {
+            "type": "verification_status_update",
+            "data": {
+                "is_verified": is_verified,
+                "document_status": document_status,
+                "verification_notes": notes,
+                "verification_date": updated_rider["verification_date"]
+            },
+            "message": f"Your account has been {'approved' if is_verified else 'rejected'}",
+            "title": "Verification Status Update"
+        }
+        await manager.broadcast(json.dumps(notification_message))
+        print(f"✅ Sent verification notification to rider {rider_id}")
+    except Exception as e:
+        print(f"⚠️ Failed to send WebSocket notification: {e}")
+    
+    return {
+        "message": "Rider verification status updated successfully",
+        "rider": {
+            "id": updated_rider["id"],
+            "username": updated_rider["username"],
+            "is_verified": updated_rider["is_verified"],
+            "document_status": updated_rider["document_status"],
+            "verification_date": updated_rider["verification_date"]
+        }
+    }
+
+@app.post("/api/admin/riders/{rider_id}/suspend")
+async def suspend_rider(rider_id: int, suspension_data: dict, current_admin: dict = Depends(get_current_admin)):
+    """Suspend or reactivate rider account"""
+    rider = db.get_rider_by_id(rider_id)
+    
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    
+    is_suspended = suspension_data.get("is_suspended", True)
+    
+    # Update rider suspension status
+    db.update_rider(rider_id, {
+        "is_suspended": is_suspended,
+        "is_active": not is_suspended,
+        "status": "suspended" if is_suspended else "available",
+        "suspension_date": utc_now().isoformat() if is_suspended else None,
+        "suspension_reason": suspension_data.get("reason", "No reason provided") if is_suspended else None
+    })
+    
+    updated_rider = db.get_rider_by_id(rider_id)
+    
+    return {
+        "message": f"Rider {'suspended' if is_suspended else 'reactivated'} successfully",
+        "rider": {
+            "id": updated_rider["id"],
+            "username": updated_rider["username"],
+            "status": updated_rider["status"],
+            "is_suspended": updated_rider.get("is_suspended", False),
+            "suspension_reason": updated_rider.get("suspension_reason")
+        }
+    }
+
+@app.get("/api/admin/riders/{rider_id}/earnings")
+async def get_rider_earnings(rider_id: int, current_admin: dict = Depends(get_current_admin)):
+    """Get detailed rider earnings breakdown"""
+    rider = db.get_rider_by_id(rider_id)
+    
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    
+    # Get all delivered orders for this rider
+    rider_orders = [o for o in orders_db if o.get("rider_id") == rider_id and o.get("status") == "delivered"]
+    
+    # Calculate earnings using actual delivery fees
+    total_deliveries = len(rider_orders)
+    commission_rate = rider.get("commission_rate", 0.8)  # 80% default
+    
+    # Calculate total earnings from actual delivery fees
+    total_earnings = 0
+    for order in rider_orders:
+        order_delivery_fee = order.get("delivery_fee", 10.0)
+        rider_earning = order_delivery_fee * commission_rate
+        total_earnings += rider_earning
+    
+    # Calculate average delivery fee
+    avg_delivery_fee = (sum(o.get("delivery_fee", 10.0) for o in rider_orders) / total_deliveries) if total_deliveries > 0 else 10.0
+    earnings_per_delivery = avg_delivery_fee * commission_rate
+    
+    # Calculate today's earnings
+    today = datetime.now().date()
+    today_deliveries = [o for o in rider_orders if datetime.fromisoformat(o["created_at"]).date() == today]
+    today_earnings = 0
+    for order in today_deliveries:
+        order_delivery_fee = order.get("delivery_fee", 10.0)
+        rider_earning = order_delivery_fee * commission_rate
+        today_earnings += rider_earning
+    
+    # Calculate this week's earnings
+    week_start = datetime.now() - timedelta(days=datetime.now().weekday())
+    week_deliveries = [o for o in rider_orders if datetime.fromisoformat(o["created_at"]) >= week_start]
+    week_earnings = 0
+    for order in week_deliveries:
+        order_delivery_fee = order.get("delivery_fee", 10.0)
+        rider_earning = order_delivery_fee * commission_rate
+        week_earnings += rider_earning
+    
+    # Calculate this month's earnings
+    month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_deliveries = [o for o in rider_orders if datetime.fromisoformat(o["created_at"]) >= month_start]
+    month_earnings = 0
+    for order in month_deliveries:
+        order_delivery_fee = order.get("delivery_fee", 10.0)
+        rider_earning = order_delivery_fee * commission_rate
+        month_earnings += rider_earning
+    
+    return {
+        "rider_id": rider_id,
+        "username": rider["username"],
+        "total_earnings": round(total_earnings, 2),
+        "today_earnings": round(today_earnings, 2),
+        "week_earnings": round(week_earnings, 2),
+        "month_earnings": round(month_earnings, 2),
+        "total_deliveries": total_deliveries,
+        "today_deliveries": len(today_deliveries),
+        "week_deliveries": len(week_deliveries),
+        "month_deliveries": len(month_deliveries),
+        "commission_rate": commission_rate,
+        "avg_delivery_fee": round(avg_delivery_fee, 2),
+        "earnings_per_delivery": round(earnings_per_delivery, 2),
+        "recent_deliveries": [
+            {
+                "order_id": o["id"],
+                "customer_name": o.get("customer_name", "Unknown"),
+                "delivery_address": o.get("delivery_address", "Unknown"),
+                "total": o.get("total", 0),
+                "delivery_fee": o.get("delivery_fee", 10.0),
+                "rider_earnings": round(o.get("delivery_fee", 10.0) * commission_rate, 2),
+                "delivered_at": o.get("updated_at", o.get("created_at"))
+            }
+            for o in rider_orders[-10:]  # Last 10 deliveries
+        ]
+    }
+
+@app.get("/api/admin/riders/{rider_id}/performance")
+async def get_rider_performance(rider_id: int, current_admin: dict = Depends(get_current_admin)):
+    """Get rider performance metrics and ratings"""
+    rider = db.get_rider_by_id(rider_id)
+    
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    
+    # Get all orders (delivered and others)
+    all_orders_db = db.get_all_orders()
+    all_orders = [o for o in all_orders_db if o.get("rider_id") == rider_id]
+    delivered_orders = [o for o in all_orders if o.get("status") == "delivered"]
+    cancelled_orders = [o for o in all_orders if o.get("status") == "cancelled"]
+    
+    total_assigned = len(all_orders)
+    total_delivered = len(delivered_orders)
+    total_cancelled = len(cancelled_orders)
+    completion_rate = (total_delivered / total_assigned * 100) if total_assigned > 0 else 0
+    
+    # Calculate average delivery time (mock data - would need timestamps in real scenario)
+    avg_delivery_time = 25  # minutes (placeholder)
+    
+    # Get ratings from delivered orders (would be stored in order feedback)
+    ratings = [o.get("rider_rating", 0) for o in delivered_orders if o.get("rider_rating")]
+    avg_rating = sum(ratings) / len(ratings) if ratings else rider.get("rating", 0.0)
+    
+    # Performance score (0-100)
+    performance_score = (completion_rate * 0.5) + (avg_rating / 5 * 100 * 0.3) + (min(avg_delivery_time, 30) / 30 * 100 * 0.2)
+    
+    return {
+        "rider_id": rider_id,
+        "username": rider["username"],
+        "overall_rating": avg_rating,
+        "total_ratings": len(ratings),
+        "performance_score": round(performance_score, 2),
+        "completion_rate": round(completion_rate, 2),
+        "total_assigned_orders": total_assigned,
+        "total_delivered_orders": total_delivered,
+        "total_cancelled_orders": total_cancelled,
+        "average_delivery_time_minutes": avg_delivery_time,
+        "on_time_delivery_rate": 85.5,  # Placeholder
+        "customer_satisfaction": round(avg_rating / 5 * 100, 2),
+        "status": rider.get("status", "available"),
+        "is_verified": rider.get("is_verified", False),
+        "is_suspended": rider.get("is_suspended", False),
+        "vehicle_type": rider.get("vehicle_type"),
+        "area_coverage": rider.get("area_coverage"),
+        "member_since": rider.get("created_at"),
+        "recent_feedback": [
+            {
+                "order_id": o["id"],
+                "customer_name": o.get("customer_name", "Anonymous"),
+                "rating": o.get("rider_rating", 0),
+                "comment": o.get("rider_feedback", ""),
+                "date": o.get("updated_at", o.get("created_at"))
+            }
+            for o in delivered_orders[-5:] if o.get("rider_rating")
+        ]
+    }
+
 @app.patch("/api/admin/users/{user_id}/status")
 async def update_user_status(user_id: int, status_data: dict, current_admin: dict = Depends(get_current_admin)):
     """Update user status (activate/deactivate)"""
-    user = next((user for user in users_db.values() if user["id"] == user_id), None)
+    user = db.get_user_by_id(user_id)
     
     if not user:
         raise HTTPException(
@@ -1401,8 +2418,10 @@ async def update_user_status(user_id: int, status_data: dict, current_admin: dic
             detail="User not found"
         )
     
-    user["is_active"] = status_data.get("is_active", True)
-    return {"message": "User status updated successfully", "user": user}
+    db.update_user(user_id, {"is_active": status_data.get("is_active", True)})
+    updated_user = db.get_user_by_id(user_id)
+    
+    return {"message": "User status updated successfully", "user": updated_user}
 
 @app.patch("/api/admin/orders/{order_id}/status")
 async def admin_update_order_status(order_id: str, status_update: OrderStatusUpdate, current_admin: dict = Depends(get_current_admin)):
@@ -1457,6 +2476,37 @@ async def delete_user(user_id: int, current_admin: dict = Depends(get_current_ad
     return {"message": "User deleted successfully"}
 
 # ==========================================
+# PUBLIC RIDER API ENDPOINTS
+# ==========================================
+
+@app.get("/api/riders/{rider_id}")
+async def get_rider_by_id(rider_id: int):
+    """Get public rider information by ID (for order tracking, etc.)"""
+    rider = db.get_rider_by_id(rider_id)
+    
+    if not rider:
+        raise HTTPException(
+            status_code=404,
+            detail="Rider not found"
+        )
+    
+    # Return only public information (no sensitive data like password)
+    return {
+        "id": rider["id"],
+        "username": rider["username"],
+        "phone": rider["phone"],
+        "vehicle_type": rider["vehicle_type"],
+        "vehicle_number": rider["vehicle_number"],
+        "area_coverage": rider["area_coverage"],
+        "status": rider["status"],
+        "location": rider.get("location"),
+        "rating": rider["rating"],
+        "total_deliveries": rider["total_deliveries"],
+        "is_verified": rider["is_verified"],
+        "is_active": rider["is_active"]
+    }
+
+# ==========================================
 # RIDER API ENDPOINTS
 # ==========================================
 
@@ -1473,10 +2523,13 @@ async def get_rider_dashboard(current_rider: dict = Depends(get_current_rider)):
     print(f"👤 Rider Username: {current_rider.get('username')}")
     print(f"👤 Rider Status: {current_rider.get('status')}")
     
-    # Get rider's assigned orders - check both rider_id and assigned_rider_id
+    # Get all orders from database
+    all_orders = db.get_all_orders()
+    
+    # Filter for orders assigned to this rider
     rider_orders = [
-        order for order in orders_db 
-        if order.get("rider_id") == rider_id or order.get("assigned_rider_id") == rider_id
+        order for order in all_orders 
+        if order.get("rider_id") == rider_id
     ]
     
     # Get rider's assigned services
@@ -1486,7 +2539,7 @@ async def get_rider_dashboard(current_rider: dict = Depends(get_current_rider)):
     ]
     
     print(f"\n📦 ORDERS ANALYSIS:")
-    print(f"   Total orders in DB: {len(orders_db)}")
+    print(f"   Total orders in DB: {len(all_orders)}")
     print(f"   Rider's orders found: {len(rider_orders)}")
     if rider_orders:
         print(f"   Order IDs: {[o.get('id') for o in rider_orders]}")
@@ -1504,7 +2557,7 @@ async def get_rider_dashboard(current_rider: dict = Depends(get_current_rider)):
         if datetime.fromisoformat(service["created_at"]).date() == today
     ]
     
-    active_orders = [order for order in rider_orders if order["status"] in ["assigned", "picked_up", "in_transit"]]
+    active_orders = [order for order in rider_orders if order["status"] in ["assigned", "picked_up", "in_transit", "pickup"]]
     active_services = [service for service in rider_services if service["status"] in ["assigned", "in_progress"]]
     
     completed_today_orders = [order for order in today_orders if order["status"] == "delivered"]
@@ -1517,12 +2570,16 @@ async def get_rider_dashboard(current_rider: dict = Depends(get_current_rider)):
     print(f"   Total deliveries: {len([o for o in rider_orders if o['status'] == 'delivered'])}")
     
     # Calculate earnings with 80% commission
-    # Each delivered order earns rider 80% of delivery fee
-    rider_earnings_per_delivery = commission_structure.delivery_fee * commission_structure.rider_commission_rate
+    # Each delivered order earns rider 80% of its actual delivery fee
+    delivered_orders = [order for order in rider_orders if order["status"] == "delivered"]
+    total_delivered_orders = len(delivered_orders)
     
-    # Calculate total earnings from delivered orders
-    total_delivered_orders = len([order for order in rider_orders if order["status"] == "delivered"])
-    total_order_earnings = total_delivered_orders * rider_earnings_per_delivery
+    # Calculate total earnings from delivered orders using actual delivery fees
+    total_order_earnings = 0
+    for order in delivered_orders:
+        order_delivery_fee = order.get("delivery_fee", 10.0)  # Use order's actual delivery fee
+        rider_earning = order_delivery_fee * commission_structure.rider_commission_rate
+        total_order_earnings += rider_earning
     
     # Calculate service earnings
     completed_services = len([s for s in rider_services if s["status"] == "completed"])
@@ -1531,18 +2588,27 @@ async def get_rider_dashboard(current_rider: dict = Depends(get_current_rider)):
     
     total_earnings = total_order_earnings + service_earnings
     
-    # Calculate today's earnings
-    today_delivered = len(completed_today_orders)
-    today_earnings = (today_delivered * rider_earnings_per_delivery) + \
+    # Calculate today's earnings using actual delivery fees
+    today_order_earnings = 0
+    for order in completed_today_orders:
+        order_delivery_fee = order.get("delivery_fee", 10.0)
+        rider_earning = order_delivery_fee * commission_structure.rider_commission_rate
+        today_order_earnings += rider_earning
+    
+    today_earnings = today_order_earnings + \
                     (len(completed_services_today) * (commission_structure.service_pickup_fee + commission_structure.service_refill_fee))
     
-    print(f"\n� EARNINGS:")
+    # Calculate average delivery fee for display
+    avg_delivery_fee = (sum(o.get("delivery_fee", 10.0) for o in delivered_orders) / total_delivered_orders) if total_delivered_orders > 0 else 10.0
+    avg_earnings_per_delivery = avg_delivery_fee * commission_structure.rider_commission_rate
+    
+    print(f"\n💰 EARNINGS:")
     print(f"   Commission rate: {commission_structure.rider_commission_rate * 100}%")
-    print(f"   Delivery fee: ₵{commission_structure.delivery_fee}")
-    print(f"   Earnings per delivery: ₵{rider_earnings_per_delivery}")
+    print(f"   Average delivery fee: ₵{avg_delivery_fee:.2f}")
+    print(f"   Average earnings per delivery: ₵{avg_earnings_per_delivery:.2f}")
     print(f"   Total deliveries: {total_delivered_orders}")
-    print(f"   Total earnings: ₵{total_earnings}")
-    print(f"   Today's earnings: ₵{today_earnings}")
+    print(f"   Total earnings: ₵{total_earnings:.2f}")
+    print(f"   Today's earnings: ₵{today_earnings:.2f}")
     print(f"{'='*60}\n")
     
     # Return in format expected by mobile app
@@ -1555,12 +2621,429 @@ async def get_rider_dashboard(current_rider: dict = Depends(get_current_rider)):
         "completed_today": len(completed_today_orders) + len(completed_services_today),
         "rating": current_rider["rating"],
         "commission_rate": commission_structure.rider_commission_rate,
-        "delivery_fee": commission_structure.delivery_fee,
-        "earnings_per_delivery": round(rider_earnings_per_delivery, 2)
+        "delivery_fee": round(avg_delivery_fee, 2),  # Average delivery fee
+        "earnings_per_delivery": round(avg_earnings_per_delivery, 2),  # Average earnings
+        "is_verified": current_rider.get("is_verified", False),
+        "document_status": current_rider.get("document_status", "pending"),
+        "verification_notes": current_rider.get("verification_notes", ""),
+        "license_photo_url": current_rider.get("license_photo_url"),
+        "vehicle_photo_url": current_rider.get("vehicle_photo_url")
     }
     
     print(f"📤 Returning dashboard data: {dashboard_data}\n")
     return dashboard_data
+
+@app.get("/api/rider/analytics")
+async def get_rider_analytics(
+    period: Optional[str] = "week",
+    current_rider: dict = Depends(get_current_rider)
+):
+    """Get detailed analytics and performance metrics for rider
+    
+    Period options: day, week, month
+    """
+    from datetime import datetime, timedelta, timezone
+    from collections import Counter
+    
+    rider_id = current_rider.get("id") or current_rider.get("rider_id")
+    
+    # Get rider details for commission rate
+    rider = db.get_rider_by_id(rider_id)
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    
+    # Get all orders for this rider
+    all_orders = db.get_all_orders()
+    rider_orders = [o for o in all_orders if o.get("rider_id") == rider_id]
+    
+    # Get commission rate
+    commission_rate = rider.get("commission_rate", 0.8)
+    
+    # Date filtering based on period (make timezone-aware)
+    now = datetime.now(timezone.utc)
+    if period == "day":
+        start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == "month":
+        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:  # week
+        start_date = now - timedelta(days=now.weekday())
+        start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Filter orders by period
+    period_orders = []
+    for o in rider_orders:
+        try:
+            created_at = o.get("created_at")
+            if created_at and isinstance(created_at, str):
+                order_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                # Ensure order_date is timezone-aware
+                if order_date.tzinfo is None:
+                    order_date = order_date.replace(tzinfo=timezone.utc)
+                if order_date >= start_date:
+                    period_orders.append(o)
+        except (ValueError, AttributeError, TypeError):
+            # Skip orders with invalid dates
+            continue
+    
+    # Calculate delivery stats
+    completed_orders = [o for o in rider_orders if o.get("status") == "delivered"]
+    completed_period = [o for o in period_orders if o.get("status") == "delivered"]
+    pending_orders = [o for o in rider_orders if o.get("status") == "pending"]
+    in_progress_orders = [o for o in rider_orders if o.get("status") in ["assigned", "pickup", "in_transit"]]
+    cancelled_orders = [o for o in rider_orders if o.get("status") == "cancelled"]
+    
+    total_deliveries = len(completed_orders)
+    completion_rate = (len(completed_orders) / len(rider_orders) * 100) if rider_orders else 0
+    
+    # Calculate earnings using actual earnings records from earnings_db
+    # Get all earnings for this rider
+    rider_earnings = [e for e in earnings_db if e["rider_id"] == rider_id]
+    
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = start_date if period == "week" else now - timedelta(days=7)
+    week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = start_date if period == "month" else now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    # Calculate earnings from actual earnings records
+    today_earnings = 0
+    week_earnings = 0
+    month_earnings = 0
+    total_earnings = 0
+    
+    for earning in rider_earnings:
+        try:
+            earning_date_str = earning.get("date")
+            if earning_date_str and isinstance(earning_date_str, str):
+                earning_date = datetime.fromisoformat(earning_date_str.replace('Z', '+00:00'))
+                # Ensure timezone-aware
+                if earning_date.tzinfo is None:
+                    earning_date = earning_date.replace(tzinfo=timezone.utc)
+                
+                earning_amount = earning.get("amount", 0)
+                total_earnings += earning_amount
+                
+                if earning_date >= today_start:
+                    today_earnings += earning_amount
+                if earning_date >= week_start:
+                    week_earnings += earning_amount
+                if earning_date >= month_start:
+                    month_earnings += earning_amount
+        except (ValueError, AttributeError, TypeError):
+            continue
+    
+    earnings_summary = {
+        "today": round(today_earnings, 2),
+        "week": round(week_earnings, 2),
+        "month": round(month_earnings, 2),
+        "total": round(total_earnings, 2)
+    }
+    
+    # Earnings trend (daily breakdown from actual earnings records)
+    earnings_trend = {}
+    for earning in rider_earnings:
+        try:
+            earning_date_str = earning.get("date")
+            if earning_date_str and isinstance(earning_date_str, str):
+                earning_date = datetime.fromisoformat(earning_date_str.replace('Z', '+00:00'))
+                # Ensure timezone-aware
+                if earning_date.tzinfo is None:
+                    earning_date = earning_date.replace(tzinfo=timezone.utc)
+                
+                # Only include earnings from the current period
+                if earning_date >= start_date:
+                    date_key = earning_date.strftime("%Y-%m-%d")
+                    if date_key not in earnings_trend:
+                        earnings_trend[date_key] = {"date": date_key, "amount": 0, "deliveries": 0}
+                    
+                    earnings_trend[date_key]["amount"] += round(earning.get("amount", 0), 2)
+                    
+                    # Count deliveries (only for delivery-related earnings)
+                    if earning.get("earning_type") in ["delivery_commission", "delivery_fee"]:
+                        # Check if we already counted this order
+                        order_id = earning.get("order_id")
+                        if order_id and f"order_{order_id}" not in earnings_trend.get(date_key, {}).get("_counted_orders", set()):
+                            if "_counted_orders" not in earnings_trend[date_key]:
+                                earnings_trend[date_key]["_counted_orders"] = set()
+                            earnings_trend[date_key]["_counted_orders"].add(f"order_{order_id}")
+                            earnings_trend[date_key]["deliveries"] += 1
+        except (ValueError, AttributeError, TypeError):
+            continue
+    
+    # Remove the _counted_orders tracking before returning
+    for trend in earnings_trend.values():
+        if "_counted_orders" in trend:
+            del trend["_counted_orders"]
+    
+    earnings_trend_list = sorted(earnings_trend.values(), key=lambda x: x["date"])
+    
+    # Rating distribution
+    ratings = [o.get("rating") for o in completed_orders if o.get("rating")]
+    rating_counts = Counter(ratings)
+    rating_distribution = {
+        "five_star": rating_counts.get(5, 0),
+        "four_star": rating_counts.get(4, 0),
+        "three_star": rating_counts.get(3, 0),
+        "two_star": rating_counts.get(2, 0),
+        "one_star": rating_counts.get(1, 0)
+    }
+    
+    # Peak hours analysis from actual earnings
+    peak_hours = {}
+    for earning in rider_earnings:
+        try:
+            earning_date_str = earning.get("date")
+            if earning_date_str and isinstance(earning_date_str, str):
+                earning_date = datetime.fromisoformat(earning_date_str.replace('Z', '+00:00'))
+                # Ensure timezone-aware
+                if earning_date.tzinfo is None:
+                    earning_date = earning_date.replace(tzinfo=timezone.utc)
+                
+                hour = earning_date.hour
+                if hour not in peak_hours:
+                    peak_hours[hour] = {"hour": hour, "deliveries": 0, "earnings": 0, "_counted_orders": set()}
+                
+                peak_hours[hour]["earnings"] += round(earning.get("amount", 0), 2)
+                
+                # Count deliveries (avoid double counting)
+                if earning.get("earning_type") in ["delivery_commission", "delivery_fee"]:
+                    order_id = earning.get("order_id")
+                    if order_id and f"order_{order_id}" not in peak_hours[hour]["_counted_orders"]:
+                        peak_hours[hour]["_counted_orders"].add(f"order_{order_id}")
+                        peak_hours[hour]["deliveries"] += 1
+        except (ValueError, AttributeError, TypeError):
+            continue
+    
+    # Remove tracking sets and prepare final list
+    for hour_data in peak_hours.values():
+        if "_counted_orders" in hour_data:
+            del hour_data["_counted_orders"]
+    
+    peak_hours_list = sorted(peak_hours.values(), key=lambda x: x["deliveries"], reverse=True)[:10]
+    
+    # Performance metrics
+    avg_rating = sum(ratings) / len(ratings) if ratings else 0
+    on_time_deliveries = [o for o in completed_orders if not o.get("late", False)]
+    on_time_percentage = (len(on_time_deliveries) / len(completed_orders) * 100) if completed_orders else 100
+    
+    # Calculate average earning per delivery from actual earnings
+    avg_earning_per_delivery = round(total_earnings / total_deliveries, 2) if total_deliveries > 0 else 0
+    
+    # Calculate completed deliveries by period for delivery stats
+    today_completed = []
+    week_completed = []
+    month_completed = []
+    
+    for o in completed_orders:
+        try:
+            created_at = o.get("created_at")
+            if created_at and isinstance(created_at, str):
+                order_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                # Ensure timezone-aware
+                if order_date.tzinfo is None:
+                    order_date = order_date.replace(tzinfo=timezone.utc)
+                if order_date >= today_start:
+                    today_completed.append(o)
+                if order_date >= week_start:
+                    week_completed.append(o)
+                if order_date >= month_start:
+                    month_completed.append(o)
+        except (ValueError, AttributeError, TypeError):
+            continue
+    
+    analytics_data = {
+        "period": period,
+        "earnings_summary": earnings_summary,
+        "delivery_stats": {
+            "total_deliveries": total_deliveries,
+            "completed_today": len(today_completed),
+            "completed_week": len(week_completed),
+            "completed_month": len(month_completed),
+            "pending": len(pending_orders),
+            "in_progress": len(in_progress_orders),
+            "cancelled": len(cancelled_orders),
+            "completion_rate": round(completion_rate, 2)
+        },
+        "performance_metrics": {
+            "average_rating": round(avg_rating, 2),
+            "total_ratings": len(ratings),
+            "on_time_percentage": round(on_time_percentage, 2),
+            "average_delivery_time": 30,  # TODO: Calculate from actual data
+            "customer_satisfaction": round(avg_rating / 5 * 100, 2) if avg_rating else 0,
+            "average_earning_per_delivery": avg_earning_per_delivery
+        },
+        "earnings_trend": earnings_trend_list,
+        "rating_distribution": rating_distribution,
+        "peak_hours": peak_hours_list
+    }
+    
+    return analytics_data
+
+# ============= RATING ENDPOINTS =============
+
+@app.post("/api/ratings")
+async def create_rating(
+    rating_data: dict,
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """Submit a rating for an order"""
+    try:
+        # Determine user type and ID
+        user_type = current_user.get("role", "customer")
+        if user_type == "rider":
+            user_id = current_user.get("id") or current_user.get("rider_id")
+            user_name = current_user.get("username", "Rider")
+        else:
+            user_id = current_user.get("id") or current_user.get("user_id")
+            user_name = current_user.get("username", "Customer")
+        
+        # Get order to determine the other party
+        order = db.get_order_by_id(rating_data["order_id"])
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Determine rating type and reviewee
+        if user_type == "rider":
+            # Rider rating customer
+            rating_type = "rider_to_customer"
+            reviewee_type = "customer"
+            reviewee_id = order.get("customer_id") or 0  # TODO: Add customer_id to orders
+            reviewee_name = order.get("customer_name", "Customer")
+        else:
+            # Customer rating rider
+            rating_type = "customer_to_rider"
+            reviewee_type = "rider"
+            reviewee_id = order.get("rider_id")
+            if not reviewee_id:
+                raise HTTPException(status_code=400, detail="Order has no assigned rider")
+            rider = db.get_rider_by_id(reviewee_id)
+            reviewee_name = rider.get("username", "Rider") if rider else "Rider"
+        
+        # Create rating
+        new_rating = db.create_rating({
+            "order_id": rating_data["order_id"],
+            "rating_type": rating_type,
+            "reviewer_id": user_id,
+            "reviewer_name": user_name,
+            "reviewer_type": user_type,
+            "reviewee_id": reviewee_id,
+            "reviewee_name": reviewee_name,
+            "reviewee_type": reviewee_type,
+            "rating": rating_data["rating"],
+            "comment": rating_data.get("comment"),
+            "tags": rating_data.get("tags", [])
+        })
+        
+        return new_rating
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error creating rating: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ratings/order/{order_id}")
+async def get_order_ratings(
+    order_id: str,
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """Get all ratings for an order"""
+    ratings = db.get_ratings_for_order(order_id)
+    return {"ratings": ratings}
+
+@app.get("/api/ratings/user/{user_id}")
+async def get_user_ratings(
+    user_id: int,
+    user_type: str,
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """Get all ratings received by a user"""
+    ratings = db.get_ratings_for_user(user_id, user_type)
+    stats = db.get_rating_stats(user_id, user_type)
+    return {
+        "ratings": ratings,
+        "stats": stats
+    }
+
+@app.get("/api/ratings/stats")
+async def get_my_rating_stats(
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """Get rating stats for current user"""
+    user_type = current_user.get("role", "customer")
+    if user_type == "rider":
+        user_id = current_user.get("id") or current_user.get("rider_id")
+    else:
+        user_id = current_user.get("id") or current_user.get("user_id")
+    
+    stats = db.get_rating_stats(user_id, user_type)
+    return stats
+
+@app.put("/api/ratings/{rating_id}/dispute")
+async def dispute_rating(
+    rating_id: str,
+    dispute_data: dict,
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """Dispute a rating"""
+    try:
+        rating = db.get_rating_by_id(rating_id)
+        if not rating:
+            raise HTTPException(status_code=404, detail="Rating not found")
+        
+        # Check if user is the reviewee
+        user_type = current_user.get("role", "customer")
+        if user_type == "rider":
+            user_id = current_user.get("id") or current_user.get("rider_id")
+        else:
+            user_id = current_user.get("id") or current_user.get("user_id")
+        
+        if rating["reviewee_id"] != user_id or rating["reviewee_type"] != user_type:
+            raise HTTPException(status_code=403, detail="You can only dispute ratings you received")
+        
+        if rating["disputed"]:
+            raise HTTPException(status_code=400, detail="Rating already disputed")
+        
+        updated_rating = db.dispute_rating(rating_id, dispute_data.get("reason", ""))
+        return updated_rating
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error disputing rating: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/ratings/disputes")
+async def get_disputed_ratings(
+    current_admin: dict = Depends(get_current_admin)
+):
+    """Get all disputed ratings (admin only)"""
+    disputed = db.get_disputed_ratings()
+    return {"disputes": disputed}
+
+@app.put("/api/admin/ratings/{rating_id}/resolve")
+async def resolve_rating_dispute(
+    rating_id: str,
+    resolution_data: dict,
+    current_admin: dict = Depends(get_current_admin)
+):
+    """Resolve a rating dispute (admin only)"""
+    try:
+        rating = db.get_rating_by_id(rating_id)
+        if not rating:
+            raise HTTPException(status_code=404, detail="Rating not found")
+        
+        if not rating["disputed"]:
+            raise HTTPException(status_code=400, detail="Rating is not disputed")
+        
+        updated_rating = db.resolve_dispute(
+            rating_id,
+            resolution_data.get("admin_response", ""),
+            resolution_data.get("status", "resolved")
+        )
+        return updated_rating
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error resolving dispute: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/rider/orders")
 async def get_rider_orders(
@@ -1601,6 +3084,15 @@ async def get_rider_orders(
         reverse=True
     )
     
+    # Add default pickup location and delivery fee to all orders
+    for order in rider_orders:
+        if not order.get("pickup_location"):
+            order["pickup_location"] = {"lat": 5.6037, "lng": -0.1870}
+        if not order.get("pickup_address"):
+            order["pickup_address"] = "GasFill Main Depot, Accra, Ghana"
+        if not order.get("delivery_fee"):
+            order["delivery_fee"] = 10.0
+    
     return rider_orders
 
 @app.get("/api/rider/orders/available")
@@ -1613,12 +3105,48 @@ async def get_available_orders(current_rider: dict = Depends(get_current_rider))
         if order.get("status") == "pending" and not order.get("rider_id")
     ]
     
+    # Add default pickup location and delivery fee to all orders
+    for order in available_orders:
+        if not order.get("pickup_location"):
+            order["pickup_location"] = {"lat": 5.6037, "lng": -0.1870}
+        if not order.get("pickup_address"):
+            order["pickup_address"] = "GasFill Main Depot, Accra, Ghana"
+        if not order.get("delivery_fee"):
+            order["delivery_fee"] = 10.0
+    
     # TODO: Filter by rider's area coverage and location proximity
     return available_orders[:20]  # Limit to 20 orders
 
 @app.post("/api/rider/orders/{order_id}/accept")
 async def accept_order(order_id: str, current_rider: dict = Depends(get_current_rider)):
     """Accept an order for delivery - transitions from pending to assigned"""
+    # Check if rider is verified
+    if not current_rider.get("is_verified", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Your account is not verified yet. Please wait for admin approval before accepting orders."
+        )
+    
+    # Check if rider is suspended
+    if current_rider.get("is_suspended", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Your account is suspended. Contact support for assistance."
+        )
+    
+    # Check document status
+    document_status = current_rider.get("document_status", "pending")
+    if document_status == "rejected":
+        raise HTTPException(
+            status_code=403,
+            detail="Your verification documents were rejected. Please update your documents and resubmit."
+        )
+    elif document_status == "pending":
+        raise HTTPException(
+            status_code=403,
+            detail="Your verification is pending. You will be notified once your documents are approved."
+        )
+    
     # Get order from database
     order = db.get_order_by_id(order_id)
     
@@ -1687,6 +3215,249 @@ async def accept_order(order_id: str, current_rider: dict = Depends(get_current_
         "rider_id": rider_id,
         "tracking_info": tracking_info
     }
+
+@app.post("/api/rider/orders/{order_id}/confirm-assignment")
+async def confirm_order_assignment(order_id: str, current_rider: dict = Depends(get_current_rider)):
+    """Confirm acceptance of an auto-assigned order"""
+    # Get order from database
+    order = db.get_order_by_id(order_id)
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Verify order is assigned to this rider
+    rider_id = current_rider.get("id") or current_rider.get("rider_id")
+    if order.get("rider_id") != rider_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Order not assigned to you"
+        )
+    
+    # Verify order is in assigned state
+    if order.get("status") != "assigned":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Order cannot be confirmed (status: {order.get('status')})"
+        )
+    
+    # Accept the assignment (clears timeout)
+    updated_order = db.accept_order_assignment(order_id, rider_id)
+    
+    if not updated_order:
+        raise HTTPException(status_code=500, detail="Failed to confirm assignment")
+    
+    return {
+        "success": True,
+        "message": "Assignment confirmed successfully",
+        "order_id": order_id,
+        "status": "assigned",
+        "rider_id": rider_id,
+        "order": updated_order
+    }
+
+@app.post("/api/rider/orders/{order_id}/reject")
+async def reject_order(order_id: str, current_rider: dict = Depends(get_current_rider)):
+    """Reject an order assignment"""
+    # Get order from database
+    order = db.get_order_by_id(order_id)
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Verify order is assigned to this rider
+    rider_id = current_rider.get("id") or current_rider.get("rider_id")
+    if order.get("rider_id") != rider_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Order not assigned to you"
+        )
+    
+    # Verify order is still in assigned state
+    if order.get("status") != "assigned":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot reject order in {order.get('status')} status"
+        )
+    
+    # Reject the assignment
+    success = db.reject_order_assignment(order_id, rider_id)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to reject order")
+    
+    return {
+        "success": True,
+        "message": "Order rejected successfully",
+        "order_id": order_id,
+        "status": "pending"
+    }
+
+@app.post("/api/orders/{order_id}/assign")
+async def auto_assign_order(
+    order_id: str,
+    customer_location: Dict[str, float] = None  # {lat, lng} or {latitude, longitude}
+):
+    """Auto-assign order to nearest available rider"""
+    try:
+        # Get order from database
+        order = db.get_order_by_id(order_id)
+        
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Check if order is already assigned
+        if order.get("status") != "pending":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Order is not available for assignment (status: {order.get('status')})"
+            )
+        
+        # Get all available riders
+        available_riders = db.get_available_riders()
+        
+        if not available_riders:
+            raise HTTPException(
+                status_code=404,
+                detail="No available riders at the moment"
+            )
+        
+        # Filter riders with location data
+        riders_with_location = [r for r in available_riders if r.get('location')]
+        
+        if not riders_with_location:
+            raise HTTPException(
+                status_code=404,
+                detail="No riders with location data available"
+            )
+        
+        # Calculate distances and find nearest rider
+        import json
+        best_rider = None
+        min_distance = float('inf')
+        estimated_time = 0
+        
+        # Use customer location from order if not provided
+        if not customer_location and order.get('customer_location'):
+            try:
+                customer_location = json.loads(order['customer_location']) if isinstance(order['customer_location'], str) else order['customer_location']
+            except Exception as e:
+                print(f"Error parsing customer location: {e}")
+                pass
+        
+        if customer_location:
+            for rider in riders_with_location:
+                try:
+                    rider_loc = json.loads(rider['location']) if isinstance(rider['location'], str) else rider['location']
+                    
+                    # Simple distance calculation (Haversine)
+                    from math import radians, cos, sin, asin, sqrt
+                    
+                    # Support both formats: {lat, lng} and {latitude, longitude}
+                    cust_lat = customer_location.get('lat') or customer_location.get('latitude')
+                    cust_lng = customer_location.get('lng') or customer_location.get('longitude')
+                    
+                    if not cust_lat or not cust_lng:
+                        print(f"Invalid customer location format: {customer_location}")
+                        continue
+                    
+                    lat1, lon1 = radians(cust_lat), radians(cust_lng)
+                    lat2, lon2 = radians(rider_loc['lat']), radians(rider_loc['lng'])
+                    
+                    dlat = lat2 - lat1
+                    dlon = lon2 - lon1
+                    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+                    c = 2 * asin(sqrt(a))
+                    distance = 6371 * c  # Radius of earth in km
+                    
+                    if distance < min_distance:
+                        min_distance = distance
+                        best_rider = rider
+                        # Estimate time: assume 30 km/h average speed
+                        estimated_time = int((distance / 30) * 60)  # minutes
+                        
+                except Exception as e:
+                    print(f"Error calculating distance for rider {rider['id']}: {e}")
+                    continue
+        else:
+            # No location data, just pick the highest rated available rider
+            best_rider = max(riders_with_location, key=lambda r: (r.get('rating', 0), r.get('total_deliveries', 0)))
+            min_distance = 0
+            estimated_time = 15  # Default estimate
+        
+        if not best_rider:
+            raise HTTPException(
+                status_code=404,
+                detail="Could not find suitable rider"
+            )
+        
+        # Assign order to rider
+        assigned_order = db.assign_order_to_rider(
+            order_id=order_id,
+            rider_id=best_rider['id'],
+            distance_km=round(min_distance, 2) if min_distance != float('inf') else None,
+            estimated_time_minutes=estimated_time,
+            expires_in_seconds=30
+        )
+        
+        if not assigned_order:
+            raise HTTPException(status_code=500, detail="Failed to assign order")
+        
+        return {
+            "success": True,
+            "message": "Order assigned successfully",
+            "order_id": order_id,
+            "rider": {
+                "id": best_rider['id'],
+                "username": best_rider['username'],
+                "phone": best_rider['phone'],
+                "vehicle_type": best_rider['vehicle_type'],
+                "rating": best_rider['rating']
+            },
+            "distance_km": round(min_distance, 2) if min_distance != float('inf') else None,
+            "estimated_time_minutes": estimated_time,
+            "assignment_expires_at": assigned_order.get('assignment_expires_at')
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in auto_assign_order: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    
+    if not assigned_order:
+        raise HTTPException(status_code=500, detail="Failed to assign order")
+    
+    return {
+        "success": True,
+        "message": "Order assigned successfully",
+        "order_id": order_id,
+        "rider": {
+            "id": best_rider['id'],
+            "username": best_rider['username'],
+            "phone": best_rider['phone'],
+            "vehicle_type": best_rider['vehicle_type'],
+            "rating": best_rider['rating']
+        },
+        "distance_km": round(min_distance, 2) if min_distance != float('inf') else None,
+        "estimated_time_minutes": estimated_time,
+        "assignment_expires_at": assigned_order.get('assignment_expires_at')
+    }
+
+@app.get("/api/rider/orders/pending")
+async def get_pending_assignments(current_rider: dict = Depends(get_current_rider)):
+    """Get orders pending acceptance by this rider"""
+    rider_id = current_rider.get("id") or current_rider.get("rider_id")
+    
+    all_orders = db.get_all_orders()
+    pending = [
+        order for order in all_orders
+        if order.get("rider_id") == rider_id 
+        and order.get("status") == "assigned"
+        and order.get("assignment_expires_at")
+    ]
+    
+    return pending
 
 @app.put("/api/rider/orders/{order_id}/status")
 async def update_delivery_status(
@@ -1814,7 +3585,8 @@ async def update_delivery_status(
             earning_type="delivery_fee",
             amount=commission_data["delivery_fee"],
             order_id=order["id"],
-            description=f"Delivery fee for order {order['id']} ({delivery_type})"
+            description=f"Delivery fee for order {order['id']} ({delivery_type})",
+            gross_amount=order["total"]
         )
         
         # Update rider stats
@@ -1856,16 +3628,25 @@ async def update_rider_status(
     current_rider: dict = Depends(get_current_rider)
 ):
     """Update rider availability status"""
-    current_rider["status"] = status_update.status
-    current_rider["updated_at"] = utc_now().isoformat()
-    
+    # Convert location dict to JSON string if provided
+    location_str = None
     if status_update.location:
-        current_rider["location"] = status_update.location
+        location_str = json.dumps(status_update.location)
+    
+    # Update database
+    updated_rider = db.update_rider_status(
+        current_rider["id"], 
+        status_update.status,
+        location_str
+    )
+    
+    if not updated_rider:
+        raise HTTPException(status_code=500, detail="Failed to update status")
     
     return {
         "message": "Status updated successfully",
-        "status": current_rider["status"],
-        "location": current_rider.get("location")
+        "status": updated_rider["status"],
+        "location": updated_rider.get("location")
     }
 
 @app.get("/api/rider/profile")
@@ -2086,12 +3867,36 @@ async def get_detailed_earnings(current_rider: dict = Depends(get_current_rider)
         if order.get("assigned_rider_id") == current_rider["id"] and order["status"] == "delivered"
     ]
     
+    # Calculate pending and paid earnings
+    # Pending earnings = sum of all earnings_db records minus approved payments
+    total_actual_earnings = sum(e["amount"] for e in rider_earnings)
+    paid_out_amount = sum(p["amount"] for p in pending_payments_db 
+                         if p["rider_id"] == current_rider["id"] and p["status"] == "approved")
+    pending_earnings = total_actual_earnings - paid_out_amount
+    
+    # Add status to each earning for frontend
+    earnings_with_status = []
+    for earning in rider_earnings:
+        earning_copy = earning.copy()
+        # Check if this earning has been paid
+        earning_copy["status"] = "pending"  # Default to pending
+        for payment in pending_payments_db:
+            if (payment["rider_id"] == current_rider["id"] and 
+                payment["status"] == "approved" and
+                datetime.fromisoformat(earning["date"]) <= datetime.fromisoformat(payment.get("updated_at", payment["created_at"]))):
+                earning_copy["status"] = "paid"
+                break
+        earnings_with_status.append(earning_copy)
+    
     return {
-        "total_earnings": current_rider["earnings"],
+        "total_earnings": total_actual_earnings,
         "today_earnings": today_earnings,
         "week_earnings": week_earnings,
         "month_earnings": month_earnings,
+        "pending_earnings": pending_earnings,
+        "paid_earnings": paid_out_amount,
         "earnings_by_type": earnings_by_type,
+        "earnings_breakdown": sorted(earnings_with_status, key=lambda x: x["date"], reverse=True),
         "completed_deliveries": len(completed_orders),
         "commission_structure": {
             "delivery_base_rate": commission_structure.delivery_base_rate,
@@ -2122,30 +3927,250 @@ async def get_earnings_history(
         "has_more": len(sorted_earnings) > offset + limit
     }
 
+@app.get("/api/rider/payment-requests")
+async def get_rider_payment_requests(
+    current_rider: dict = Depends(get_current_rider),
+    status_filter: Optional[str] = None
+):
+    """Get rider's payment requests history"""
+    # Get all payment requests for this rider
+    rider_requests = [
+        p for p in pending_payments_db 
+        if p["rider_id"] == current_rider["id"]
+    ]
+    
+    # Filter by status if provided
+    if status_filter:
+        rider_requests = [
+            p for p in rider_requests 
+            if p["status"] == status_filter
+        ]
+    
+    # Sort by creation date (newest first)
+    rider_requests.sort(key=lambda x: x.get("requested_at", ""), reverse=True)
+    
+    return {
+        "requests": rider_requests,
+        "total": len(rider_requests),
+        "pending_count": len([p for p in rider_requests if p["status"] == "pending"]),
+        "approved_count": len([p for p in rider_requests if p["status"] == "approved"]),
+        "rejected_count": len([p for p in rider_requests if p["status"] == "rejected"])
+    }
+
+@app.get("/api/rider/payout-history")
+async def get_rider_payout_history(
+    current_rider: dict = Depends(get_current_rider)
+):
+    """Get rider's payout history (approved payment requests)"""
+    # Get approved payment requests for this rider
+    approved_requests = [
+        p for p in pending_payments_db 
+        if p["rider_id"] == current_rider["id"] and p["status"] == "approved"
+    ]
+    
+    # Get entries from payment history
+    history_entries = [
+        p for p in payment_history_db 
+        if p.get("rider_id") == current_rider["id"]
+    ]
+    
+    # Combine both sources
+    payout_history = []
+    
+    # Add approved requests
+    for req in approved_requests:
+        payout_history.append({
+            "id": req["id"],
+            "amount": req["amount"],
+            "payment_method": req["payment_method"],
+            "payment_reference": req.get("payment_reference", "N/A"),
+            "requested_date": req["created_at"],
+            "processed_date": req.get("processed_at", req.get("updated_at", req["created_at"])),
+            "status": "approved",
+            "source": "payment_request"
+        })
+    
+    # Add payment history entries
+    for entry in history_entries:
+        payout_history.append({
+            "id": entry.get("id", entry.get("request_id")),
+            "amount": entry["amount"],
+            "payment_method": entry.get("payment_method", "N/A"),
+            "payment_reference": entry.get("payment_reference", "N/A"),
+            "requested_date": entry.get("created_at", entry.get("date")),
+            "processed_date": entry.get("processed_at", entry.get("date")),
+            "status": entry.get("status", "completed"),
+            "source": "payment_history"
+        })
+    
+    # Sort by processed_date descending (newest first)
+    payout_history.sort(key=lambda x: x["processed_date"], reverse=True)
+    
+    # Calculate total paid out
+    total_paid = sum(p["amount"] for p in payout_history)
+    
+    return {
+        "history": payout_history,
+        "total_paid": total_paid,
+        "count": len(payout_history)
+    }
+
+@app.put("/api/rider/payment-request/{request_id}")
+async def update_payment_request(
+    request_id: int,
+    payment_update: PaymentRequest,
+    current_rider: dict = Depends(get_current_rider)
+):
+    """Update a pending payment request (modify amount or payment method)"""
+    # Find the payment request
+    payment_request = None
+    for p in pending_payments_db:
+        if p["id"] == request_id and p["rider_id"] == current_rider["id"]:
+            payment_request = p
+            break
+    
+    if not payment_request:
+        raise HTTPException(status_code=404, detail="Payment request not found")
+    
+    # Only allow updating pending requests
+    if payment_request["status"] != "pending":
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot update {payment_request['status']} payment request. Only pending requests can be modified."
+        )
+    
+    # Calculate available pending earnings
+    paid_out_amount = sum(p["amount"] for p in pending_payments_db 
+                         if p["rider_id"] == current_rider["id"] and p["status"] == "approved")
+    
+    # Subtract other pending request amounts (excluding this one)
+    other_pending_amount = sum(p["amount"] for p in pending_payments_db 
+                              if p["rider_id"] == current_rider["id"] 
+                              and p["status"] == "pending" 
+                              and p["id"] != request_id)
+    
+    pending_earnings = current_rider["earnings"] - paid_out_amount - other_pending_amount
+    
+    # Validate new amount
+    if payment_update.amount < 100:
+        raise HTTPException(
+            status_code=400, 
+            detail="Minimum payout amount is ₵100.00"
+        )
+    
+    if payment_update.amount > pending_earnings:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Insufficient pending earnings. Available: ₵{pending_earnings:.2f}"
+        )
+    
+    # Update the payment request
+    payment_request["amount"] = payment_update.amount
+    payment_request["payment_method"] = payment_update.payment_method
+    if payment_update.recipient_details:
+        payment_request["recipient_details"] = payment_update.recipient_details
+    payment_request["updated_at"] = utc_now().isoformat()
+    
+    return {
+        "message": "Payment request updated successfully",
+        "request": payment_request
+    }
+
+@app.delete("/api/rider/payment-request/{request_id}")
+async def cancel_payment_request(
+    request_id: int,
+    current_rider: dict = Depends(get_current_rider)
+):
+    """Cancel a pending payment request"""
+    # Find the payment request
+    payment_request = None
+    request_index = None
+    for i, p in enumerate(pending_payments_db):
+        if p["id"] == request_id and p["rider_id"] == current_rider["id"]:
+            payment_request = p
+            request_index = i
+            break
+    
+    if not payment_request:
+        raise HTTPException(status_code=404, detail="Payment request not found")
+    
+    # Only allow cancelling pending requests
+    if payment_request["status"] != "pending":
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot cancel {payment_request['status']} payment request. Only pending requests can be cancelled."
+        )
+    
+    # Remove the payment request
+    pending_payments_db.pop(request_index)
+    
+    return {
+        "message": "Payment request cancelled successfully",
+        "request_id": request_id
+    }
+
 @app.post("/api/rider/payment-request")
 async def request_payment(
     payment_request: PaymentRequest,
     current_rider: dict = Depends(get_current_rider)
 ):
     """Request payment of earnings"""
-    if payment_request.rider_id != current_rider["id"]:
+    # Use current rider's ID if not provided
+    rider_id = payment_request.rider_id or current_rider["id"]
+    
+    if rider_id != current_rider["id"]:
         raise HTTPException(status_code=403, detail="Can only request payment for your own earnings")
     
-    # Check if rider has sufficient earnings
-    if current_rider["earnings"] < payment_request.amount:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Insufficient earnings. Available: ₵{current_rider['earnings']:.2f}"
-        )
+    # Calculate pending earnings (total - already paid out)
+    paid_out_amount = sum(p["amount"] for p in pending_payments_db 
+                         if p["rider_id"] == current_rider["id"] and p["status"] == "approved")
     
-    # Check for pending payment requests
+    # Check for existing pending payment requests
     pending_requests = [p for p in pending_payments_db 
                        if p["rider_id"] == current_rider["id"] and p["status"] == "pending"]
+    
     if pending_requests:
+        # Return the existing pending request details
+        existing_request = pending_requests[0]
         raise HTTPException(
             status_code=400, 
-            detail="You already have a pending payment request"
+            detail={
+                "error": "duplicate_request",
+                "message": f"You already have a pending payment request of ₵{existing_request['amount']:.2f}",
+                "existing_request": {
+                    "id": existing_request["id"],
+                    "amount": existing_request["amount"],
+                    "requested_at": existing_request["requested_at"],
+                    "payment_method": existing_request.get("payment_method", "mobile_money")
+                },
+                "suggestion": "You can update or cancel the existing request before creating a new one"
+            }
         )
+    
+    # Calculate available earnings (subtract other pending requests)
+    pending_request_amount = sum(p["amount"] for p in pending_requests)
+    pending_earnings = current_rider["earnings"] - paid_out_amount - pending_request_amount
+    
+    # Check if rider has sufficient pending earnings
+    if pending_earnings < payment_request.amount:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Insufficient pending earnings. Available: ₵{pending_earnings:.2f}"
+        )
+    
+    # Minimum payout amount
+    if payment_request.amount < 100:
+        raise HTTPException(
+            status_code=400, 
+            detail="Minimum payout amount is ₵100.00"
+        )
+    
+    # Use rider's details if recipient_details not provided
+    recipient_details = payment_request.recipient_details or {
+        "name": current_rider["username"],
+        "phone": current_rider.get("phone", ""),
+        "email": current_rider["email"]
+    }
     
     # Create payment request
     payment_entry = {
@@ -2155,9 +4180,11 @@ async def request_payment(
         "rider_email": current_rider["email"],
         "amount": payment_request.amount,
         "payment_method": payment_request.payment_method,
-        "recipient_details": payment_request.recipient_details,
+        "recipient_details": recipient_details,
         "status": "pending",
         "requested_at": utc_now().isoformat(),
+        "created_at": utc_now().isoformat(),
+        "updated_at": utc_now().isoformat(),
         "processed_at": None,
         "processed_by": None
     }
@@ -2169,6 +4196,242 @@ async def request_payment(
         "request_id": payment_entry["id"],
         "amount": payment_request.amount,
         "estimated_processing": "1-2 business days"
+    }
+
+# ============================================================================
+# RIDER PROFILE & SETTINGS ENDPOINTS
+# ============================================================================
+
+@app.put("/api/rider/profile")
+async def update_rider_profile(
+    profile_update: dict,
+    current_rider: dict = Depends(get_current_rider)
+):
+    """Update rider profile information"""
+    # Get rider email (the key for riders_db)
+    rider_email = current_rider.get("email")
+    
+    # Get rider from database using email as key
+    if rider_email not in riders_db:
+        raise HTTPException(status_code=404, detail="Rider not found in database")
+    
+    rider = riders_db[rider_email]
+    
+    # Update allowed fields (map area to area_coverage)
+    field_mapping = {
+        "phone": "phone",
+        "emergency_contact": "emergency_contact",
+        "vehicle_number": "vehicle_number",
+        "area": "area_coverage",  # Map area to area_coverage
+        "area_coverage": "area_coverage"  # Also accept area_coverage directly
+    }
+    
+    for field, db_field in field_mapping.items():
+        if field in profile_update:
+            rider[db_field] = profile_update[field]
+    
+    # Update timestamp
+    rider["updated_at"] = utc_now().isoformat()
+    
+    return {
+        "message": "Profile updated successfully",
+        "rider": {
+            "id": rider["id"],
+            "username": rider["username"],
+            "email": rider["email"],
+            "phone": rider.get("phone", ""),
+            "emergency_contact": rider.get("emergency_contact", ""),
+            "vehicle_number": rider.get("vehicle_number", ""),
+            "area_coverage": rider.get("area_coverage", ""),
+            "license_number": rider.get("license_number", ""),
+            "vehicle_type": rider.get("vehicle_type", "motorcycle"),
+        }
+    }
+
+@app.post("/api/rider/change-password")
+async def change_rider_password(
+    password_data: dict,
+    current_rider: dict = Depends(get_current_rider)
+):
+    """Change rider password"""
+    rider_id = current_rider.get("id") or current_rider.get("rider_id")
+    
+    # Get rider from database
+    if rider_id not in riders_db:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    
+    rider = riders_db[rider_id]
+    
+    # Verify current password
+    current_password = password_data.get("current_password")
+    new_password = password_data.get("new_password")
+    
+    if not current_password or not new_password:
+        raise HTTPException(status_code=400, detail="Current and new passwords are required")
+    
+    # In production, you should verify the current password with proper hashing
+    # For now, we'll just update the password (assuming it's already hashed on the client)
+    if rider.get("password") != current_password:
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    
+    # Update password
+    rider["password"] = new_password
+    rider["updated_at"] = utc_now().isoformat()
+    
+    return {
+        "message": "Password changed successfully"
+    }
+
+@app.post("/api/rider/upload-documents")
+async def upload_rider_documents(
+    license_photo: Optional[UploadFile] = File(None),
+    vehicle_photo: Optional[UploadFile] = File(None),
+    current_rider: dict = Depends(get_current_rider)
+):
+    """Upload rider verification documents (license and vehicle photos)"""
+    rider_id = current_rider.get("id") or current_rider.get("rider_id")
+    
+    if not rider_id:
+        raise HTTPException(status_code=401, detail="Rider ID not found")
+    
+    # Get rider from database
+    rider = db.get_rider_by_id(rider_id)
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    
+    # Create uploads directory if it doesn't exist
+    upload_dir = Path(__file__).parent / "uploads" / "documents"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    
+    uploaded_files = {}
+    
+    # Upload license photo
+    if license_photo:
+        # Validate file type
+        allowed_types = ["image/jpeg", "image/png", "image/jpg", "image/webp"]
+        if license_photo.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid license photo format. Allowed: {', '.join(allowed_types)}"
+            )
+        
+        # Generate unique filename
+        file_ext = license_photo.filename.split('.')[-1]
+        unique_filename = f"license_{rider_id}_{int(datetime.now(UTC).timestamp())}.{file_ext}"
+        file_path = upload_dir / unique_filename
+        
+        # Save file
+        with open(file_path, "wb") as f:
+            content = await license_photo.read()
+            f.write(content)
+        
+        license_url = f"/uploads/documents/{unique_filename}"
+        uploaded_files["license_photo"] = license_url
+    
+    # Upload vehicle photo
+    if vehicle_photo:
+        # Validate file type
+        allowed_types = ["image/jpeg", "image/png", "image/jpg", "image/webp"]
+        if vehicle_photo.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid vehicle photo format. Allowed: {', '.join(allowed_types)}"
+            )
+        
+        # Generate unique filename
+        file_ext = vehicle_photo.filename.split('.')[-1]
+        unique_filename = f"vehicle_{rider_id}_{int(datetime.now(UTC).timestamp())}.{file_ext}"
+        file_path = upload_dir / unique_filename
+        
+        # Save file
+        with open(file_path, "wb") as f:
+            content = await vehicle_photo.read()
+            f.write(content)
+        
+        vehicle_url = f"/uploads/documents/{unique_filename}"
+        uploaded_files["vehicle_photo"] = vehicle_url
+    
+    if not uploaded_files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+    
+    # Update rider record with document paths
+    update_data = {}
+    if "license_photo" in uploaded_files:
+        update_data["license_photo_url"] = uploaded_files["license_photo"]
+    if "vehicle_photo" in uploaded_files:
+        update_data["vehicle_photo_url"] = uploaded_files["vehicle_photo"]
+    
+    # Set document status to pending if uploading new documents
+    update_data["document_status"] = "pending"
+    update_data["verification_notes"] = ""  # Clear any previous rejection notes
+    
+    # Update rider in database
+    updated_rider = db.update_rider(rider_id, update_data)
+    
+    if not updated_rider:
+        raise HTTPException(status_code=500, detail="Failed to update rider documents")
+    
+    return {
+        "message": "Documents uploaded successfully",
+        "uploaded_files": uploaded_files,
+        "document_status": "pending"
+    }
+
+
+# ============================================================================
+# HELP & SUPPORT ENDPOINTS
+# ============================================================================
+
+@app.get("/api/help/faq")
+async def get_faq():
+    """Get frequently asked questions"""
+    # In production, this would come from a database
+    faqs = [
+        {
+            "id": "1",
+            "category": "Getting Started",
+            "question": "How do I start receiving orders?",
+            "answer": "Toggle the 'Available' switch on your dashboard to start receiving order notifications. Make sure your location services are enabled.",
+        },
+        {
+            "id": "2",
+            "category": "Earnings",
+            "question": "How are my earnings calculated?",
+            "answer": "You earn 15% commission on order value plus a ₵10.00 delivery fee per order. Bonuses are awarded for completing 5+ deliveries daily (₵50) or 25+ weekly (₵200).",
+        },
+        # Add more FAQs as needed
+    ]
+    
+    return {"faqs": faqs}
+
+@app.post("/api/support/ticket")
+async def create_support_ticket(
+    ticket_data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a support ticket"""
+    user_id = current_user.get("id")
+    user_type = current_user.get("role", "customer")
+    
+    # In production, save to database
+    ticket = {
+        "id": len(support_tickets_db) + 1,
+        "user_id": user_id,
+        "user_type": user_type,
+        "subject": ticket_data.get("subject", "Support Request"),
+        "message": ticket_data.get("message", ""),
+        "status": "open",
+        "priority": ticket_data.get("priority", "normal"),
+        "created_at": utc_now().isoformat(),
+        "updated_at": utc_now().isoformat(),
+    }
+    
+    support_tickets_db.append(ticket)
+    
+    return {
+        "message": "Support ticket created successfully",
+        "ticket_id": ticket["id"],
+        "estimated_response": "24 hours"
     }
 
 @app.get("/api/admin/earnings/overview")
@@ -2223,6 +4486,10 @@ async def get_payment_requests(
     """Get all payment requests for admin review"""
     requests = pending_payments_db
     
+    print(f"📋 GET payment requests - DB has {len(requests)} requests")
+    for req in requests:
+        print(f"   - ID: {req['id']}, Rider: {req['rider_id']}, Amount: ₵{req['amount']}, Status: {req['status']}")
+    
     if status:
         requests = [r for r in requests if r["status"] == status]
     
@@ -2231,64 +4498,100 @@ async def get_payment_requests(
 @app.post("/api/admin/payment-requests/{request_id}/process")
 async def process_payment_request(
     request_id: int,
-    action: str,  # "approve" or "reject"
+    process_request: PaymentProcessRequest,
     current_admin: dict = Depends(get_current_admin)
 ):
     """Process a payment request (approve or reject)"""
-    # Find the payment request
-    payment_request = next((p for p in pending_payments_db if p["id"] == request_id), None)
-    if not payment_request:
-        raise HTTPException(status_code=404, detail="Payment request not found")
-    
-    if payment_request["status"] != "pending":
-        raise HTTPException(status_code=400, detail="Payment request already processed")
-    
-    if action == "approve":
-        # Find the rider and deduct earnings
-        rider = next((r for r in riders_db.values() if r["id"] == payment_request["rider_id"]), None)
-        if not rider:
-            raise HTTPException(status_code=404, detail="Rider not found")
-        
-        if rider["earnings"] < payment_request["amount"]:
-            raise HTTPException(status_code=400, detail="Rider has insufficient earnings")
-        
-        # Deduct earnings
-        rider["earnings"] -= payment_request["amount"]
-        
-        # Record payment
-        payment_entry = {
-            "id": len(payment_history_db) + 1,
-            "rider_id": payment_request["rider_id"],
-            "amount": payment_request["amount"],
-            "payment_method": payment_request["payment_method"],
-            "processed_by": current_admin["id"],
-            "processed_at": utc_now().isoformat(),
-            "reference": f"PAY-{request_id}-{utc_now().strftime('%Y%m%d')}"
-        }
-        payment_history_db.append(payment_entry)
-        
-        # Update request status
-        payment_request["status"] = "approved"
-        payment_request["processed_at"] = utc_now().isoformat()
-        payment_request["processed_by"] = current_admin["id"]
-        
-        return {
-            "message": "Payment approved and processed",
-            "reference": payment_entry["reference"],
-            "amount": payment_request["amount"]
-        }
-        
-    elif action == "reject":
-        payment_request["status"] = "rejected"
-        payment_request["processed_at"] = utc_now().isoformat()
-        payment_request["processed_by"] = current_admin["id"]
-        
-        return {
-            "message": "Payment request rejected"
-        }
-    
-    else:
-        raise HTTPException(status_code=400, detail="Invalid action. Use 'approve' or 'reject'")
+    # Wrap the handler logic in try/except so we log full traceback for debugging
+    try:
+        print(f"🔍 Processing payment request {request_id} (type: {type(request_id)})")
+        print(f"📦 Received action: {process_request.action}")
+        print(f"💾 Pending payments DB: {pending_payments_db}")
+
+        # Find the payment request
+        payment_request = next((p for p in pending_payments_db if p["id"] == request_id), None)
+        if not payment_request:
+            print(f"❌ Payment request {request_id} not found!")
+            print(f"   Available IDs in DB: {[p['id'] for p in pending_payments_db]}")
+            print(f"   ID types in DB: {[type(p['id']) for p in pending_payments_db]}")
+            raise HTTPException(status_code=404, detail="Payment request not found")
+
+        if payment_request["status"] != "pending":
+            raise HTTPException(status_code=400, detail="Payment request already processed")
+
+        action = process_request.action
+
+        if action == "approve":
+            # Find the rider and deduct earnings
+            rider_email = payment_request.get("rider_email")
+            print(f"🔍 Looking for rider with email: {rider_email}")
+            
+            if not rider_email:
+                print(f"❌ No rider_email in payment request!")
+                raise HTTPException(status_code=404, detail="Rider email not found in payment request")
+            
+            # Get rider from database
+            rider = db.get_rider_by_email(rider_email)
+            if not rider:
+                print(f"❌ Rider email '{rider_email}' not found in database!")
+                raise HTTPException(status_code=404, detail="Rider not found")
+            
+            print(f"✅ Found rider: {rider.get('name', 'Unknown')}, earnings: ₵{rider.get('earnings', 0)}")
+
+            if rider["earnings"] < payment_request["amount"]:
+                raise HTTPException(status_code=400, detail="Rider has insufficient earnings")
+
+            # Deduct earnings and update rider in database
+            new_earnings = rider["earnings"] - payment_request["amount"]
+            db.update_rider(rider["id"], {
+                "earnings": new_earnings,
+                "updated_at": utc_now().isoformat()
+            })
+            print(f"💰 Deducted ₵{payment_request['amount']} from rider earnings. New balance: ₵{new_earnings}")
+
+            # Record payment
+            payment_entry = {
+                "id": len(payment_history_db) + 1,
+                "rider_id": payment_request["rider_id"],
+                "amount": payment_request["amount"],
+                "payment_method": payment_request["payment_method"],
+                "processed_by": current_admin["id"],
+                "processed_at": utc_now().isoformat(),
+                "reference": f"PAY-{request_id}-{utc_now().strftime('%Y%m%d')}"
+            }
+            payment_history_db.append(payment_entry)
+
+            # Update request status
+            payment_request["status"] = "approved"
+            payment_request["processed_at"] = utc_now().isoformat()
+            payment_request["processed_by"] = current_admin["id"]
+
+            return {
+                "message": "Payment approved and processed",
+                "reference": payment_entry["reference"],
+                "amount": payment_request["amount"]
+            }
+
+        elif action == "reject":
+            payment_request["status"] = "rejected"
+            payment_request["processed_at"] = utc_now().isoformat()
+            payment_request["processed_by"] = current_admin["id"]
+
+            return {
+                "message": "Payment request rejected"
+            }
+
+        else:
+            raise HTTPException(status_code=400, detail="Invalid action. Use 'approve' or 'reject'")
+    except HTTPException:
+        # Re-raise HTTPExceptions so FastAPI handles them normally
+        raise
+    except Exception as exc:
+        import traceback
+        print("❗ Unhandled exception while processing payment request:")
+        traceback.print_exc()
+        # Return a 500 with the error message for easier debugging in the client
+        raise HTTPException(status_code=500, detail=str(exc))
 
 @app.get("/api/admin/commission-structure")
 async def get_commission_structure(current_admin: dict = Depends(get_current_admin)):
@@ -2369,6 +4672,164 @@ async def get_earning_statistics(
         "earnings_by_rider": earnings_by_rider,
         "transaction_count": len(period_earnings),
         "average_per_transaction": round(total_earnings / max(len(period_earnings), 1), 2)
+    }
+
+@app.get("/api/admin/analytics")
+async def get_admin_analytics(
+    period: str = "month",
+    current_admin: dict = Depends(get_current_admin)
+):
+    """Get comprehensive analytics for admin dashboard
+    
+    Period options: day, week, month, year
+    """
+    from datetime import datetime, timedelta
+    from collections import Counter
+    
+    today = utc_now().date()
+    now = utc_now()
+    
+    # Calculate date range
+    if period == "day":
+        start_date = today
+        start_datetime = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == "week":
+        start_date = today - timedelta(days=today.weekday())
+        start_datetime = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=now.weekday())
+    elif period == "month":
+        start_date = today.replace(day=1)
+        start_datetime = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:  # year
+        start_date = today.replace(month=1, day=1)
+        start_datetime = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    # Get all data
+    all_orders = db.get_all_orders()
+    all_users = db.get_all_users()
+    all_riders = list(riders_db.values())
+    
+    # Filter orders by period
+    period_orders = []
+    for order in all_orders:
+        try:
+            created_at = order.get("created_at")
+            if created_at and isinstance(created_at, str):
+                order_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                if order_date >= start_datetime:
+                    period_orders.append(order)
+        except (ValueError, TypeError):
+            continue
+    
+    # Order statistics
+    total_orders = len(all_orders)
+    period_order_count = len(period_orders)
+    completed_orders = [o for o in period_orders if o.get("status") == "delivered"]
+    pending_orders = [o for o in period_orders if o.get("status") == "pending"]
+    in_progress_orders = [o for o in period_orders if o.get("status") in ["assigned", "pickup", "picked_up", "in_transit"]]
+    cancelled_orders = [o for o in period_orders if o.get("status") == "cancelled"]
+    
+    # Revenue calculations
+    total_revenue = sum(o.get("total", 0) for o in completed_orders)
+    avg_order_value = total_revenue / len(completed_orders) if completed_orders else 0
+    
+    # Customer analytics
+    active_customers = len(set(o.get("customer_email") for o in period_orders if o.get("customer_email")))
+    new_customers = len([u for u in all_users if datetime.fromisoformat(u["created_at"]) >= start_datetime])
+    
+    # Rider performance
+    active_riders = len(set(o.get("rider_id") for o in period_orders if o.get("rider_id")))
+    total_riders = len(all_riders)
+    
+    # Earnings by period
+    period_earnings = [e for e in earnings_db if datetime.fromisoformat(e["date"]) >= start_datetime]
+    total_earnings_paid = sum(e["amount"] for e in period_earnings)
+    
+    # Order status distribution
+    status_distribution = {
+        "completed": len(completed_orders),
+        "pending": len(pending_orders),
+        "in_progress": len(in_progress_orders),
+        "cancelled": len(cancelled_orders)
+    }
+    
+    # Daily trend
+    daily_trend = {}
+    for order in period_orders:
+        try:
+            created_at = order.get("created_at")
+            if created_at and isinstance(created_at, str):
+                order_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                date_key = order_date.strftime("%Y-%m-%d")
+                if date_key not in daily_trend:
+                    daily_trend[date_key] = {
+                        "date": date_key,
+                        "orders": 0,
+                        "revenue": 0,
+                        "completed": 0
+                    }
+                daily_trend[date_key]["orders"] += 1
+                if order.get("status") == "delivered":
+                    daily_trend[date_key]["completed"] += 1
+                    daily_trend[date_key]["revenue"] += order.get("total", 0)
+        except (ValueError, TypeError):
+            continue
+    
+    daily_trend_list = sorted(daily_trend.values(), key=lambda x: x["date"])
+    
+    # Top performing riders
+    rider_performance = {}
+    for order in completed_orders:
+        rider_id = order.get("rider_id")
+        if rider_id:
+            if rider_id not in rider_performance:
+                rider = next((r for r in all_riders if r["id"] == rider_id), None)
+                rider_performance[rider_id] = {
+                    "rider_id": rider_id,
+                    "rider_name": rider.get("username", f"Rider {rider_id}") if rider else f"Rider {rider_id}",
+                    "deliveries": 0,
+                    "earnings": 0,
+                    "rating": rider.get("rating", 0) if rider else 0
+                }
+            rider_performance[rider_id]["deliveries"] += 1
+            # Calculate earnings (commission + delivery fee)
+            rider_earnings = rider_performance[rider_id].get("earnings", 0)
+            order_total = order.get("total", 0)
+            delivery_fee = order.get("delivery_fee", 10.0)
+            commission = order_total * 0.15  # 15% commission
+            rider_performance[rider_id]["earnings"] = rider_earnings + commission + delivery_fee
+    
+    top_riders = sorted(rider_performance.values(), key=lambda x: x["deliveries"], reverse=True)[:10]
+    
+    return {
+        "period": period,
+        "start_date": start_date.isoformat(),
+        "overview": {
+            "total_orders": period_order_count,
+            "total_revenue": round(total_revenue, 2),
+            "average_order_value": round(avg_order_value, 2),
+            "active_customers": active_customers,
+            "active_riders": active_riders,
+            "total_riders": total_riders,
+            "new_customers": new_customers,
+            "total_earnings_paid": round(total_earnings_paid, 2)
+        },
+        "order_statistics": {
+            "total": period_order_count,
+            "completed": len(completed_orders),
+            "pending": len(pending_orders),
+            "in_progress": len(in_progress_orders),
+            "cancelled": len(cancelled_orders),
+            "completion_rate": round((len(completed_orders) / period_order_count * 100) if period_order_count else 0, 2),
+            "cancellation_rate": round((len(cancelled_orders) / period_order_count * 100) if period_order_count else 0, 2)
+        },
+        "status_distribution": status_distribution,
+        "daily_trend": daily_trend_list,
+        "top_riders": top_riders,
+        "growth": {
+            "orders_vs_previous": 0,  # TODO: Calculate vs previous period
+            "revenue_vs_previous": 0,
+            "customers_vs_previous": 0
+        }
     }
 
 # Service Management for Riders
@@ -2574,33 +5035,555 @@ try:
             self.active_connections: TypingList[WebSocket] = []
 
         async def connect(self, websocket: WebSocket):
-            await websocket.accept()
-            self.active_connections.append(websocket)
+            try:
+                await websocket.accept()
+                self.active_connections.append(websocket)
+                print(f"[ConnectionManager] New connection. Total active: {len(self.active_connections)}")
+            except Exception as e:
+                print(f"[ConnectionManager] Error accepting connection: {e}")
+                raise
 
         def disconnect(self, websocket: WebSocket):
-            self.active_connections.remove(websocket)
+            try:
+                if websocket in self.active_connections:
+                    self.active_connections.remove(websocket)
+                    print(f"[ConnectionManager] Connection removed. Total active: {len(self.active_connections)}")
+            except Exception as e:
+                print(f"[ConnectionManager] Error disconnecting: {e}")
 
         async def send_personal_message(self, message: str, websocket: WebSocket):
-            await websocket.send_text(message)
+            try:
+                await websocket.send_text(message)
+            except (OSError, RuntimeError, ConnectionResetError) as e:
+                print(f"[ConnectionManager] Connection error sending personal message: {type(e).__name__}")
+                self.disconnect(websocket)
+            except Exception as e:
+                print(f"[ConnectionManager] Unexpected error sending personal message: {e}")
+                self.disconnect(websocket)
 
         async def broadcast(self, message: str):
+            disconnected = []
             for connection in self.active_connections:
                 try:
                     await connection.send_text(message)
-                except:
-                    self.disconnect(connection)
+                except (OSError, RuntimeError, ConnectionResetError) as e:
+                    print(f"[ConnectionManager] Connection error during broadcast: {type(e).__name__}")
+                    disconnected.append(connection)
+                except Exception as e:
+                    print(f"[ConnectionManager] Error broadcasting to connection: {type(e).__name__}: {e}")
+                    disconnected.append(connection)
+            
+            # Clean up disconnected connections
+            for conn in disconnected:
+                self.disconnect(conn)
+            
+            if disconnected:
+                print(f"[ConnectionManager] Cleaned up {len(disconnected)} dead connections")
 
     manager = ConnectionManager()
+
+    # ============================================
+    # PUSH NOTIFICATION ENDPOINTS
+    # ============================================
+
+    # Store push tokens and notifications in memory (should be in database for production)
+    push_tokens_db = {}  # Format: {user_id: {token: str, device_type: str, user_type: str}}
+    notifications_db = []  # Format: [{id, user_id, type, title, message, is_read, created_at, icon, data}]
+    notification_counter = 0
+
+    @app.post("/api/notifications/register-token")
+    async def register_push_token(token_data: dict, current_user: dict = Depends(get_current_user)):
+        """Register user's push notification token"""
+        try:
+            user_id = current_user.get("id")
+            user_type = current_user.get("role", "customer")
+            
+            push_tokens_db[user_id] = {
+                "token": token_data.get("push_token"),
+                "device_type": token_data.get("device_type", "unknown"),
+                "user_type": user_type,
+                "user_id": user_id,
+                "registered_at": utc_now().isoformat()
+            }
+            
+            print(f"✅ Push token registered for {user_type} user {user_id}")
+            return {"success": True, "message": "Push token registered successfully"}
+        except Exception as e:
+            print(f"❌ Error registering push token: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/api/notifications")
+    async def get_notifications(
+        unread_only: bool = False,
+        current_user: dict = Depends(get_current_user)
+    ):
+        """Get user's in-app notifications"""
+        try:
+            user_id = current_user.get("id")
+            
+            # Filter notifications for this user
+            user_notifications = [
+                n for n in notifications_db 
+                if n["user_id"] == user_id
+            ]
+            
+            # Filter unread if requested
+            if unread_only:
+                user_notifications = [
+                    n for n in user_notifications 
+                    if not n.get("is_read", False)
+                ]
+            
+            # Sort by creation date (newest first)
+            user_notifications.sort(
+                key=lambda x: x.get("created_at", ""),
+                reverse=True
+            )
+            
+            return user_notifications
+        except Exception as e:
+            print(f"❌ Error getting notifications: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.put("/api/notifications/{notification_id}/read")
+    async def mark_notification_read(
+        notification_id: str,
+        current_user: dict = Depends(get_current_user)
+    ):
+        """Mark a notification as read"""
+        try:
+            user_id = current_user.get("id")
+            
+            # Find and update notification
+            for notification in notifications_db:
+                if notification["id"] == notification_id and notification["user_id"] == user_id:
+                    notification["is_read"] = True
+                    notification["read_at"] = utc_now().isoformat()
+                    return {"success": True, "message": "Notification marked as read"}
+            
+            raise HTTPException(status_code=404, detail="Notification not found")
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"❌ Error marking notification as read: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.put("/api/notifications/read-all")
+    async def mark_all_notifications_read(current_user: dict = Depends(get_current_user)):
+        """Mark all notifications as read for the current user"""
+        try:
+            user_id = current_user.get("id")
+            updated_count = 0
+            
+            for notification in notifications_db:
+                if notification["user_id"] == user_id and not notification.get("is_read", False):
+                    notification["is_read"] = True
+                    notification["read_at"] = utc_now().isoformat()
+                    updated_count += 1
+            
+            return {
+                "success": True,
+                "message": f"Marked {updated_count} notifications as read"
+            }
+        except Exception as e:
+            print(f"❌ Error marking all notifications as read: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/api/notifications/remove-token")
+    async def remove_push_token(token_data: dict, current_user: dict = Depends(get_current_user)):
+        """Remove user's push notification token"""
+        try:
+            user_id = current_user.get("id")
+            
+            if user_id in push_tokens_db:
+                del push_tokens_db[user_id]
+                print(f"✅ Push token removed for user {user_id}")
+            
+            return {"success": True, "message": "Push token removed successfully"}
+        except Exception as e:
+            print(f"❌ Error removing push token: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def send_push_notification(user_id: int, title: str, body: str, data: dict = None):
+        """Send push notification to a specific user and save to notification history"""
+        global notification_counter
+        
+        try:
+            # Save notification to history
+            notification_counter += 1
+            notification_type = data.get("type", "general") if data else "general"
+            icon = data.get("icon", "notifications") if data else "notifications"
+            
+            notification = {
+                "id": str(notification_counter),
+                "user_id": user_id,
+                "type": notification_type,
+                "title": title,
+                "message": body,
+                "is_read": False,
+                "created_at": utc_now().isoformat(),
+                "icon": icon,
+                "data": data or {}
+            }
+            notifications_db.append(notification)
+            print(f"💾 Saved in-app notification for user {user_id}")
+            
+            # Send push notification if token exists
+            if user_id not in push_tokens_db:
+                print(f"⚠️  No push token found for user {user_id} (in-app saved)")
+                return False
+            
+            token_info = push_tokens_db[user_id]
+            push_token = token_info["token"]
+            
+            # Prepare Expo push notification
+            message = {
+                "to": push_token,
+                "sound": "default",
+                "title": title,
+                "body": body,
+                "data": data or {},
+                "priority": "high",
+                "channelId": data.get("channel", "default") if data else "default"
+            }
+            
+            # Send to Expo push notification service
+            import httpx
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://exp.host/--/api/v2/push/send",
+                    json=message,
+                    headers={
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                    },
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    print(f"✅ Push notification sent to user {user_id}: {title}")
+                    return True
+                else:
+                    print(f"❌ Failed to send push notification: {response.status_code}")
+                    return False
+                    
+        except Exception as e:
+            print(f"❌ Error sending push notification: {e}")
+            return False
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
         await manager.connect(websocket)
+        last_ping = datetime.now()
+        ping_interval = 30  # Send ping every 30 seconds
+        
         try:
             while True:
-                data = await websocket.receive_text()
-                await manager.broadcast(f"Message: {data}")
-        except WebSocketDisconnect:
-            manager.disconnect(websocket)
+                try:
+                    # Check if we need to send a ping
+                    now = datetime.now()
+                    if (now - last_ping).total_seconds() > ping_interval:
+                        try:
+                            await websocket.send_json({"type": "ping", "timestamp": now.isoformat()})
+                            last_ping = now
+                        except Exception as ping_error:
+                            print(f"[WebSocket] Ping failed: {ping_error}")
+                            break
+                    
+                    # Receive JSON data with shorter timeout for better responsiveness
+                    # Reduced timeout helps catch connection issues faster
+                    data_text = await asyncio.wait_for(
+                        websocket.receive_text(), 
+                        timeout=60  # 60 seconds timeout (reduced from 300)
+                    )
+                    
+                    try:
+                        data = json.loads(data_text)
+                        event_type = data.get("type", "message")
+                        event_data = data.get("data", {})
+                        
+                        print(f"[WebSocket] Received event: {event_type}")
+                        
+                        # Handle chat-specific events
+                        if event_type == "chat_send_message":
+                            # Save message to database and broadcast
+                            chat_room_id = event_data.get("chat_room_id")
+                            message_text = event_data.get("message")
+                            sender_id = event_data.get("sender_id")
+                            sender_type = event_data.get("sender_type")
+                            sender_name = event_data.get("sender_name", "User")
+                            message_type = event_data.get("message_type", "text")
+                            image_url = event_data.get("image_url")
+                            location_data = event_data.get("location_data")
+                            
+                            print(f"[WebSocket] Saving message from {sender_name} ({sender_id}) to database")
+                            
+                            # Prepare message data for database
+                            db_message_data = {
+                                "chat_room_id": chat_room_id,
+                                "sender_id": sender_id,
+                                "sender_type": sender_type,
+                                "sender_name": sender_name,
+                                "message": message_text,
+                                "message_type": message_type
+                            }
+                            
+                            # Add optional fields
+                            if image_url:
+                                db_message_data["image_url"] = image_url
+                            if location_data:
+                                db_message_data["location"] = location_data
+                            
+                            # Save to database - this returns the created message with generated ID
+                            saved_message = db.create_chat_message(db_message_data)
+                            
+                            print(f"[WebSocket] Message saved with ID: {saved_message['id']}")
+                            print(f"[WebSocket] Broadcasting message to room {chat_room_id}")
+                            
+                            # Broadcast the saved message to all clients
+                            message_data = {
+                                "id": saved_message["id"],
+                                "chat_room_id": saved_message["chat_room_id"],
+                                "sender_id": saved_message["sender_id"],
+                                "sender_type": saved_message["sender_type"],
+                                "sender_name": saved_message["sender_name"],
+                                "message": saved_message["message"],
+                                "message_type": saved_message["message_type"],
+                                "is_read": saved_message["is_read"],
+                                "is_delivered": saved_message["is_delivered"],
+                                "created_at": saved_message["created_at"]
+                            }
+                            
+                            # Add optional fields if present
+                            if saved_message.get("image_url"):
+                                message_data["image_url"] = saved_message["image_url"]
+                            if saved_message.get("location"):
+                                message_data["location_data"] = saved_message["location"]
+                            
+                            # Broadcast to all clients
+                            await manager.broadcast(json.dumps({
+                                "type": "chat_message",
+                                "data": message_data
+                            }))
+                            
+                        elif event_type == "chat_join_room":
+                            # User joined chat room
+                            chat_room_id = event_data.get("chat_room_id")
+                            user_id = event_data.get("user_id")
+                            print(f"[WebSocket] User {user_id} joined room {chat_room_id}")
+                            
+                            # Notify other users in the room
+                            await manager.broadcast(json.dumps({
+                                "type": "chat_user_status",
+                                "data": {
+                                    "chat_room_id": chat_room_id,
+                                    "user_id": user_id,
+                                    "is_online": True
+                                }
+                            }))
+                            
+                        elif event_type == "chat_leave_room":
+                            # User left chat room
+                            chat_room_id = event_data.get("chat_room_id")
+                            user_id = event_data.get("user_id")
+                            print(f"[WebSocket] User {user_id} left room {chat_room_id}")
+                            
+                            # Notify other users in the room
+                            await manager.broadcast(json.dumps({
+                                "type": "chat_user_status",
+                                "data": {
+                                    "chat_room_id": chat_room_id,
+                                    "user_id": user_id,
+                                    "is_online": False
+                                }
+                            }))
+                            
+                        elif event_type == "chat_typing_start":
+                            # User started typing
+                            chat_room_id = event_data.get("chat_room_id")
+                            user_id = event_data.get("user_id")
+                            
+                            await manager.broadcast(json.dumps({
+                                "type": "chat_typing",
+                                "data": {
+                                    "chat_room_id": chat_room_id,
+                                    "user_id": user_id,
+                                    "is_typing": True
+                                }
+                            }))
+                            
+                        elif event_type == "chat_typing_stop":
+                            # User stopped typing
+                            chat_room_id = event_data.get("chat_room_id")
+                            user_id = event_data.get("user_id")
+                            
+                            await manager.broadcast(json.dumps({
+                                "type": "chat_typing",
+                                "data": {
+                                    "chat_room_id": chat_room_id,
+                                    "user_id": user_id,
+                                    "is_typing": False
+                                }
+                            }))
+                            
+                        elif event_type == "chat_message_delivered":
+                            # Message delivered receipt
+                            message_id = event_data.get("message_id")
+                            
+                            await manager.broadcast(json.dumps({
+                                "type": "chat_messages_delivered",
+                                "data": {
+                                    "message_ids": [message_id]
+                                }
+                            }))
+                            
+                        elif event_type == "chat_mark_read":
+                            # Mark messages as read
+                            chat_room_id = event_data.get("chat_room_id")
+                            message_ids = event_data.get("message_ids", [])
+                            
+                            # Save to database
+                            if chat_room_id and message_ids:
+                                print(f"[WebSocket] Marking {len(message_ids)} messages as read in room {chat_room_id}")
+                                db.mark_messages_as_read(chat_room_id, message_ids)
+                            
+                            # Broadcast read receipt
+                            await manager.broadcast(json.dumps({
+                                "type": "chat_messages_read",
+                                "data": {
+                                    "message_ids": message_ids
+                                }
+                            }))
+                            
+                        # Legacy event types for backward compatibility
+                        elif event_type == "message":
+                            # Broadcast new message to all connected clients
+                            await manager.broadcast(json.dumps({
+                                "type": "message",
+                                "chat_room_id": data.get("chat_room_id"),
+                                "message": data.get("message"),
+                                "sender_id": data.get("sender_id"),
+                                "sender_type": data.get("sender_type"),
+                                "sender_name": data.get("sender_name"),
+                                "message_type": data.get("message_type", "text"),
+                                "timestamp": data.get("timestamp")
+                            }))
+                        elif event_type == "typing":
+                            # Broadcast typing indicator
+                            await manager.broadcast(json.dumps({
+                                "type": "typing",
+                                "chat_room_id": data.get("chat_room_id"),
+                                "user_id": data.get("user_id"),
+                                "user_name": data.get("user_name"),
+                                "is_typing": data.get("is_typing", True)
+                            }))
+                        elif event_type == "read":
+                            # Broadcast read receipt
+                            await manager.broadcast(json.dumps({
+                                "type": "read",
+                                "chat_room_id": data.get("chat_room_id"),
+                                "message_ids": data.get("message_ids", []),
+                                "user_id": data.get("user_id")
+                            }))
+                        
+                        elif event_type == "rider_location_update":
+                            # Rider sends location update
+                            rider_id = event_data.get("rider_id")
+                            order_id = event_data.get("order_id")
+                            latitude = event_data.get("latitude")
+                            longitude = event_data.get("longitude")
+                            accuracy = event_data.get("accuracy")
+                            speed = event_data.get("speed")
+                            heading = event_data.get("heading")
+                            
+                            print(f"[WebSocket] Rider {rider_id} location update for order {order_id}: ({latitude}, {longitude})")
+                            
+                            # Update rider's location in database
+                            try:
+                                location_data = {
+                                    "latitude": latitude,
+                                    "longitude": longitude,
+                                    "accuracy": accuracy,
+                                    "speed": speed,
+                                    "heading": heading,
+                                    "timestamp": data.get("timestamp") or datetime.now().isoformat()
+                                }
+                                
+                                import sqlite3
+                                conn = sqlite3.connect(db.DB_PATH)
+                                cur = conn.cursor()
+                                cur.execute("""
+                                    UPDATE riders 
+                                    SET location = ?, updated_at = ?
+                                    WHERE id = ?
+                                """, (json.dumps(location_data), datetime.now().isoformat(), rider_id))
+                                conn.commit()
+                                conn.close()
+                                print(f"[WebSocket] ✅ Updated rider {rider_id} location in database")
+                            except Exception as e:
+                                print(f"[WebSocket] ❌ Error updating rider location in DB: {e}")
+                            
+                            # Broadcast to all clients (customers can filter by order_id)
+                            await manager.broadcast(json.dumps({
+                                "type": "rider_location",
+                                "data": {
+                                    "rider_id": rider_id,
+                                    "order_id": order_id,
+                                    "latitude": latitude,
+                                    "longitude": longitude,
+                                    "accuracy": accuracy,
+                                    "speed": speed,
+                                    "heading": heading,
+                                    "timestamp": data.get("timestamp") or datetime.now().isoformat()
+                                }
+                            }))
+                        
+                        elif event_type == "ping":
+                            # Respond to ping with pong
+                            await websocket.send_json({"type": "pong"})
+                            
+                    except json.JSONDecodeError:
+                        # Fallback to plain text for backward compatibility
+                        await manager.broadcast(json.dumps({
+                            "type": "message",
+                            "message": data_text
+                        }))
+                        
+                except asyncio.TimeoutError:
+                    # Timeout - send ping to keep connection alive
+                    try:
+                        await websocket.send_json({"type": "ping", "timestamp": datetime.now().isoformat()})
+                        last_ping = datetime.now()
+                    except Exception as ping_error:
+                        print(f"[WebSocket] Ping failed after timeout: {ping_error}")
+                        break
+                        
+                except (WebSocketDisconnect, ConnectionResetError) as e:
+                    print(f"[WebSocket] Client disconnected: {type(e).__name__}")
+                    break
+                    
+                except OSError as e:
+                    # Catch Windows-specific errors (WinError 121, etc.)
+                    print(f"[WebSocket] OS error (likely connection timeout): {e}")
+                    break
+                    
+                except RuntimeError as e:
+                    print(f"[WebSocket] Runtime error: {e}")
+                    break
+                    
+                except Exception as e:
+                    print(f"[WebSocket] Unexpected error in message loop: {type(e).__name__}: {e}")
+                    break
+                    
+        except Exception as e:
+            print(f"[WebSocket] Connection error: {type(e).__name__}: {e}")
+        finally:
+            try:
+                manager.disconnect(websocket)
+                print(f"[WebSocket] Connection closed and cleaned up")
+            except Exception as cleanup_error:
+                print(f"[WebSocket] Error during cleanup: {cleanup_error}")
             
 except ImportError:
     print("WebSocket support not available. Install with: pip install websockets")
@@ -2760,34 +5743,338 @@ def verify_paystack_signature(payload: bytes, signature: str) -> bool:
         return False
 
 # ========================
+# CHAT API ENDPOINTS
+# ========================
+
+class ChatRoomCreate(BaseModel):
+    order_id: Union[int, str]  # Accept both int and string (e.g., "ORD-1" or 1)
+    user_id: int
+    user_type: str
+
+class ChatMessageCreate(BaseModel):
+    chat_room_id: str
+    sender_id: int
+    sender_type: str
+    sender_name: str
+    message: str
+    message_type: str = 'text'
+    image_url: Optional[str] = None
+    location: Optional[Dict[str, Any]] = None
+
+class MarkAsReadRequest(BaseModel):
+    message_ids: List[str]
+
+@app.post("/api/chat/rooms")
+async def create_or_get_chat_room(data: ChatRoomCreate, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Create or get existing chat room for an order"""
+    try:
+        # Verify authentication
+        current_user = get_current_user(credentials)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        # Get user info
+        user_email = current_user.get("email")
+        user_name = current_user.get("username", "User")
+        
+        # Normalize order_id (convert "ORD-1" to 1, or keep as int)
+        order_id = data.order_id
+        if isinstance(order_id, str):
+            # Extract number from "ORD-1" format
+            if order_id.startswith("ORD-"):
+                order_id = int(order_id.replace("ORD-", ""))
+            else:
+                order_id = int(order_id)
+        
+        # Get order to find rider info if needed
+        order = db.get_order_by_id(f"ORD-{order_id}")
+        rider_id = order.get('rider_id') if order else None
+        rider_name = None
+        
+        if rider_id:
+            # Get rider name from database
+            rider = db.get_rider_by_id(rider_id)
+            if rider:
+                rider_name = rider.get('username', 'Rider')
+        
+        # Create or get chat room
+        chat_room = db.create_or_get_chat_room(
+            order_id=order_id,
+            customer_id=data.user_id,
+            customer_name=user_name,
+            rider_id=rider_id,
+            rider_name=rider_name
+        )
+        
+        return chat_room
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error creating chat room: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/chat/rooms/{chat_room_id}/messages")
+async def get_chat_messages_endpoint(
+    chat_room_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Get message history for a chat room"""
+    try:
+        # Verify authentication
+        current_user = get_current_user(credentials)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        print(f"📨 Fetching messages for chat room: {chat_room_id} (limit: {limit}, offset: {offset})")
+        messages = db.get_chat_messages(chat_room_id, limit, offset)
+        print(f"✅ Retrieved {len(messages)} messages")
+        return messages
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error fetching chat messages: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/chat/messages")
+async def send_chat_message(message: ChatMessageCreate, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Send a new chat message"""
+    try:
+        # Verify token
+        current_user = get_current_user(credentials)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        # Create message in database
+        new_message = db.create_chat_message(message.dict())
+        
+        # Broadcast via WebSocket to all connected clients
+        try:
+            await manager.broadcast(json.dumps({
+                "type": "message",
+                "chat_room_id": new_message["chat_room_id"],
+                "message_id": new_message["id"],
+                "sender_id": new_message["sender_id"],
+                "sender_type": new_message["sender_type"],
+                "sender_name": new_message["sender_name"],
+                "message": new_message["message"],
+                "message_type": new_message["message_type"],
+                "image_url": new_message.get("image_url"),
+                "location_data": new_message.get("location_data"),
+                "created_at": new_message["created_at"]
+            }))
+        except Exception as ws_error:
+            print(f"WebSocket broadcast error: {ws_error}")
+        
+        return new_message
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/chat/rooms/{chat_room_id}/read")
+async def mark_messages_as_read(
+    chat_room_id: str,
+    data: MarkAsReadRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Mark messages as read"""
+    try:
+        # Verify token
+        current_user = get_current_user(credentials)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        db.mark_messages_as_read(chat_room_id, data.message_ids)
+        
+        # Broadcast read receipt via WebSocket
+        try:
+            await manager.broadcast(json.dumps({
+                "type": "read",
+                "chat_room_id": chat_room_id,
+                "message_ids": data.message_ids,
+                "user_id": current_user["id"]
+            }))
+        except Exception as ws_error:
+            print(f"WebSocket broadcast error: {ws_error}")
+        
+        return {"success": True}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/chat/rooms")
+async def get_user_chat_rooms_endpoint(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Get all chat rooms for the authenticated user"""
+    try:
+        # Verify authentication
+        current_user = get_current_user(credentials)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        user_email = current_user.get("email")
+        user_role = current_user.get("role", "customer")
+        
+        # Determine user type and ID based on role
+        if user_role == "rider":
+            user_type = "rider"
+            rider = db.get_rider_by_email(user_email)
+            user_id = rider.get("id") if rider else None
+        else:
+            user_type = "customer"
+            user = db.get_user_by_email(user_email)
+            user_id = user.get("id") if user else None
+        
+        if not user_id:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        chat_rooms = db.get_user_chat_rooms(user_id, user_type)
+        return chat_rooms
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error fetching chat rooms: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/chat/rooms/{chat_room_id}/close")
+async def close_chat_room(chat_room_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Close a chat room"""
+    try:
+        # Verify token
+        current_user = get_current_user(credentials)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        db.close_chat_room(chat_room_id)
+        return {"success": True, "message": "Chat room closed"}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/chat/upload-image")
+async def upload_chat_image(
+    file: UploadFile = File(...),
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Upload an image for chat"""
+    try:
+        # Verify token
+        current_user = get_current_user(credentials)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        # Validate file type
+        allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+        if file.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file type. Allowed: {', '.join(allowed_types)}"
+            )
+        
+        # Validate file size (max 5MB)
+        max_size = 5 * 1024 * 1024  # 5MB in bytes
+        contents = await file.read()
+        if len(contents) > max_size:
+            raise HTTPException(
+                status_code=400,
+                detail="File size exceeds 5MB limit"
+            )
+        
+        # Create uploads directory if it doesn't exist
+        upload_dir = Path(__file__).parent / "uploads" / "chat"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename
+        file_extension = Path(file.filename).suffix
+        unique_filename = f"chat_{utc_now().strftime('%Y%m%d_%H%M%S')}_{current_user['id']}{file_extension}"
+        file_path = upload_dir / unique_filename
+        
+        # Save file
+        with open(file_path, "wb") as f:
+            f.write(contents)
+        
+        # Return URL
+        image_url = f"/uploads/chat/{unique_filename}"
+        return {
+            "success": True,
+            "image_url": image_url,
+            "filename": unique_filename
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+# ========================
 # SERVER INITIALIZATION
 # ========================
 
-if __name__ == "__main__":
+# Background task for clearing expired assignments
+async def clear_expired_assignments_task():
+    """Background task that runs every 10 seconds to clear expired order assignments"""
+    while True:
+        try:
+            expired_orders = db.clear_expired_assignments()
+            if expired_orders:
+                print(f"⏰ Cleared {len(expired_orders)} expired assignments: {expired_orders}")
+                
+                # TODO: Trigger re-assignment for these orders
+                # for order_id in expired_orders:
+                #     await auto_assign_order(order_id)
+                
+        except Exception as e:
+            print(f"Error in clear_expired_assignments_task: {e}")
+        
+        await asyncio.sleep(10)  # Run every 10 seconds
+
+@app.on_event("startup")
+async def startup_event():
+    """Run startup tasks"""
+    print("🚀 Starting GasFill Backend Server...")
+    
     # Initialize database
     db.init_db()
+    print("✅ Database initialized")
     
+    # Start background task for clearing expired assignments
+    asyncio.create_task(clear_expired_assignments_task())
+    print("✅ Background assignment cleanup task started")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Run shutdown tasks"""
+    print("👋 Shutting down GasFill Backend Server...")
+
+if __name__ == "__main__":
     # Migrate existing in-memory orders to SQLite
     globals()['order_counter'] = db.migrate_orders(orders_db)
     
     # Clear in-memory orders after migration
     orders_db.clear()
     
-    # Create default admin user if none exists
+    # Create default admin user if none exists in database
     admin_email = "admin@gasfill.com"
-    if admin_email not in users_db:
-        admin_user = {
-            "id": 999999,  # Special admin ID
+    existing_admin = db.get_user_by_email(admin_email)
+    if not existing_admin:
+        db.create_user({
             "username": "admin",
             "email": admin_email,
             "password": hash_password("admin123"),  # Default admin password
             "phone": "+233200000000",
             "address": "GasFill HQ, Accra",
             "role": "admin",
-            "created_at": utc_now().isoformat(),
             "is_active": True
-        }
-        users_db[admin_email] = admin_user
+        })
         print("✅ Default admin user created:")
         print(f"   Email: {admin_email}")
         print(f"   Password: admin123")
@@ -2796,9 +6083,9 @@ if __name__ == "__main__":
     # Create default rider users for testing
     rider_emails = ["rider1@gasfill.com", "rider2@gasfill.com"]
     for i, rider_email in enumerate(rider_emails, 1):
-        if rider_email not in riders_db:
-            rider_user = {
-                "id": 1000 + i,
+        existing_rider = db.get_rider_by_email(rider_email)
+        if not existing_rider:
+            db.create_rider({
                 "username": f"rider{i}",
                 "email": rider_email,
                 "password": hash_password("rider123"),
@@ -2814,17 +6101,127 @@ if __name__ == "__main__":
                 "total_deliveries": i * 50,
                 "successful_deliveries": i * 48,
                 "earnings": i * 500.0,
-                "created_at": utc_now().isoformat(),
-                "updated_at": utc_now().isoformat(),
+                "commission_rate": 0.8,
+                "delivery_fee": 10.0,
                 "is_verified": True,
-                "is_active": True
-            }
-            riders_db[rider_email] = rider_user
+                "is_active": True,
+                "is_suspended": False,
+                "verification_date": utc_now().isoformat(),
+                "verification_notes": "Default rider - auto-verified",
+                "document_status": "approved",
+                "suspension_date": None,
+                "suspension_reason": None
+            })
     
     if rider_emails:
         print("✅ Default rider users created:")
         for i, email in enumerate(rider_emails, 1):
             print(f"   Rider {i}: {email} / rider123")
+    
+    # Create sample orders for testing
+    sample_customer_email = "ann@gasfill.com"
+    existing_customer = db.get_user_by_email(sample_customer_email)
+    if not existing_customer:
+        # Create a sample customer first
+        db.create_user({
+            "username": "Ann Mensah",
+            "email": sample_customer_email,
+            "password": hash_password("customer123"),
+            "phone": "+233241234567",
+            "address": "123 Oxford Street, Accra",
+            "role": "customer",
+            "is_active": True
+        })
+        print(f"✅ Sample customer created: {sample_customer_email} / customer123")
+    
+    # Check if sample orders already exist
+    existing_orders = db.get_all_orders()
+    if len(existing_orders) < 3:
+        # Create 5 sample orders with different statuses
+        sample_orders = [
+            {
+                "customer_name": "Ann Mensah",
+                "customer_email": sample_customer_email,
+                "customer_phone": "+233241234567",
+                "delivery_address": "123 Oxford Street, Accra",
+                "items": [{"name": "12.5kg Gas Cylinder", "quantity": 1, "price": 150.0}],
+                "total_amount": 160.0,  # 150 + 10 delivery
+                "payment_method": "cash",
+                "payment_status": "pending",
+                "status": "assigned",
+                "rider_id": 1,
+                "delivery_fee": 10.0,
+                "notes": "Please call when you arrive"
+            },
+            {
+                "customer_name": "Ann Mensah",
+                "customer_email": sample_customer_email,
+                "customer_phone": "+233241234567",
+                "delivery_address": "456 Ring Road, Accra",
+                "items": [{"name": "6kg Gas Cylinder", "quantity": 2, "price": 75.0}],
+                "total_amount": 160.0,  # 150 + 10 delivery
+                "payment_method": "momo",
+                "payment_status": "completed",
+                "status": "in_transit",
+                "rider_id": 1,
+                "delivery_fee": 10.0,
+                "notes": "Gate code: 1234"
+            },
+            {
+                "customer_name": "Ann Mensah",
+                "customer_email": sample_customer_email,
+                "customer_phone": "+233241234567",
+                "delivery_address": "789 Spintex Road, Accra",
+                "items": [{"name": "12.5kg Gas Cylinder", "quantity": 1, "price": 150.0}],
+                "total_amount": 160.0,
+                "payment_method": "card",
+                "payment_status": "completed",
+                "status": "delivered",
+                "rider_id": 2,
+                "delivery_fee": 10.0,
+                "notes": "Thank you!"
+            },
+            {
+                "customer_name": "Ann Mensah",
+                "customer_email": sample_customer_email,
+                "customer_phone": "+233241234567",
+                "delivery_address": "321 Tema Station Road, Tema",
+                "items": [{"name": "6kg Gas Cylinder", "quantity": 1, "price": 75.0}],
+                "total_amount": 85.0,
+                "payment_method": "cash",
+                "payment_status": "pending",
+                "status": "pending",
+                "rider_id": None,
+                "delivery_fee": 10.0,
+                "notes": ""
+            },
+            {
+                "customer_name": "Ann Mensah",
+                "customer_email": sample_customer_email,
+                "customer_phone": "+233241234567",
+                "delivery_address": "555 Airport Residential, Accra",
+                "items": [{"name": "12.5kg Gas Cylinder", "quantity": 2, "price": 150.0}],
+                "total_amount": 310.0,
+                "payment_method": "momo",
+                "payment_status": "completed",
+                "status": "pickup",
+                "rider_id": 2,
+                "delivery_fee": 10.0,
+                "notes": "Apartment 5B"
+            }
+        ]
+        
+        orders_created = 0
+        for order_data in sample_orders:
+            try:
+                db.create_order(order_data)
+                orders_created += 1
+            except Exception as e:
+                print(f"⚠️  Error creating sample order: {e}")
+        
+        if orders_created > 0:
+            print(f"✅ Created {orders_created} sample orders for testing")
+            print(f"   📦 Statuses: pending, assigned, in_transit, pickup, delivered")
     
     print("🚀 Starting GasFill Python Backend Server...")
     print("📊 API Documentation: http://localhost:5002/api/docs")

@@ -10,9 +10,12 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import * as Location from 'expo-location';
 import { useNavigation } from '@react-navigation/native';
 import { StorageService } from '../utils/storage';
 import { OrderCreateRequest, OrderItem, PaystackPayment } from '../types';
@@ -23,6 +26,247 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import Toast from '../components/Toast';
 import Loading from '../components/Loading';
+import geocodingService from '../services/geocodingService';
+
+interface LocationPickerModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onConfirm: (location: { lat: number; lng: number }) => void;
+  initialLocation?: { lat: number; lng: number } | null;
+  gasStations?: Array<{
+    id: string;
+    name: string;
+    address: string;
+    location: { lat: number; lng: number };
+    phone: string;
+    hours: string;
+    services: string[];
+  }>;
+  availableRiders?: Array<{
+    id: number;
+    name: string;
+    phone: string;
+    rating: number;
+    location: { lat: number; lng: number };
+    total_deliveries: number;
+    status: string;
+  }>;
+  showMarkers?: boolean;
+}
+
+const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
+  visible,
+  onClose,
+  onConfirm,
+  initialLocation,
+  gasStations = [],
+  availableRiders = [],
+  showMarkers = true,
+}) => {
+  const [selectedLocation, setSelectedLocation] = useState(
+    initialLocation || { lat: 5.6037, lng: -0.1870 } // Default to Accra, Ghana
+  );
+  const [loading, setLoading] = useState(false);
+  const mapRef = React.useRef<MapView>(null);
+
+  useEffect(() => {
+    if (visible && !initialLocation) {
+      getCurrentLocation();
+    }
+  }, [visible]);
+
+  const getCurrentLocation = async () => {
+    try {
+      setLoading(true);
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      
+      const newLocation = {
+        lat: location.coords.latitude,
+        lng: location.coords.longitude,
+      };
+      
+      setSelectedLocation(newLocation);
+      
+      // Animate map to current location
+      if (mapRef.current) {
+        mapRef.current.animateToRegion({
+          latitude: newLocation.lat,
+          longitude: newLocation.lng,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        });
+      }
+    } catch (error) {
+      console.error('Error getting current location:', error);
+      Alert.alert('Location Error', 'Could not get your current location');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMapPress = (event: any) => {
+    const { latitude, longitude } = event.nativeEvent.coordinate;
+    setSelectedLocation({ lat: latitude, lng: longitude });
+  };
+
+  const handleConfirm = () => {
+    onConfirm(selectedLocation);
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+        {/* Header */}
+        <View style={locationPickerStyles.header}>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={28} color="#111827" />
+          </TouchableOpacity>
+          <Text style={locationPickerStyles.headerTitle}>Pin Your Location</Text>
+          <TouchableOpacity onPress={getCurrentLocation} disabled={loading}>
+            <Ionicons name="locate" size={24} color="#3b82f6" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Map */}
+        <MapView
+          ref={mapRef}
+          style={{ flex: 1 }}
+          provider={PROVIDER_DEFAULT}
+          initialRegion={{
+            latitude: selectedLocation.lat,
+            longitude: selectedLocation.lng,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }}
+          onPress={handleMapPress}
+        >
+          {/* Customer Delivery Location Marker */}
+          <Marker
+            coordinate={{
+              latitude: selectedLocation.lat,
+              longitude: selectedLocation.lng,
+            }}
+            draggable
+            onDragEnd={handleMapPress}
+          >
+            <View style={locationPickerStyles.markerContainer}>
+              <Ionicons name="location" size={40} color="#dc2626" />
+            </View>
+          </Marker>
+
+          {/* Gas Stations Markers */}
+          {showMarkers && gasStations.map((station) => (
+            <Marker
+              key={station.id}
+              coordinate={{
+                latitude: station.location.lat,
+                longitude: station.location.lng,
+              }}
+              title={station.name}
+              description={`${station.address} • ${station.hours}`}
+            >
+              <View style={locationPickerStyles.stationMarker}>
+                <Ionicons name="business" size={28} color="#ffffff" />
+                <View style={locationPickerStyles.stationBadge}>
+                  <Ionicons name="flame" size={12} color="#f59e0b" />
+                </View>
+              </View>
+            </Marker>
+          ))}
+
+          {/* Available Riders Markers */}
+          {showMarkers && availableRiders.map((rider) => (
+            <Marker
+              key={`rider_${rider.id}`}
+              coordinate={{
+                latitude: rider.location.lat,
+                longitude: rider.location.lng,
+              }}
+              title={`${rider.name} ⭐${rider.rating.toFixed(1)}`}
+              description={`Available • ${rider.total_deliveries} deliveries`}
+            >
+              <View style={locationPickerStyles.riderMarker}>
+                <Ionicons name="bicycle" size={24} color="#ffffff" />
+                <View style={locationPickerStyles.riderOnlineBadge}>
+                  <View style={locationPickerStyles.onlinePulse} />
+                </View>
+              </View>
+            </Marker>
+          ))}
+        </MapView>
+
+        {/* Bottom Card */}
+        <View style={locationPickerStyles.bottomCard}>
+          <View style={locationPickerStyles.coordinatesContainer}>
+            <Ionicons name="location-outline" size={20} color="#6b7280" />
+            <Text style={locationPickerStyles.coordinatesText}>
+              {selectedLocation.lat.toFixed(6)}, {selectedLocation.lng.toFixed(6)}
+            </Text>
+          </View>
+          
+          <Text style={locationPickerStyles.instructionText}>
+            Tap or drag the marker to adjust your delivery location
+          </Text>
+
+          {/* Map Legend */}
+          {showMarkers && (gasStations.length > 0 || availableRiders.length > 0) && (
+            <View style={locationPickerStyles.legendContainer}>
+              <Text style={locationPickerStyles.legendTitle}>Map Legend:</Text>
+              <View style={locationPickerStyles.legendRow}>
+                <View style={locationPickerStyles.legendItem}>
+                  <View style={locationPickerStyles.legendMarkerRed}>
+                    <Ionicons name="location" size={16} color="#dc2626" />
+                  </View>
+                  <Text style={locationPickerStyles.legendText}>Your Location</Text>
+                </View>
+                {gasStations.length > 0 && (
+                  <View style={locationPickerStyles.legendItem}>
+                    <View style={locationPickerStyles.legendMarkerBlue}>
+                      <Ionicons name="business" size={16} color="#3b82f6" />
+                    </View>
+                    <Text style={locationPickerStyles.legendText}>Gas Station</Text>
+                  </View>
+                )}
+                {availableRiders.length > 0 && (
+                  <View style={locationPickerStyles.legendItem}>
+                    <View style={locationPickerStyles.legendMarkerGreen}>
+                      <Ionicons name="bicycle" size={16} color="#10b981" />
+                    </View>
+                    <Text style={locationPickerStyles.legendText}>Available Rider</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={locationPickerStyles.legendSubtext}>
+                {availableRiders.length} rider{availableRiders.length !== 1 ? 's' : ''} available nearby
+              </Text>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={locationPickerStyles.confirmButton}
+            onPress={handleConfirm}
+          >
+            <Ionicons name="checkmark-circle" size={24} color="#ffffff" />
+            <Text style={locationPickerStyles.confirmButtonText}>Confirm Location</Text>
+          </TouchableOpacity>
+        </View>
+
+        {loading && (
+          <View style={locationPickerStyles.loadingOverlay}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={locationPickerStyles.loadingText}>Getting your location...</Text>
+          </View>
+        )}
+      </SafeAreaView>
+    </Modal>
+  );
+};
 
 const CheckoutScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -31,14 +275,44 @@ const CheckoutScreen: React.FC = () => {
   
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [orderPlaced, setOrderPlaced] = useState(false); // Track if order was successfully placed
   
   // Form fields
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+  const [deliveryLocation, setDeliveryLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [deliveryType, setDeliveryType] = useState<'standard' | 'express'>('standard');
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'mobile_money'>('card');
+  const [geocoding, setGeocoding] = useState(false);
+  
+  // Dynamic delivery fee
+  const [calculatedDeliveryFee, setCalculatedDeliveryFee] = useState(10.0);
+  const [distanceInfo, setDistanceInfo] = useState<{ meters: number; km: number } | null>(null);
+  const [calculatingFee, setCalculatingFee] = useState(false);
+
+  // Map locations (gas stations and riders)
+  const [gasStations, setGasStations] = useState<Array<{
+    id: string;
+    name: string;
+    address: string;
+    location: { lat: number; lng: number };
+    phone: string;
+    hours: string;
+    services: string[];
+  }>>([]);
+  const [availableRiders, setAvailableRiders] = useState<Array<{
+    id: number;
+    name: string;
+    phone: string;
+    rating: number;
+    location: { lat: number; lng: number };
+    total_deliveries: number;
+    status: string;
+  }>>([]);
+  const [showMapMarkers, setShowMapMarkers] = useState(true);
 
   // Toast state
   const [toast, setToast] = useState({
@@ -54,14 +328,15 @@ const CheckoutScreen: React.FC = () => {
   };
 
   useEffect(() => {
-    // Check if cart is empty
-    if (cart.length === 0) {
+    // Check if cart is empty (but not after successful order placement)
+    if (cart.length === 0 && !orderPlaced) {
       Alert.alert('Empty Cart', 'Your cart is empty. Add some products first.', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     }
     loadUserData();
-  }, [cart]);
+    loadMapLocations(); // Load gas stations and riders
+  }, [cart, orderPlaced]);
 
   const loadUserData = () => {
     if (user) {
@@ -72,16 +347,175 @@ const CheckoutScreen: React.FC = () => {
     }
   };
 
+  const loadMapLocations = async () => {
+    try {
+      console.log('🗺️ Loading map locations...');
+      const data = await ApiService.getMapLocations();
+      setGasStations(data.gas_stations || []);
+      setAvailableRiders(data.available_riders || []);
+      console.log(`✅ Loaded ${data.gas_stations?.length || 0} stations and ${data.available_riders?.length || 0} riders`);
+    } catch (error) {
+      console.error('❌ Failed to load map locations:', error);
+      // Set default gas station even on error
+      setGasStations([
+        {
+          id: 'station_1',
+          name: 'GasFill Main Station',
+          address: 'Accra, Ghana',
+          location: { lat: 5.6037, lng: -0.1870 },
+          phone: '+233 201 022 153',
+          hours: '24/7',
+          services: ['6kg', '12.5kg', '37kg', 'Refills', 'Exchange']
+        }
+      ]);
+    }
+  };
+
   const getSubtotal = () => {
     return cartTotal;
   };
 
   const getDeliveryFee = () => {
-    return DELIVERY_FEES[deliveryType];
+    // For express delivery, add ₵15 to the calculated fee
+    if (deliveryType === 'express') {
+      return calculatedDeliveryFee + 15;
+    }
+    return calculatedDeliveryFee;
   };
 
   const getTotalAmount = () => {
     return getSubtotal() + getDeliveryFee();
+  };
+
+  const calculateDeliveryFee = async (location: { lat: number; lng: number }) => {
+    try {
+      setCalculatingFee(true);
+      console.log('📍 Calculating delivery fee for:', location);
+      
+      // Include order total for 50% cap calculation
+      const orderTotal = getSubtotal();
+      const feeData = await ApiService.calculateDeliveryFee({
+        ...location,
+        order_total: orderTotal
+      });
+      
+      setCalculatedDeliveryFee(feeData.delivery_fee);
+      setDistanceInfo({
+        meters: feeData.distance_meters,
+        km: feeData.distance_km
+      });
+      
+      const capMessage = feeData.breakdown?.capped 
+        ? ` (capped at 50% of ₵${orderTotal.toFixed(2)})`
+        : '';
+      
+      console.log(`💰 Fee calculated: ₵${feeData.delivery_fee} for ${feeData.distance_km}km${capMessage}`);
+      
+      setToast({
+        visible: true,
+        message: `Delivery fee: ₵${feeData.delivery_fee.toFixed(2)} (${feeData.distance_km.toFixed(2)}km from station)${capMessage}`,
+        type: 'info',
+      });
+    } catch (error) {
+      console.error('Error calculating delivery fee:', error);
+      // Keep default fee on error
+      setCalculatedDeliveryFee(10.0);
+    } finally {
+      setCalculatingFee(false);
+    }
+  };
+
+  const handleOpenLocationPicker = async () => {
+    try {
+      // Request location permissions
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Please enable location permissions to pin your location');
+        return;
+      }
+
+      setShowLocationPicker(true);
+    } catch (error) {
+      console.error('Error opening location picker:', error);
+      Alert.alert('Error', 'Failed to open location picker');
+    }
+  };
+
+  const handleConfirmLocation = async (location: { lat: number; lng: number }) => {
+    setDeliveryLocation(location);
+    setShowLocationPicker(false);
+    
+    // Calculate delivery fee based on selected location
+    await calculateDeliveryFee(location);
+    
+    // Show success message
+    setToast({
+      visible: true,
+      message: 'Location pinned successfully!',
+      type: 'success',
+    });
+  };
+
+  const handleGeocodeAddress = async () => {
+    if (!customerAddress || !customerAddress.trim()) {
+      Alert.alert('No Address', 'Please enter a delivery address first');
+      return;
+    }
+
+    try {
+      setGeocoding(true);
+      console.log('Geocoding address:', customerAddress);
+      
+      const result = await geocodingService.geocodeAddress(customerAddress);
+      
+      if (result) {
+        console.log('Geocoding successful:', result);
+        
+        // Check if location is within service area
+        if (!geocodingService.isWithinServiceArea(result.lat, result.lng)) {
+          Alert.alert(
+            'Outside Service Area',
+            'We currently only deliver within Ghana. The address you entered appears to be outside our service area.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        
+        // Set the location
+        setDeliveryLocation({ lat: result.lat, lng: result.lng });
+        
+        // Calculate delivery fee for geocoded location
+        await calculateDeliveryFee({ lat: result.lat, lng: result.lng });
+        
+        // Show success with formatted address
+        Alert.alert(
+          'Address Located! 📍',
+          `Found: ${result.formattedAddress}\n\nCoordinates: ${result.lat.toFixed(5)}, ${result.lng.toFixed(5)}\n\nYou can adjust the pin if needed by tapping "Pin Location".`,
+          [{ text: 'OK' }]
+        );
+        
+        setToast({
+          visible: true,
+          message: 'Address geocoded successfully!',
+          type: 'success',
+        });
+      } else {
+        Alert.alert(
+          'Address Not Found',
+          'Could not locate this address on the map. Please:\n\n1. Check for typos\n2. Use "Pin Location" to manually select your location\n3. Include landmarks (e.g., "near Circle, Accra")',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error: any) {
+      console.error('Geocoding error:', error);
+      Alert.alert(
+        'Geocoding Failed',
+        'Unable to convert your address to coordinates. Please use "Pin Location" to select your location on the map.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setGeocoding(false);
+    }
   };
 
   const validateForm = (): boolean => {
@@ -154,6 +588,10 @@ const CheckoutScreen: React.FC = () => {
         customer_address: customerAddress,
         total: totalAmount,
         delivery_type: deliveryType,
+        ...(deliveryLocation && {
+          delivery_location: deliveryLocation,
+          customer_location: deliveryLocation,
+        }),
       };
 
       try {
@@ -161,6 +599,9 @@ const CheckoutScreen: React.FC = () => {
         
         // Save order locally
         await StorageService.addOrder(order);
+        
+        // Mark order as placed BEFORE clearing cart to prevent empty cart alert
+        setOrderPlaced(true);
         
         // Clear cart
         await clearCart();
@@ -174,7 +615,7 @@ const CheckoutScreen: React.FC = () => {
         setTimeout(() => {
           Alert.alert(
             'Order Placed Successfully! 🎉',
-            `Your order #${order.id} has been placed and payment confirmed.\n\nTotal: ₵${totalAmount.toFixed(2)}\n\nYou'll receive updates via email and SMS.`,
+            `Your order #${order.id} has been placed and payment confirmed.\n\nTotal: GH₵ ${totalAmount.toFixed(2)}\n\nYou'll receive updates via email and SMS.`,
             [
               {
                 text: 'View Orders',
@@ -211,6 +652,10 @@ const CheckoutScreen: React.FC = () => {
         };
         
         await StorageService.addOrder(localOrder);
+        
+        // Mark order as placed BEFORE clearing cart to prevent empty cart alert
+        setOrderPlaced(true);
+        
         await clearCart();
         
         setToast({
@@ -222,7 +667,7 @@ const CheckoutScreen: React.FC = () => {
         setTimeout(() => {
           Alert.alert(
             'Order Saved Locally ✓',
-            `Payment confirmed! Your order has been saved locally and will sync when connection is restored.\n\nTotal: ₵${totalAmount.toFixed(2)}`,
+            `Payment confirmed! Your order has been saved locally and will sync when connection is restored.\n\nTotal: GH₵ ${totalAmount.toFixed(2)}`,
             [
               {
                 text: 'OK',
@@ -289,9 +734,9 @@ const CheckoutScreen: React.FC = () => {
               <View key={item.id} style={styles.orderItem}>
                 <View style={styles.orderItemLeft}>
                   <Text style={styles.orderItemName}>{item.name}</Text>
-                  <Text style={styles.orderItemDetails}>₵{item.price} × {item.qty}</Text>
+                  <Text style={styles.orderItemDetails}>GH₵ {item.price.toFixed(2)} × {item.qty}</Text>
                 </View>
-                <Text style={styles.orderItemTotal}>₵{(item.price * item.qty).toFixed(2)}</Text>
+                <Text style={styles.orderItemTotal}>GH₵ {(item.price * item.qty).toFixed(2)}</Text>
               </View>
             ))}
 
@@ -299,15 +744,29 @@ const CheckoutScreen: React.FC = () => {
             
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Subtotal</Text>
-              <Text style={styles.priceValue}>₵{getSubtotal().toFixed(2)}</Text>
+              <Text style={styles.priceValue}>GH₵ {getSubtotal().toFixed(2)}</Text>
             </View>
             <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Delivery Fee</Text>
-              <Text style={styles.priceValue}>₵{getDeliveryFee().toFixed(2)}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.priceLabel}>Delivery Fee</Text>
+                {distanceInfo && (
+                  <Text style={styles.distanceInfo}>
+                    {distanceInfo.km.toFixed(2)}km from depot
+                  </Text>
+                )}
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.priceValue}>
+                  GH₵ {getDeliveryFee().toFixed(2)}
+                </Text>
+                {calculatingFee && (
+                  <ActivityIndicator size="small" color="#1e40af" style={{ marginTop: 4 }} />
+                )}
+              </View>
             </View>
             <View style={[styles.priceRow, styles.totalRow]}>
               <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>₵{getTotalAmount().toFixed(2)}</Text>
+              <Text style={styles.totalValue}>GH₵ {getTotalAmount().toFixed(2)}</Text>
             </View>
           </View>
 
@@ -409,16 +868,57 @@ const CheckoutScreen: React.FC = () => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Delivery Address *</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.inputLabel}>Delivery Address *</Text>
+                <View style={styles.locationButtonsRow}>
+                  <TouchableOpacity 
+                    style={[styles.geocodeButton, geocoding && styles.geocodeButtonDisabled]}
+                    onPress={handleGeocodeAddress}
+                    disabled={geocoding || !customerAddress.trim()}
+                  >
+                    {geocoding ? (
+                      <ActivityIndicator size="small" color="#3b82f6" />
+                    ) : (
+                      <Ionicons name="search" size={16} color="#3b82f6" />
+                    )}
+                    <Text style={styles.geocodeButtonText}>
+                      {geocoding ? 'Finding...' : 'Find on Map'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.pinLocationButton}
+                    onPress={handleOpenLocationPicker}
+                  >
+                    <Ionicons name="location" size={16} color="#3b82f6" />
+                    <Text style={styles.pinLocationText}>Pin Location</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={customerAddress}
                 onChangeText={setCustomerAddress}
-                placeholder="Enter your complete delivery address"
+                placeholder="Enter your complete delivery address (e.g., House 123, Circle, Accra)"
                 placeholderTextColor="#9ca3af"
                 multiline
                 numberOfLines={3}
               />
+              {deliveryLocation && (
+                <View style={styles.locationPinned}>
+                  <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                  <Text style={styles.locationPinnedText}>
+                    Location pinned: {deliveryLocation.lat.toFixed(5)}, {deliveryLocation.lng.toFixed(5)}
+                  </Text>
+                </View>
+              )}
+              {!deliveryLocation && customerAddress.trim() && (
+                <View style={styles.locationWarning}>
+                  <Ionicons name="warning" size={16} color="#f59e0b" />
+                  <Text style={styles.locationWarningText}>
+                    Tip: Use "Find on Map" or "Pin Location" for accurate delivery
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -501,6 +1001,17 @@ const CheckoutScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Location Picker Modal */}
+      <LocationPickerModal
+        visible={showLocationPicker}
+        onClose={() => setShowLocationPicker(false)}
+        onConfirm={handleConfirmLocation}
+        initialLocation={deliveryLocation}
+        gasStations={gasStations}
+        availableRiders={availableRiders}
+        showMarkers={showMapMarkers}
+      />
     </SafeAreaView>
   );
 };
@@ -610,6 +1121,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#0f172a',
+  },
+  distanceInfo: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 2,
   },
   totalRow: {
     marginTop: 8,
@@ -785,6 +1301,299 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     fontWeight: '700',
+  },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  pinLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+  },
+  pinLocationText: {
+    fontSize: 14,
+    color: '#3b82f6',
+    fontWeight: '600',
+  },
+  locationPinned: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#10b981',
+  },
+  locationPinnedText: {
+    fontSize: 13,
+    color: '#059669',
+    fontWeight: '500',
+  },
+  locationButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  geocodeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+  },
+  geocodeButtonDisabled: {
+    opacity: 0.6,
+  },
+  geocodeButtonText: {
+    fontSize: 14,
+    color: '#3b82f6',
+    fontWeight: '600',
+  },
+  locationWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: '#fffbeb',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  locationWarningText: {
+    fontSize: 13,
+    color: '#d97706',
+    fontWeight: '500',
+    flex: 1,
+  },
+});
+
+const locationPickerStyles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  markerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomCard: {
+    backgroundColor: '#ffffff',
+    padding: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  coordinatesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+  },
+  coordinatesText: {
+    fontSize: 14,
+    color: '#374151',
+    fontFamily: 'monospace',
+  },
+  instructionText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  confirmButton: {
+    flexDirection: 'row',
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  confirmButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  stationMarker: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    position: 'relative',
+  },
+  stationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+  },
+  riderMarker: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#10b981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    position: 'relative',
+  },
+  riderOnlineBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#10b981',
+  },
+  onlinePulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10b981',
+  },
+  legendContainer: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  legendTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 8,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendMarkerRed: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#dc2626',
+  },
+  legendMarkerBlue: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  legendMarkerGreen: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#10b981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  legendText: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  legendSubtext: {
+    fontSize: 11,
+    color: '#10b981',
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
 

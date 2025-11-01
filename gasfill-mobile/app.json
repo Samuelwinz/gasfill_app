@@ -23,6 +23,11 @@
           "mailto",
           "maps",
           "comgooglemaps"
+        ],
+        "NSLocationWhenInUseUsageDescription": "GasFill needs your location to show delivery address and track orders.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "GasFill needs background location access to provide real-time delivery tracking.",
+        "UIBackgroundModes": [
+          "location"
         ]
       }
     },
@@ -33,16 +38,25 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.gasfill.mobile"
+      "package": "com.gasfill.mobile",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiUrl": "http://localhost:8000"
+      "apiUrl": "http://localhost:8000",
+      "eas": {
+        "projectId": "e497093c-3560-443e-8d07-3d6a3f9938f2"
+      }
     },
     "plugins": [
       "expo-web-browser"
-    ]
+    ],
+    "owner": "lixtic"
   }
 }

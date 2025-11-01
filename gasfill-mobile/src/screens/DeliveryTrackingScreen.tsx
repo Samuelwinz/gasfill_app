@@ -9,13 +9,19 @@ import {
   Linking,
   Alert,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import * as Location from 'expo-location';
 import { apiService } from '../services/api';
+import { useWebSocketEvent } from '../context/WebSocketContext';
+import locationTrackingService from '../services/locationTracking';
+import geocodingService from '../services/geocodingService';
 import Loading from '../components/Loading';
 import ErrorDisplay from '../components/ErrorDisplay';
+import OrderRatingModal from '../components/OrderRatingModal';
 
 interface TrackingScreenProps {
   navigation: any;
@@ -55,6 +61,7 @@ interface OrderTracking {
     price: number;
   }>;
   total: number;
+  delivery_fee?: number;
   created_at: string;
 }
 
@@ -63,9 +70,106 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [liveTracking, setLiveTracking] = useState(false); // Shows if receiving live updates
+  const [eta, setEta] = useState<string | null>(null);
+  const [distance, setDistance] = useState<string | null>(null);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [updatingLocation, setUpdatingLocation] = useState(false);
+  const [newLocation, setNewLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [customerAddressFormatted, setCustomerAddressFormatted] = useState<string | null>(null);
+  const [loadingAddress, setLoadingAddress] = useState(false);
   const mapRef = useRef<MapView>(null);
   const orderId = route.params?.orderId;
   const isLoadingRef = useRef(false);
+
+  // Subscribe to rider location updates via WebSocket
+  useWebSocketEvent('rider_location', (data) => {
+    console.log('[DeliveryTracking] Rider location update:', data);
+    
+    // Only update if this is for our order
+    if (data.order_id === orderId) {
+      console.log('[DeliveryTracking] ✅ Updating rider location for order:', orderId);
+      setLiveTracking(true);
+      
+      setTrackingData(prev => {
+        if (!prev) return prev;
+        
+        const newLocation = {
+          lat: data.latitude,
+          lng: data.longitude,
+        };
+        
+        console.log('[DeliveryTracking] 📍 New rider location:', newLocation);
+        
+        // Calculate distance and ETA if we have customer location
+        if (prev.customer_location) {
+          const distanceMeters = locationTrackingService.calculateDistance(
+            data.latitude,
+            data.longitude,
+            prev.customer_location.lat,
+            prev.customer_location.lng
+          );
+          
+          const etaMinutes = locationTrackingService.calculateETA(distanceMeters);
+          
+          setDistance(locationTrackingService.formatDistance(distanceMeters));
+          setEta(locationTrackingService.formatETA(etaMinutes));
+          
+          console.log('[DeliveryTracking] 📊 Distance:', distanceMeters, 'm, ETA:', etaMinutes, 'min');
+          
+          // Update map to show both locations
+          if (mapRef.current) {
+            mapRef.current.fitToCoordinates(
+              [
+                { latitude: data.latitude, longitude: data.longitude },
+                { latitude: prev.customer_location.lat, longitude: prev.customer_location.lng },
+              ],
+              {
+                edgePadding: { top: 100, right: 50, bottom: 350, left: 50 },
+                animated: true,
+              }
+            );
+          }
+        }
+        
+        return {
+          ...prev,
+          rider_location: newLocation,
+        };
+      });
+    }
+  });
+
+  // Subscribe to order status updates via WebSocket
+  useWebSocketEvent('order_status_update', (data) => {
+    console.log('[DeliveryTracking] Order status update:', data);
+    
+    // Only update if this is for our order
+    if (data.order_id === orderId) {
+      console.log('[DeliveryTracking] ✅ Order status changed to:', data.status);
+      
+      setTrackingData(prev => {
+        if (!prev) return prev;
+        
+        const newStatus = data.status;
+        const previousStatus = prev.status;
+        
+        // Auto-show rating modal when order is delivered
+        if (newStatus.toLowerCase() === 'delivered' && previousStatus.toLowerCase() !== 'delivered') {
+          console.log('[DeliveryTracking] 🎉 Order delivered! Auto-showing rating modal');
+          setTimeout(() => {
+            setShowRatingModal(true);
+          }, 1000); // Small delay for better UX
+        }
+        
+        return {
+          ...prev,
+          status: newStatus,
+        };
+      });
+    }
+  });
 
   const loadTrackingData = useCallback(async (isRefreshing = false) => {
     // Prevent multiple simultaneous loads
@@ -85,12 +189,32 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
 
       console.log('📍 Loading tracking data for order:', orderId);
       const data = await apiService.getOrderTracking(orderId);
-      console.log('✅ Tracking data loaded:', data);
+      console.log('✅ Tracking data loaded:', {
+        order_id: data.order_id,
+        status: data.status,
+        has_rider_location: !!data.rider_location,
+        rider_location: data.rider_location,
+        has_customer_location: !!data.customer_location,
+        customer_location: data.customer_location,
+      });
+      
+      // Log detailed customer location info
+      if (data.customer_location) {
+        console.log('📍✅ Customer location IS PINNED:', data.customer_location);
+      } else {
+        console.log('📍⚠️ Customer location NOT PINNED - will use default location');
+      }
       
       setTrackingData(data);
 
+      // Reverse geocode customer location to get formatted address
+      if (data.customer_location && !customerAddressFormatted) {
+        reverseGeocodeCustomerLocation(data.customer_location.lat, data.customer_location.lng);
+      }
+
       // Fit map to show both locations
       if (data.rider_location && data.customer_location && mapRef.current) {
+        console.log('[DeliveryTracking] 🗺️ Fitting map to show rider and customer');
         setTimeout(() => {
           mapRef.current?.fitToCoordinates(
             [
@@ -143,6 +267,28 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
     loadTrackingData(true);
   };
 
+  const reverseGeocodeCustomerLocation = async (lat: number, lng: number) => {
+    try {
+      setLoadingAddress(true);
+      console.log('🗺️ Reverse geocoding customer location:', { lat, lng });
+      
+      const address = await geocodingService.reverseGeocode(lat, lng);
+      
+      if (address) {
+        console.log('✅ Formatted address:', address);
+        setCustomerAddressFormatted(address);
+      } else {
+        console.log('⚠️ Could not reverse geocode location');
+        setCustomerAddressFormatted(null);
+      }
+    } catch (error) {
+      console.error('❌ Reverse geocoding error:', error);
+      setCustomerAddressFormatted(null);
+    } finally {
+      setLoadingAddress(false);
+    }
+  };
+
   const handleCallRider = () => {
     if (trackingData?.rider_phone) {
       Alert.alert(
@@ -156,6 +302,76 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
           },
         ]
       );
+    }
+  };
+
+  const handleRatingSubmit = async (rating: number, comment: string) => {
+    try {
+      await apiService.createRating({
+        order_id: orderId || '',
+        rating,
+        comment
+      });
+      
+      Alert.alert('Success', 'Thank you for your rating!');
+      setShowRatingModal(false);
+      
+      // Refresh tracking data to get updated rating
+      await loadTrackingData();
+    } catch (error) {
+      console.error('Error submitting rating:', error);
+      Alert.alert('Error', 'Failed to submit rating. Please try again.');
+    }
+  };
+
+  const handleOpenLocationPicker = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required to update delivery location.');
+        return;
+      }
+      
+      // Set initial location to current customer location or get current GPS
+      if (trackingData?.customer_location) {
+        setNewLocation(trackingData.customer_location);
+      } else {
+        const location = await Location.getCurrentPositionAsync({});
+        setNewLocation({
+          lat: location.coords.latitude,
+          lng: location.coords.longitude,
+        });
+      }
+      
+      setShowLocationPicker(true);
+    } catch (error) {
+      console.error('Error opening location picker:', error);
+      Alert.alert('Error', 'Failed to get location access');
+    }
+  };
+
+  const handleUpdateLocation = async () => {
+    if (!newLocation || !orderId) return;
+    
+    try {
+      setUpdatingLocation(true);
+      
+      // Call API to update order location
+      await apiService.updateOrderLocation(orderId, newLocation);
+      
+      Alert.alert('Success', 'Delivery location updated successfully!');
+      setShowLocationPicker(false);
+      
+      // Reload tracking data
+      await loadTrackingData();
+      
+      // Reverse geocode the new location
+      await reverseGeocodeCustomerLocation(newLocation.lat, newLocation.lng);
+    } catch (error: any) {
+      console.error('Error updating location:', error);
+      Alert.alert('Error', error.message || 'Failed to update location');
+    } finally {
+      setUpdatingLocation(false);
     }
   };
 
@@ -203,8 +419,11 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
   }
 
   const currentStatusIndex = getCurrentStepIndex();
-  const riderLocation = trackingData.rider_location || { lat: 5.65, lng: -0.2 };
-  const customerLocation = trackingData.customer_location || { lat: 5.6, lng: -0.18 };
+  
+  // Use customer location if pinned, otherwise use a default location for Accra, Ghana
+  const DEFAULT_LOCATION = { lat: 5.6037, lng: -0.1870 }; // Accra city center
+  const customerLocation = trackingData.customer_location || DEFAULT_LOCATION;
+  const hasCustomerLocation = !!trackingData.customer_location;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -235,22 +454,34 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
             latitude: customerLocation.lat,
             longitude: customerLocation.lng,
           }} 
-          title="Delivery Location"
+          title={hasCustomerLocation ? "📍 Pinned Location" : "Delivery Location (Approximate)"}
           description={trackingData.customer_address}
         >
-          <View style={styles.customerMarker}>
-            <Ionicons name="home" size={28} color="#ffffff" />
+          <View style={[
+            styles.customerMarker,
+            hasCustomerLocation && styles.pinnedMarker
+          ]}>
+            <Ionicons 
+              name={hasCustomerLocation ? "pin" : "home"} 
+              size={28} 
+              color="#ffffff" 
+            />
+            {hasCustomerLocation && (
+              <View style={styles.pinnedMarkerBadge}>
+                <Ionicons name="checkmark-circle" size={14} color="#10b981" />
+              </View>
+            )}
           </View>
         </Marker>
 
         {/* Rider Location */}
-        {trackingData.rider_name && (
+        {trackingData.rider_location && (
           <Marker 
             coordinate={{
-              latitude: riderLocation.lat,
-              longitude: riderLocation.lng,
+              latitude: trackingData.rider_location.lat,
+              longitude: trackingData.rider_location.lng,
             }} 
-            title={trackingData.rider_name}
+            title={trackingData.rider_name || 'Rider'}
             description="Your rider"
           >
             <View style={styles.riderMarker}>
@@ -260,10 +491,10 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
         )}
 
         {/* Route Line */}
-        {trackingData.rider_name && (
+        {trackingData.rider_location && (
           <Polyline
             coordinates={[
-              { latitude: riderLocation.lat, longitude: riderLocation.lng },
+              { latitude: trackingData.rider_location.lat, longitude: trackingData.rider_location.lng },
               { latitude: customerLocation.lat, longitude: customerLocation.lng },
             ]}
             strokeColor="#3b82f6"
@@ -340,6 +571,39 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
           ))}
         </View>
 
+        {/* Live Tracking Status & ETA */}
+        {liveTracking && (eta || distance) && (
+          <View style={styles.liveTrackingCard}>
+            <View style={styles.liveHeader}>
+              <View style={styles.liveIndicator}>
+                <View style={styles.livePulse} />
+                <Ionicons name="navigate" size={16} color="#10b981" />
+              </View>
+              <Text style={styles.liveText}>Live Tracking Active</Text>
+            </View>
+            <View style={styles.liveMetricsRow}>
+              {eta && (
+                <View style={styles.liveMetricCard}>
+                  <Ionicons name="time-outline" size={24} color="#3b82f6" />
+                  <View>
+                    <Text style={styles.liveMetricLabel}>ETA</Text>
+                    <Text style={styles.liveMetricValue}>{eta}</Text>
+                  </View>
+                </View>
+              )}
+              {distance && (
+                <View style={styles.liveMetricCard}>
+                  <Ionicons name="navigate-outline" size={24} color="#8b5cf6" />
+                  <View>
+                    <Text style={styles.liveMetricLabel}>Distance</Text>
+                    <Text style={styles.liveMetricValue}>{distance}</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Rider Info */}
         {trackingData.rider_name && (
           <View style={styles.riderCard}>
@@ -360,7 +624,7 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
                   <View style={styles.riderRatingContainer}>
                     <Ionicons name="star" size={18} color="#fbbf24" />
                     <Text style={styles.riderRating}>
-                      {trackingData.rider_rating.toFixed(1)}
+                      {trackingData.rider_rating?.toFixed(1) || 'N/A'}
                     </Text>
                     <Text style={styles.riderRatingText}> (Excellent)</Text>
                   </View>
@@ -424,6 +688,61 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
             </Text>
           </View>
 
+          {/* Pinned Location Info */}
+          {trackingData.customer_location ? (
+            <View style={styles.pinnedLocationRow}>
+              <View style={styles.pinnedLocationInfo}>
+                <View style={styles.pinnedLocationBadge}>
+                  <Ionicons name="pin" size={18} color="#10b981" />
+                  <Text style={styles.pinnedLocationText}>Exact location pinned</Text>
+                </View>
+                {loadingAddress ? (
+                  <Text style={styles.formattedAddress}>Loading address...</Text>
+                ) : customerAddressFormatted ? (
+                  <Text style={styles.formattedAddress}>📍 {customerAddressFormatted}</Text>
+                ) : (
+                  <Text style={styles.locationCoordinates}>
+                    {trackingData.customer_location.lat.toFixed(5)}, {trackingData.customer_location.lng.toFixed(5)}
+                  </Text>
+                )}
+              </View>
+              <TouchableOpacity
+                style={styles.openMapButton}
+                onPress={() => {
+                  const lat = trackingData.customer_location!.lat;
+                  const lng = trackingData.customer_location!.lng;
+                  const url = `https://www.google.com/maps?q=${lat},${lng}`;
+                  Linking.openURL(url);
+                }}
+              >
+                <Ionicons name="map-outline" size={16} color="#3b82f6" />
+                <Text style={styles.openMapText}>Open in Maps</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.locationWarningRow}>
+              <View style={styles.locationWarningBadge}>
+                <Ionicons name="warning-outline" size={16} color="#f59e0b" />
+                <Text style={styles.locationWarningText}>
+                  Location not pinned - Using text address
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Update Location Button - Only for pending/assigned orders */}
+          {(trackingData.status === 'pending' || trackingData.status === 'assigned') && (
+            <TouchableOpacity
+              style={styles.updateLocationButton}
+              onPress={handleOpenLocationPicker}
+            >
+              <Ionicons name="location" size={18} color="#3b82f6" />
+              <Text style={styles.updateLocationText}>
+                {trackingData.customer_location ? 'Update Location' : 'Pin Exact Location'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {trackingData.items && trackingData.items.length > 0 && (
             <>
               <View style={styles.divider} />
@@ -434,19 +753,141 @@ const DeliveryTrackingScreen: React.FC<TrackingScreenProps> = ({ navigation, rou
                     {item.quantity}x {item.name}
                   </Text>
                   <Text style={styles.itemPrice}>
-                    ₵{(item.price * item.quantity).toFixed(2)}
+                    GH₵ {((item.price || 0) * (item.quantity || 0)).toFixed(2)}
                   </Text>
                 </View>
               ))}
               <View style={styles.divider} />
+              <View style={styles.itemRow}>
+                <Text style={styles.itemName}>Delivery Fee</Text>
+                <Text style={[styles.itemPrice, { color: '#10b981', fontWeight: '700' }]}>
+                  GH₵ {(trackingData.delivery_fee || 10.0).toFixed(2)}
+                </Text>
+              </View>
+              <View style={styles.divider} />
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>₵{trackingData.total.toFixed(2)}</Text>
+                <Text style={styles.totalValue}>GH₵ {(trackingData.total || 0).toFixed(2)}</Text>
               </View>
             </>
           )}
         </View>
+
+        {/* Rate Rider Button - Only show for delivered orders */}
+        {trackingData.status.toLowerCase() === 'delivered' && (
+          <TouchableOpacity
+            style={styles.rateRiderButton}
+            onPress={() => setShowRatingModal(true)}
+          >
+            <Ionicons name="star" size={20} color="#FFD700" />
+            <Text style={styles.rateRiderButtonText}>Rate Your Rider</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
+
+      {/* Rating Modal */}
+      <OrderRatingModal
+        visible={showRatingModal}
+        onClose={() => setShowRatingModal(false)}
+        onSubmit={handleRatingSubmit}
+        orderId={orderId || ''}
+        riderName={trackingData.rider_name || 'Your Rider'}
+      />
+
+      {/* Location Picker Modal */}
+      <Modal
+        visible={showLocationPicker}
+        animationType="slide"
+        onRequestClose={() => setShowLocationPicker(false)}
+      >
+        <SafeAreaView style={styles.locationPickerContainer}>
+          <View style={styles.locationPickerHeader}>
+            <TouchableOpacity onPress={() => setShowLocationPicker(false)}>
+              <Ionicons name="close" size={24} color="#0A2540" />
+            </TouchableOpacity>
+            <Text style={styles.locationPickerTitle}>Update Delivery Location</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          {newLocation && (
+            <MapView
+              style={styles.locationPickerMap}
+              initialRegion={{
+                latitude: newLocation.lat,
+                longitude: newLocation.lng,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+              }}
+              onRegionChangeComplete={(region) => {
+                setNewLocation({
+                  lat: region.latitude,
+                  lng: region.longitude,
+                });
+              }}
+            >
+              <Marker
+                coordinate={{
+                  latitude: newLocation.lat,
+                  longitude: newLocation.lng,
+                }}
+                draggable
+                onDragEnd={(e) => {
+                  setNewLocation({
+                    lat: e.nativeEvent.coordinate.latitude,
+                    lng: e.nativeEvent.coordinate.longitude,
+                  });
+                }}
+              >
+                <View style={styles.locationPickerMarker}>
+                  <Ionicons name="pin" size={32} color="#3b82f6" />
+                </View>
+              </Marker>
+            </MapView>
+          )}
+
+          <View style={styles.locationPickerFooter}>
+            <View style={styles.coordinatesDisplay}>
+              <Text style={styles.coordinatesLabel}>Selected Location:</Text>
+              <Text style={styles.coordinatesText}>
+                {newLocation?.lat.toFixed(6)}, {newLocation?.lng.toFixed(6)}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.getCurrentLocationButton}
+              onPress={async () => {
+                try {
+                  const location = await Location.getCurrentPositionAsync({});
+                  setNewLocation({
+                    lat: location.coords.latitude,
+                    lng: location.coords.longitude,
+                  });
+                } catch (error) {
+                  Alert.alert('Error', 'Failed to get current location');
+                }
+              }}
+            >
+              <Ionicons name="navigate" size={18} color="#3b82f6" />
+              <Text style={styles.getCurrentLocationText}>Use Current Location</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.confirmLocationButton, updatingLocation && styles.confirmLocationButtonDisabled]}
+              onPress={handleUpdateLocation}
+              disabled={updatingLocation}
+            >
+              {updatingLocation ? (
+                <Text style={styles.confirmLocationText}>Updating...</Text>
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={20} color="#ffffff" />
+                  <Text style={styles.confirmLocationText}>Update Location</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -489,6 +930,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
+  },
+  pinnedMarker: {
+    backgroundColor: '#3b82f6',
+  },
+  pinnedMarkerBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#10b981',
   },
   riderMarker: {
     width: 44,
@@ -812,6 +1269,255 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#3b82f6',
+  },
+  liveTrackingCard: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#10b981',
+  },
+  liveHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  liveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  livePulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10b981',
+  },
+  liveText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#065f46',
+  },
+  liveMetricsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  liveMetricCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#ffffff',
+    padding: 12,
+    borderRadius: 12,
+  },
+  liveMetricLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  liveMetricValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  rateRiderButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 16,
+    marginVertical: 16,
+    gap: 8,
+  },
+  rateRiderButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  pinnedLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  pinnedLocationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  pinnedLocationText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#065f46',
+  },
+  pinnedLocationInfo: {
+    flex: 1,
+    gap: 8,
+  },
+  formattedAddress: {
+    fontSize: 13,
+    color: '#374151',
+    fontStyle: 'italic',
+    marginLeft: 24,
+  },
+  locationCoordinates: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontFamily: 'monospace',
+    marginLeft: 24,
+  },
+  openMapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+    backgroundColor: '#eff6ff',
+  },
+  openMapText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  locationWarningRow: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  locationWarningBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fbbf24',
+  },
+  locationWarningText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#92400e',
+    flex: 1,
+  },
+  updateLocationButton: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+  },
+  updateLocationText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  locationPickerContainer: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  locationPickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  locationPickerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  locationPickerMap: {
+    flex: 1,
+  },
+  locationPickerMarker: {
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  locationPickerFooter: {
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    gap: 12,
+  },
+  coordinatesDisplay: {
+    padding: 12,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+  },
+  coordinatesLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  coordinatesText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  getCurrentLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+    backgroundColor: '#ffffff',
+  },
+  getCurrentLocationText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  confirmLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#3b82f6',
+  },
+  confirmLocationButtonDisabled: {
+    opacity: 0.6,
+  },
+  confirmLocationText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });
 

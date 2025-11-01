@@ -74,7 +74,7 @@ const CartScreen: React.FC = () => {
             
             <View style={styles.itemDetails}>
               <Text style={styles.itemName}>{item.name}</Text>
-              <Text style={styles.itemPrice}>₵{item.price} each</Text>
+              <Text style={styles.itemPrice}>GH₵ {item.price.toFixed(2)} each</Text>
             </View>
 
             <View style={styles.quantityControls}>
@@ -108,7 +108,7 @@ const CartScreen: React.FC = () => {
       <View style={styles.footer}>
         <View style={styles.totalSection}>
           <Text style={styles.totalLabel}>Total: </Text>
-          <Text style={styles.totalAmount}>₵{totalPrice.toFixed(2)}</Text>
+          <Text style={styles.totalAmount}>GH₵ {totalPrice.toFixed(2)}</Text>
         </View>
         
         <TouchableOpacity style={styles.checkoutButton} onPress={() => navigation.navigate('Checkout' as never)}>

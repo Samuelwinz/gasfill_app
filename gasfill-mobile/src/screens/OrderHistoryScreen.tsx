@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +19,10 @@ import { useAuth } from '../context/AuthContext';
 import Toast from '../components/Toast';
 import Loading from '../components/Loading';
 import ErrorDisplay from '../components/ErrorDisplay';
+import RatingModal from '../components/RatingModal';
+import ReviewCard from '../components/ReviewCard';
+import DisputeModal from '../components/DisputeModal';
+import { Rating } from '../types/rating';
 
 const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [filter, setFilter] = useState('All');
@@ -25,7 +30,7 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   
   const [toast, setToast] = useState({
     visible: false,
@@ -33,9 +38,72 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     type: 'success' as 'success' | 'error' | 'info',
   });
 
+  // Rating states
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [selectedOrderForRating, setSelectedOrderForRating] = useState<Order | null>(null);
+  const [orderRatings, setOrderRatings] = useState<Record<string, Rating[]>>({});
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputeRatingId, setDisputeRatingId] = useState<string | null>(null);
+  
+  // Cancellation states
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+  
+  // Track which orders have been prompted for rating
+  const [ratingPromptedOrders, setRatingPromptedOrders] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     loadOrders();
+    loadRatingPromptedOrders();
   }, [isAuthenticated]);
+
+  // Check for newly delivered orders that need rating
+  useEffect(() => {
+    checkForUnratedDeliveries();
+  }, [orders, orderRatings, ratingPromptedOrders]);
+
+  const loadRatingPromptedOrders = async () => {
+    try {
+      const prompted = await StorageService.getItem('ratingPromptedOrders');
+      if (prompted && typeof prompted === 'string') {
+        setRatingPromptedOrders(new Set(JSON.parse(prompted)));
+      }
+    } catch (err) {
+      console.error('Failed to load rating prompted orders:', err);
+    }
+  };
+
+  const markOrderAsPrompted = async (orderId: string) => {
+    try {
+      const newSet = new Set(ratingPromptedOrders);
+      newSet.add(orderId);
+      setRatingPromptedOrders(newSet);
+      await StorageService.setItem('ratingPromptedOrders', JSON.stringify(Array.from(newSet)));
+    } catch (err) {
+      console.error('Failed to save rating prompted order:', err);
+    }
+  };
+
+  const checkForUnratedDeliveries = () => {
+    // Find delivered orders that haven't been rated by customer and haven't been prompted yet
+    const unratedDelivered = orders.find(order => {
+      if (order.status.toLowerCase() !== 'delivered') return false;
+      if (ratingPromptedOrders.has(order.id)) return false;
+      
+      const ratings = orderRatings[order.id] || [];
+      const hasCustomerRating = ratings.some(r => r.reviewer_type === 'customer');
+      
+      return !hasCustomerRating;
+    });
+
+    // Show rating modal for the first unrated delivered order
+    if (unratedDelivered && !showRatingModal) {
+      console.log('[OrderHistory] Auto-showing rating for delivered order:', unratedDelivered.id);
+      setSelectedOrderForRating(unratedDelivered);
+      loadOrderRatings(unratedDelivered.id);
+      setShowRatingModal(true);
+      markOrderAsPrompted(unratedDelivered.id);
+    }
+  };
 
   const loadOrders = async (isRefreshing = false) => {
     try {
@@ -55,6 +123,13 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           for (const order of apiOrders) {
             await StorageService.addOrder(order);
           }
+          
+          // Load ratings for delivered orders to check if they need rating
+          const deliveredOrders = apiOrders.filter(o => o.status.toLowerCase() === 'delivered');
+          for (const order of deliveredOrders) {
+            loadOrderRatings(order.id);
+          }
+          
           return;
         } catch (apiError) {
           console.log('[OrderHistory] API failed, loading from local storage:', apiError);
@@ -65,6 +140,12 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       const localOrders = await StorageService.loadOrders();
       console.log('[OrderHistory] Loaded from local storage:', localOrders.length, 'orders');
       setOrders(localOrders);
+      
+      // Load ratings for delivered orders
+      const deliveredOrders = localOrders.filter(o => o.status.toLowerCase() === 'delivered');
+      for (const order of deliveredOrders) {
+        loadOrderRatings(order.id);
+      }
 
     } catch (error: any) {
       console.error('[OrderHistory] Error loading orders:', error);
@@ -84,6 +165,114 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const handleRefresh = () => {
     setRefreshing(true);
     loadOrders(true);
+  };
+
+  const loadOrderRatings = async (orderId: string) => {
+    try {
+      const ratings = await ApiService.getOrderRatings(orderId);
+      setOrderRatings(prev => ({ ...prev, [orderId]: ratings }));
+    } catch (err) {
+      console.error('Failed to load ratings:', err);
+    }
+  };
+
+  const handleSubmitRating = async (rating: number, comment: string, tags: string[]) => {
+    if (!selectedOrderForRating) return;
+
+    try {
+      await ApiService.createRating({
+        order_id: selectedOrderForRating.id,
+        rating,
+        comment,
+        tags,
+      });
+
+      setToast({
+        visible: true,
+        message: 'Thank you for your feedback!',
+        type: 'success',
+      });
+
+      loadOrderRatings(selectedOrderForRating.id);
+    } catch (err: any) {
+      throw new Error(err.message || 'Failed to submit rating');
+    }
+  };
+
+  const handleDisputeRating = async (reason: string) => {
+    if (!disputeRatingId) return;
+
+    try {
+      await ApiService.disputeRating(disputeRatingId, reason);
+      setToast({
+        visible: true,
+        message: 'Your dispute has been submitted for review.',
+        type: 'success',
+      });
+
+      // Refresh ratings for the order
+      const order = orders.find(o => 
+        orderRatings[o.id]?.some(r => r.id === disputeRatingId)
+      );
+      if (order) {
+        loadOrderRatings(order.id);
+      }
+    } catch (err: any) {
+      throw new Error(err.message || 'Failed to submit dispute');
+    }
+  };
+
+  const handleCancelOrder = async (order: Order) => {
+    // Only allow cancellation for pending and assigned orders
+    if (!['pending', 'assigned'].includes(order.status.toLowerCase())) {
+      setToast({
+        visible: true,
+        message: 'This order cannot be cancelled at this stage.',
+        type: 'error',
+      });
+      return;
+    }
+
+    Alert.alert(
+      'Cancel Order',
+      `Are you sure you want to cancel order ${order.id}?`,
+      [
+        {
+          text: 'No',
+          style: 'cancel',
+        },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setCancellingOrderId(order.id);
+              
+              // Cancel the order
+              await ApiService.cancelOrder(order.id);
+              
+              setToast({
+                visible: true,
+                message: 'Order cancelled successfully.',
+                type: 'success',
+              });
+              
+              // Refresh orders
+              await loadOrders(true);
+            } catch (err: any) {
+              console.error('Cancel order error:', err);
+              setToast({
+                visible: true,
+                message: err.message || 'Failed to cancel order. Please try again.',
+                type: 'error',
+              });
+            } finally {
+              setCancellingOrderId(null);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const getStatusStyle = (status: string) => {
@@ -254,6 +443,19 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                     </Text>
                   ))}
                 </View>
+
+                {/* Pricing Breakdown */}
+                <View style={styles.pricingSection}>
+                  <View style={styles.pricingRow}>
+                    <Text style={styles.pricingLabel}>Items Total</Text>
+                    <Text style={styles.pricingValue}>GH₵ {order.total.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.pricingRow}>
+                    <Text style={styles.pricingLabel}>Delivery Fee</Text>
+                    <Text style={styles.deliveryFee}>GH₵ {(order.delivery_fee || 10.0).toFixed(2)}</Text>
+                  </View>
+                </View>
+
                 <View style={styles.footer}>
                   <View
                     style={[
@@ -270,7 +472,7 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                       {order.status}
                     </Text>
                   </View>
-                  <Text style={styles.total}>₵{order.total.toFixed(2)}</Text>
+                  <Text style={styles.total}>GH₵ {order.total.toFixed(2)}</Text>
                 </View>
                 
                 {/* Track Order Button for active orders */}
@@ -283,11 +485,84 @@ const OrderHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                     <Text style={styles.trackButtonText}>Track Order</Text>
                   </TouchableOpacity>
                 )}
+
+                {/* Cancel Order Button for pending/assigned orders */}
+                {['pending', 'assigned'].includes(order.status.toLowerCase()) && (
+                  <TouchableOpacity 
+                    style={[
+                      styles.cancelButton,
+                      cancellingOrderId === order.id && styles.cancelButtonDisabled
+                    ]}
+                    onPress={() => handleCancelOrder(order)}
+                    disabled={cancellingOrderId === order.id}
+                  >
+                    {cancellingOrderId === order.id ? (
+                      <ActivityIndicator size="small" color="#F44336" />
+                    ) : (
+                      <>
+                        <Ionicons name="close-circle" size={18} color="#F44336" />
+                        <Text style={styles.cancelButtonText}>Cancel Order</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+
+                {/* Rating Section for delivered orders */}
+                {order.status.toLowerCase() === 'delivered' && (
+                  <View style={styles.ratingSection}>
+                    {!orderRatings[order.id]?.some(r => r.reviewer_type === 'customer') && (
+                      <TouchableOpacity
+                        style={styles.rateButton}
+                        onPress={() => {
+                          setSelectedOrderForRating(order);
+                          loadOrderRatings(order.id);
+                          setShowRatingModal(true);
+                        }}
+                      >
+                        <Ionicons name="star" size={18} color="#FFD700" />
+                        <Text style={styles.rateButtonText}>Rate Rider</Text>
+                      </TouchableOpacity>
+                    )}
+                    
+                    {orderRatings[order.id]?.map((rating) => (
+                      <ReviewCard
+                        key={rating.id}
+                        rating={rating}
+                        currentUserId={user?.id || 0}
+                        currentUserType="customer"
+                        onDispute={(ratingId) => {
+                          setDisputeRatingId(ratingId);
+                          setShowDisputeModal(true);
+                        }}
+                      />
+                    ))}
+                  </View>
+                )}
               </View>
             );
           })
         )}
       </ScrollView>
+
+      {/* Rating Modal */}
+      {selectedOrderForRating && (
+        <RatingModal
+          visible={showRatingModal}
+          onClose={() => setShowRatingModal(false)}
+          onSubmit={handleSubmitRating}
+          targetName={selectedOrderForRating.rider_name || 'Rider'}
+          targetType="rider"
+          title="Rate Your Rider"
+        />
+      )}
+
+      {/* Dispute Modal */}
+      <DisputeModal
+        visible={showDisputeModal}
+        onClose={() => setShowDisputeModal(false)}
+        onSubmit={handleDisputeRating}
+        ratingId={disputeRatingId || ''}
+      />
     </SafeAreaView>
   );
 };
@@ -486,6 +761,75 @@ const styles = StyleSheet.create({
   },
   trackButtonText: {
     color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  ratingSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  rateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF3E0',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  rateButtonText: {
+    color: '#F57C00',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  pricingSection: {
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+  },
+  pricingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  pricingLabel: {
+    fontSize: 14,
+    color: '#616161',
+  },
+  pricingValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#424242',
+  },
+  deliveryFee: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#10b981',
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFEBEE',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+  },
+  cancelButtonDisabled: {
+    opacity: 0.6,
+  },
+  cancelButtonText: {
+    color: '#F44336',
     fontSize: 15,
     fontWeight: '600',
   },

@@ -6,12 +6,12 @@ const TOKEN_KEY = 'gasfill_token_v1';
 // Admin API Service
 class AdminApiService {
   private api: AxiosInstance;
-  private baseURL = 'http://192.168.1.25:8000';
+  private baseURL = 'http://192.168.8.100:8000';
 
   constructor() {
     this.api = axios.create({
       baseURL: this.baseURL,
-      timeout: 10000,
+      timeout: 30000,  // Increased to 30 seconds
       headers: {
         'Content-Type': 'application/json',
       },

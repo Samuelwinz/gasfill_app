@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Switch,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,6 +52,23 @@ const RiderDashboard: React.FC = () => {
         // Otherwise, refresh entire dashboard
         loadDashboard();
       }
+    },
+    onVerificationStatusUpdate: (data) => {
+      console.log('✅ Verification status updated:', data);
+      // Show alert to rider
+      Alert.alert(
+        data.title || 'Verification Status Update',
+        data.message || `Your account has been ${data.data?.is_verified ? 'approved' : 'rejected'}${data.data?.verification_notes ? ': ' + data.data.verification_notes : ''}`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Refresh dashboard to show updated verification status
+              loadDashboard();
+            }
+          }
+        ]
+      );
     },
   });
 
@@ -157,6 +175,18 @@ const RiderDashboard: React.FC = () => {
                 <Text style={styles.notificationBadgeText}>2</Text>
               </View>
             </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.iconButton}
+              onPress={() => (navigation as any).navigate('RiderHelpSupport')}
+            >
+              <Ionicons name="help-circle-outline" size={24} color="#1F2937" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.iconButton}
+              onPress={() => (navigation as any).navigate('RiderAccountSettings')}
+            >
+              <Ionicons name="settings-outline" size={22} color="#1F2937" />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
               <View style={styles.refreshIcon}>
                 <Ionicons name="refresh" size={20} color="#10b981" />
@@ -194,6 +224,59 @@ const RiderDashboard: React.FC = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#10b981']} tintColor="#10b981" />
         }
       >
+        {/* Verification Status Banner */}
+        {dashboardData && !dashboardData.is_verified && (
+          <View style={[
+            styles.verificationBanner,
+            {
+              backgroundColor: dashboardData.document_status === 'rejected' ? '#fef2f2' : '#fffbeb'
+            }
+          ]}>
+            <View style={styles.verificationIconContainer}>
+              <Ionicons 
+                name={dashboardData.document_status === 'rejected' ? 'close-circle' : 'time-outline'}
+                size={28} 
+                color={dashboardData.document_status === 'rejected' ? '#dc2626' : '#f59e0b'}
+              />
+            </View>
+            <View style={styles.verificationContent}>
+              <Text style={[
+                styles.verificationTitle,
+                { color: dashboardData.document_status === 'rejected' ? '#991b1b' : '#92400e' }
+              ]}>
+                {dashboardData.document_status === 'rejected' 
+                  ? 'Verification Rejected' 
+                  : 'Verification Pending'}
+              </Text>
+              <Text style={[
+                styles.verificationMessage,
+                { color: dashboardData.document_status === 'rejected' ? '#7f1d1d' : '#78350f' }
+              ]}>
+                {dashboardData.document_status === 'rejected'
+                  ? dashboardData.verification_notes || 'Your documents were rejected. Please update and resubmit.'
+                  : 'Your account is under review. You will be notified once approved.'}
+              </Text>
+              {dashboardData.document_status === 'rejected' && (
+                <TouchableOpacity 
+                  style={styles.resubmitButton}
+                  onPress={() => (navigation as any).navigate('RiderAccountSettings')}
+                >
+                  <Ionicons name="refresh" size={16} color="#fff" />
+                  <Text style={styles.resubmitButtonText}>Resubmit Documents</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Verified Badge */}
+        {dashboardData && dashboardData.is_verified && (
+          <View style={styles.verifiedBanner}>
+            <Ionicons name="checkmark-circle" size={24} color="#10b981" />
+            <Text style={styles.verifiedText}>Your account is verified</Text>
+          </View>
+        )}
+
         {/* Today's Earnings */}
         <View style={styles.earningsCard}>
           <View style={styles.earningsHeader}>
@@ -207,13 +290,20 @@ const RiderDashboard: React.FC = () => {
 
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
+          <TouchableOpacity 
+            style={styles.statCard}
+            onPress={() => (navigation as any).navigate('Jobs', { initialTab: 'active' })}
+            activeOpacity={0.7}
+          >
             <View style={[styles.statIcon, { backgroundColor: '#dbeafe' }]}>
               <Ionicons name="bicycle" size={24} color="#3b82f6" />
             </View>
             <Text style={styles.statValue}>{dashboardData?.active_orders || 0}</Text>
             <Text style={styles.statLabel}>Active Orders</Text>
-          </View>
+            <View style={styles.statBadge}>
+              <Ionicons name="chevron-forward" size={14} color="#3b82f6" />
+            </View>
+          </TouchableOpacity>
 
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
@@ -223,13 +313,20 @@ const RiderDashboard: React.FC = () => {
             <Text style={styles.statLabel}>Rating</Text>
           </View>
 
-          <View style={styles.statCard}>
+          <TouchableOpacity 
+            style={styles.statCard}
+            onPress={() => (navigation as any).navigate('Earnings')}
+            activeOpacity={0.7}
+          >
             <View style={[styles.statIcon, { backgroundColor: '#d1fae5' }]}>
               <Ionicons name="wallet-outline" size={24} color="#10b981" />
             </View>
             <Text style={styles.statValue}>₵{dashboardData?.total_earnings?.toFixed(0) || '0'}</Text>
             <Text style={styles.statLabel}>Total Earnings</Text>
-          </View>
+            <View style={styles.statBadge}>
+              <Ionicons name="chevron-forward" size={14} color="#10b981" />
+            </View>
+          </TouchableOpacity>
 
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: '#e0e7ff' }]}>
@@ -527,6 +624,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  iconButton: {
+    padding: 6,
+  },
   notificationButton: {
     position: 'relative',
     padding: 6,
@@ -548,6 +648,81 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#fff',
+  },
+  statBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  // Verification Status Styles
+  verificationBanner: {
+    flexDirection: 'row',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  verificationIconContainer: {
+    marginRight: 12,
+    paddingTop: 2,
+  },
+  verificationContent: {
+    flex: 1,
+  },
+  verificationTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  verificationMessage: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  resubmitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    gap: 6,
+  },
+  resubmitButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  verifiedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#d1fae5',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  verifiedText: {
+    fontSize: 14,
+    color: '#065f46',
+    fontWeight: '600',
   },
 });
 

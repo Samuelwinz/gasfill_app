@@ -74,7 +74,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   };
 
   const handleLogin = () => {
-    navigation.navigate('Login');
+    // Don't navigate manually - just logout to clear tokens
+    // AuthNavigation will automatically show login screen
+    logout();
   };
 
   const customerMenuItems = [
@@ -83,14 +85,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     { icon: 'location-outline', name: 'Delivery Addresses', screen: null, description: 'Manage saved addresses' },
     { icon: 'card-outline', name: 'Payment Methods', screen: null, description: 'Manage payment options' },
     { icon: 'notifications-outline', name: 'Notifications', screen: 'Notifications', description: 'Notification preferences' },
-    { icon: 'help-circle-outline', name: 'Help & Support', screen: null, description: 'Get help and contact us' },
+    { icon: 'help-circle-outline', name: 'Help & Support', screen: 'CustomerHelpSupport', description: 'Get help and contact us' },
     { icon: 'information-circle-outline', name: 'About', screen: 'About', description: 'App version and info' },
   ];
 
   const riderMenuItems = [
-    { icon: 'settings-outline', name: 'Account Settings', screen: null, description: 'Update your information' },
+    { icon: 'settings-outline', name: 'Account Settings', screen: 'RiderAccountSettings', description: 'Update your information' },
     { icon: 'notifications-outline', name: 'Notifications', screen: 'Notifications', description: 'Notification preferences' },
-    { icon: 'help-circle-outline', name: 'Help & Support', screen: null, description: 'Get help and contact us' },
+    { icon: 'help-circle-outline', name: 'Help & Support', screen: 'RiderHelpSupport', description: 'Get help and contact us' },
     { icon: 'information-circle-outline', name: 'About', screen: 'About', description: 'App version and info' },
   ];
 
@@ -101,7 +103,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     { icon: 'shield-outline', name: 'Security', screen: null, description: 'Security and permissions' },
     { icon: 'notifications-outline', name: 'Notifications', screen: 'Notifications', description: 'Notification preferences' },
     { icon: 'document-text-outline', name: 'Activity Logs', screen: null, description: 'View system activity' },
-    { icon: 'help-circle-outline', name: 'Help & Support', screen: null, description: 'Get help and resources' },
+    { icon: 'help-circle-outline', name: 'Help & Support', screen: 'RiderHelpSupport', description: 'Get help and resources' },
     { icon: 'information-circle-outline', name: 'About', screen: 'About', description: 'App version and info' },
   ];
 
@@ -443,7 +445,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.registerButton}
-              onPress={() => navigation.navigate('Register')}
+              onPress={() => {
+                // Clear any existing data and trigger auth state change
+                logout();
+              }}
             >
               <Text style={styles.registerButtonText}>Create Account</Text>
             </TouchableOpacity>

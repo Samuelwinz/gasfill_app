@@ -24,13 +24,24 @@ import PickupRequestScreen from '../screens/PickupRequestScreen';
 import DeliveryTrackingScreen from '../screens/DeliveryTrackingScreen';
 import RiderDashboard from '../screens/RiderDashboard';
 import RiderJobsScreen from '../screens/RiderJobsScreen';
+import RiderDeliveryMapScreen from '../screens/RiderDeliveryMapScreen';
+import RiderAnalyticsScreen from '../screens/RiderAnalyticsScreen';
 import RiderEarningsScreen from '../screens/RiderEarningsScreen';
 import AdminDashboard from '../screens/AdminDashboard';
+import AdminRidersScreen from '../screens/AdminRidersScreen';
+import AdminLoginScreen from '../screens/AdminLoginScreen';
+import RiderDetailsScreen from '../screens/RiderDetailsScreen';
 import AboutScreen from '../screens/AboutScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
 import ChatScreen from '../screens/ChatScreen';
 import CustomerChatListScreen from '../screens/CustomerChatListScreen';
+import RiderAccountSettingsScreen from '../screens/RiderAccountSettingsScreen';
+import RiderHelpSupportScreen from '../screens/RiderHelpSupportScreen';
+import CustomerHelpSupportScreen from '../screens/CustomerHelpSupportScreen';
+import AdminCommissionScreen from '../screens/AdminCommissionScreen';
+import AdminRiderEarningsScreen from '../screens/AdminRiderEarningsScreen';
+import AdminPaymentRequestsScreen from '../screens/AdminPaymentRequestsScreen';
 
 // Import services
 import { StorageService } from '../utils/storage';
@@ -56,9 +67,6 @@ function CustomerTabs() {
               break;
             case 'Pickup':
               iconName = focused ? 'car' : 'car-outline';
-              break;
-            case 'Messages':
-              iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
               break;
             case 'Orders':
               iconName = focused ? 'receipt' : 'receipt-outline';
@@ -93,11 +101,6 @@ function CustomerTabs() {
         name="Pickup" 
         component={PickupRequestScreen}
         options={{ title: 'Request Pickup' }}
-      />
-      <Tab.Screen 
-        name="Messages" 
-        component={CustomerChatListScreen}
-        options={{ title: 'Messages' }}
       />
       <Tab.Screen name="Orders" component={OrderHistoryScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
@@ -180,10 +183,10 @@ function AdminTabs() {
               iconName = focused ? 'analytics' : 'analytics-outline';
               break;
             case 'Riders':
-              iconName = focused ? 'people' : 'people-outline';
+              iconName = focused ? 'bicycle' : 'bicycle-outline';
               break;
-            case 'Orders':
-              iconName = focused ? 'receipt' : 'receipt-outline';
+            case 'Commission':
+              iconName = focused ? 'wallet' : 'wallet-outline';
               break;
             case 'Settings':
               iconName = focused ? 'settings' : 'settings-outline';
@@ -212,13 +215,13 @@ function AdminTabs() {
       <Tab.Screen name="Dashboard" component={AdminDashboard} />
       <Tab.Screen 
         name="Riders" 
-        component={AdminDashboard} // Admin can switch tabs within
+        component={AdminRidersScreen}
         options={{ title: 'Riders' }}
       />
       <Tab.Screen 
-        name="Orders" 
-        component={AdminDashboard}
-        options={{ title: 'Orders' }}
+        name="Commission" 
+        component={AdminCommissionScreen}
+        options={{ title: 'Commission' }}
       />
       <Tab.Screen 
         name="Settings" 
@@ -295,6 +298,35 @@ function AppStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={MainComponent} />
+      <Stack.Screen 
+        name="AdminLogin" 
+        component={AdminLoginScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="AdminRiders" 
+        component={AdminRidersScreen}
+        options={{ 
+          headerShown: true,
+          title: 'Rider Verification',
+        }}
+      />
+      <Stack.Screen 
+        name="AdminRiderEarnings" 
+        component={AdminRiderEarningsScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="AdminPaymentRequests" 
+        component={AdminPaymentRequestsScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
       <Stack.Screen 
         name="DeliveryTracking" 
         component={DeliveryTrackingScreen as any}
@@ -378,6 +410,48 @@ function AppStack() {
       <Stack.Screen 
         name="Chat" 
         component={ChatScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="RiderDetails" 
+        component={RiderDetailsScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="RiderAnalytics" 
+        component={RiderAnalyticsScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="RiderDeliveryMap" 
+        component={RiderDeliveryMapScreen as any}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="RiderAccountSettings" 
+        component={RiderAccountSettingsScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="RiderHelpSupport" 
+        component={RiderHelpSupportScreen}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="CustomerHelpSupport" 
+        component={CustomerHelpSupportScreen}
         options={{ 
           headerShown: false,
         }}

@@ -11,9 +11,14 @@ import {
   StatusBar,
   Image,
   ActivityIndicator,
+  Alert,
+  Animated,
+  Vibration,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { useAuth } from '../context/AuthContext';
 import { ChatMessage, ChatParticipant } from '../types';
 import chatService from '../services/chat';
@@ -37,6 +42,29 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
   const [participantOnline, setParticipantOnline] = useState(true);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const messageAnimations = useRef<Map<string, Animated.Value>>(new Map());
+  const connectionPulse = useRef(new Animated.Value(0)).current;
+
+  // Debug: Log typing state changes
+  useEffect(() => {
+    console.log('[ChatScreen] 🔔 participantTyping state changed:', participantTyping);
+  }, [participantTyping]);
+
+  // Get or create animation value for a message
+  const getMessageAnimation = (messageId: string) => {
+    if (!messageAnimations.current.has(messageId)) {
+      const animValue = new Animated.Value(0);
+      messageAnimations.current.set(messageId, animValue);
+      // Trigger animation immediately for new messages
+      Animated.spring(animValue, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }).start();
+    }
+    return messageAnimations.current.get(messageId)!;
+  };
 
   // Determine current user info
   const currentUserId = userRole === 'rider' ? rider?.id : user?.id;
@@ -64,10 +92,36 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
     chatRoomId: chatRoomId || '',
     userId: currentUserId || 0,
     userType: currentUserType,
+    userName: currentUserName,
     onNewMessage: useCallback((message: ChatMessage) => {
+      console.log('[ChatScreen] onNewMessage callback triggered:', message);
       setMessages(prev => {
         // Avoid duplicates
-        if (prev.some(m => m.id === message.id)) return prev;
+        if (prev.some(m => m.id === message.id)) {
+          console.log('[ChatScreen] Duplicate message ignored:', message.id);
+          return prev;
+        }
+        console.log('[ChatScreen] ✨ NEW MESSAGE RECEIVED - Adding to state');
+        
+        // Vibrate on new message (short pattern)
+        Vibration.vibrate(100);
+        
+        // Animate the new message
+        const animValue = getMessageAnimation(message.id);
+        Animated.sequence([
+          Animated.timing(animValue, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.spring(animValue, {
+            toValue: 1,
+            friction: 8,
+            tension: 40,
+            useNativeDriver: true,
+          }),
+        ]).start();
+        
         return [...prev, message];
       });
       // Auto-scroll to bottom
@@ -75,7 +129,8 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }, []),
-    onTypingStatus: useCallback((isTyping: boolean) => {
+    onTypingStatus: useCallback((isTyping: boolean, participantName?: string) => {
+      console.log('[ChatScreen] Typing status:', isTyping, participantName);
       setParticipantTyping(isTyping);
     }, []),
     onMessageRead: useCallback((messageIds: string[]) => {
@@ -92,6 +147,28 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
       setParticipantOnline(isOnline);
     }, []),
   });
+
+  // Animate connection indicator
+  useEffect(() => {
+    if (isConnected) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(connectionPulse, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(connectionPulse, {
+            toValue: 0,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      connectionPulse.setValue(0);
+    }
+  }, [isConnected]);
 
   // Initialize chat room and load messages
   useEffect(() => {
@@ -136,6 +213,8 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || !chatRoomId) return;
 
+    console.log('[ChatScreen] Sending message. WebSocket connected:', isConnected);
+
     try {
       setIsSending(true);
       
@@ -164,8 +243,10 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
 
       // Send via WebSocket for real-time delivery
       if (isConnected) {
+        console.log('[ChatScreen] Sending via WebSocket:', messageText);
         sendWebSocketMessage(messageText, 'text');
       } else {
+        console.log('[ChatScreen] WebSocket not connected, using HTTP fallback');
         // Fallback to HTTP if WebSocket not connected
         await chatService.sendMessage({
           chat_room_id: chatRoomId,
@@ -206,6 +287,172 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
     }
   };
 
+  // Handle image picker
+  const handlePickImage = async () => {
+    try {
+      // Request permissions
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant camera roll permissions to share images');
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.7,
+        base64: false,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await uploadAndSendImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('[ChatScreen] Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  // Upload image and send as message
+  const uploadAndSendImage = async (imageUri: string) => {
+    try {
+      setIsSending(true);
+
+      // Create form data
+      const formData = new FormData();
+      const filename = imageUri.split('/').pop() || 'image.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+      formData.append('file', {
+        uri: imageUri,
+        name: filename,
+        type,
+      } as any);
+
+      // Upload image
+      const response = await chatService.uploadImage(formData);
+      const imageUrl = response.image_url;
+
+      // Send image message
+      const newMessage: ChatMessage = {
+        id: `temp_${Date.now()}`,
+        chat_room_id: chatRoomId,
+        sender_id: currentUserId || 0,
+        sender_type: currentUserType,
+        sender_name: currentUserName || 'You',
+        message: 'Sent an image',
+        message_type: 'image',
+        image_url: imageUrl,
+        is_read: false,
+        is_delivered: false,
+        created_at: new Date().toISOString(),
+      };
+
+      setMessages(prev => [...prev, newMessage]);
+
+      // Send via WebSocket or HTTP
+      if (isConnected) {
+        sendWebSocketMessage('Sent an image', 'image', { image_url: imageUrl });
+      } else {
+        await chatService.sendMessage({
+          chat_room_id: chatRoomId,
+          sender_id: currentUserId || 0,
+          sender_type: currentUserType,
+          sender_name: currentUserName || 'You',
+          message: 'Sent an image',
+          message_type: 'image',
+          is_read: false,
+        }, imageUrl);
+      }
+
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+
+    } catch (error) {
+      console.error('[ChatScreen] Error uploading image:', error);
+      Alert.alert('Error', 'Failed to send image');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // Handle location sharing
+  const handleShareLocation = async () => {
+    try {
+      // Request permissions
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant location permissions to share your location');
+        return;
+      }
+
+      setIsSending(true);
+
+      // Get current location
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const { latitude, longitude } = location.coords;
+      const locationData = {
+        latitude,
+        longitude,
+        accuracy: location.coords.accuracy || 0,
+      };
+
+      // Send location message
+      const newMessage: ChatMessage = {
+        id: `temp_${Date.now()}`,
+        chat_room_id: chatRoomId,
+        sender_id: currentUserId || 0,
+        sender_type: currentUserType,
+        sender_name: currentUserName || 'You',
+        message: `Shared location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+        message_type: 'location',
+        location_data: locationData,
+        is_read: false,
+        is_delivered: false,
+        created_at: new Date().toISOString(),
+      };
+
+      setMessages(prev => [...prev, newMessage]);
+
+      // Send via WebSocket or HTTP
+      if (isConnected) {
+        sendWebSocketMessage(
+          `Shared location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+          'location',
+          { location_data: locationData }
+        );
+      } else {
+        await chatService.sendMessage({
+          chat_room_id: chatRoomId,
+          sender_id: currentUserId || 0,
+          sender_type: currentUserType,
+          sender_name: currentUserName || 'You',
+          message: `Shared location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+          message_type: 'location',
+          is_read: false,
+        }, undefined, locationData);
+      }
+
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+
+    } catch (error) {
+      console.error('[ChatScreen] Error sharing location:', error);
+      Alert.alert('Error', 'Failed to share location');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -220,19 +467,29 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isMyMessage = item.sender_id === currentUserId && item.sender_type === currentUserType;
+    const animValue = getMessageAnimation(item.id);
 
     return (
-      <View style={[
-        styles.messageContainer,
-        isMyMessage ? styles.myMessageContainer : styles.theirMessageContainer,
-      ]}>
+      <Animated.View style={{
+        opacity: animValue,
+        transform: [{
+          translateY: animValue.interpolate({
+            inputRange: [0, 1],
+            outputRange: [20, 0],
+          }),
+        }],
+      }}>
+        <View style={[
+          styles.messageContainer,
+          isMyMessage ? styles.myMessageContainer : styles.theirMessageContainer,
+        ]}>
         {!isMyMessage && (
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
               <Ionicons 
-                name={otherParticipant.user_type === 'rider' ? 'bicycle' : 'person'} 
+                name={otherParticipant.type === 'rider' ? 'bicycle' : 'person'} 
                 size={20} 
-                color="#ffffff" 
+                color="#6b7280" 
               />
             </View>
           </View>
@@ -245,12 +502,60 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
           {!isMyMessage && (
             <Text style={styles.senderName}>{item.sender_name}</Text>
           )}
-          <Text style={[
-            styles.messageText,
-            isMyMessage ? styles.myMessageText : styles.theirMessageText,
-          ]}>
-            {item.message}
-          </Text>
+          
+          {/* Render image message */}
+          {item.message_type === 'image' && item.image_url && (
+            <TouchableOpacity onPress={() => {
+              // Could open full-screen image viewer
+              Alert.alert('Image', 'Full image viewer coming soon');
+            }}>
+              <Image 
+                source={{ uri: item.image_url }}
+                style={styles.messageImage}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          )}
+
+          {/* Render location message */}
+          {item.message_type === 'location' && item.location_data && (
+            <TouchableOpacity onPress={() => {
+              if (!item.location_data) return;
+              const { latitude, longitude } = item.location_data;
+              const url = Platform.select({
+                ios: `maps:0,0?q=${latitude},${longitude}`,
+                android: `geo:0,0?q=${latitude},${longitude}`,
+              });
+              Alert.alert('Open in Maps', `Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+            }}>
+              <View style={styles.locationContainer}>
+                <Ionicons name="location" size={40} color={isMyMessage ? '#fff' : '#3b82f6'} />
+                <Text style={[
+                  styles.locationText,
+                  isMyMessage ? styles.myMessageText : styles.theirMessageText,
+                ]}>
+                  📍 Location Shared
+                </Text>
+                <Text style={[
+                  styles.locationCoords,
+                  isMyMessage ? styles.myMessageTime : styles.theirMessageTime,
+                ]}>
+                  {item.location_data.latitude.toFixed(6)}, {item.location_data.longitude.toFixed(6)}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {/* Render text message */}
+          {item.message_type === 'text' && (
+            <Text style={[
+              styles.messageText,
+              isMyMessage ? styles.myMessageText : styles.theirMessageText,
+            ]}>
+              {item.message}
+            </Text>
+          )}
+
           <View style={styles.messageFooter}>
             <Text style={[
               styles.messageTime,
@@ -274,6 +579,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
 
         {isMyMessage && <View style={styles.avatarPlaceholder} />}
       </View>
+      </Animated.View>
     );
   };
 
@@ -298,15 +604,32 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
           <View style={styles.headerText}>
             <Text style={styles.headerName}>{otherParticipant.name}</Text>
             <View style={styles.statusContainer}>
+              {isConnected && (
+                <Animated.View style={[
+                  styles.liveIndicator,
+                  {
+                    opacity: connectionPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.6, 1],
+                    }),
+                  },
+                ]}>
+                  <Text style={styles.liveText}>● LIVE</Text>
+                </Animated.View>
+              )}
               {participantTyping ? (
                 <Text style={styles.typingText}>typing...</Text>
               ) : participantOnline ? (
                 <>
                   <View style={styles.onlineDot} />
-                  <Text style={styles.statusText}>Online</Text>
+                  <Text style={styles.statusText}>
+                    Online
+                  </Text>
                 </>
               ) : (
-                <Text style={styles.statusText}>Offline</Text>
+                <Text style={styles.statusText}>
+                  Offline
+                </Text>
               )}
             </View>
           </View>
@@ -321,6 +644,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3b82f6" />
+          <Text style={styles.loadingText}>Loading messages...</Text>
         </View>
       ) : (
         <FlatList
@@ -328,9 +652,33 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
           data={messages}
           keyExtractor={(item) => item.id}
           renderItem={renderMessage}
-          contentContainerStyle={styles.messagesList}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          contentContainerStyle={messages.length === 0 ? styles.emptyMessagesList : styles.messagesList}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="chatbubbles-outline" size={64} color="#d1d5db" />
+              <Text style={styles.emptyTitle}>No messages yet</Text>
+              <Text style={styles.emptyText}>
+                Start the conversation by sending a message
+              </Text>
+            </View>
+          }
+          onContentSizeChange={() => {
+            if (messages.length > 0) {
+              flatListRef.current?.scrollToEnd({ animated: false });
+            }
+          }}
         />
+      )}
+
+      {/* Typing Indicator */}
+      {participantTyping && messages.length > 0 && (
+        <View style={styles.typingIndicatorContainer}>
+          <View style={styles.typingBubble}>
+            <View style={styles.typingDot} />
+            <View style={[styles.typingDot, styles.typingDotDelay1]} />
+            <View style={[styles.typingDot, styles.typingDotDelay2]} />
+          </View>
+        </View>
       )}
 
       {/* Input Area */}
@@ -339,8 +687,20 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ navigation, route }) => {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.attachButton}>
-            <Ionicons name="add-circle-outline" size={28} color="#6b7280" />
+          <TouchableOpacity 
+            style={styles.attachButton}
+            onPress={handlePickImage}
+            disabled={isSending}
+          >
+            <Ionicons name="image-outline" size={26} color="#6b7280" />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.attachButton}
+            onPress={handleShareLocation}
+            disabled={isSending}
+          >
+            <Ionicons name="location-outline" size={26} color="#6b7280" />
           </TouchableOpacity>
           
           <TextInput
@@ -438,8 +798,64 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#4b5563',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyMessagesList: {
+    flex: 1,
+  },
   messagesList: {
     padding: 16,
+  },
+  typingIndicatorContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  typingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    alignSelf: 'flex-start',
+    marginLeft: 40, // Align with other participant's messages
+  },
+  typingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#9ca3af',
+    marginHorizontal: 2,
+  },
+  typingDotDelay1: {
+    opacity: 0.7,
+  },
+  typingDotDelay2: {
+    opacity: 0.4,
   },
   messageContainer: {
     flexDirection: 'row',
@@ -554,6 +970,40 @@ const styles = StyleSheet.create({
   sendButtonDisabled: {
     backgroundColor: '#9ca3af',
     opacity: 0.5,
+  },
+  messageImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  locationContainer: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  locationText: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  locationCoords: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  liveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10b981',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginRight: 8,
+  },
+  liveText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.5,
   },
 });
 

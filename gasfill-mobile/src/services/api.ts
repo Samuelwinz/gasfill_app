@@ -19,7 +19,7 @@ import { StorageService } from '../utils/storage';
 // For physical device/emulator, replace localhost with your computer's IP address
 // Example: const API_BASE_URL = 'http://192.168.1.100:8000'
 const API_BASE_URL = __DEV__ 
-  ? 'http://192.168.1.25:8000'  // Your local machine IP address
+  ? 'http://192.168.8.100:8000'  // Your local machine IP address
   : 'https://your-production-api.com'; // Production URL
 
 class ApiService {
@@ -28,7 +28,7 @@ class ApiService {
   constructor() {
     this.api = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 5000,  // Reduced timeout to 5 seconds for faster demo fallback
+      timeout: 30000,  // Increased timeout to 30 seconds for database queries
       headers: {
         'Content-Type': 'application/json',
       },
@@ -40,6 +40,9 @@ class ApiService {
         const token = await StorageService.getToken();
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
+          console.log('🔑 API Request with token:', config.method?.toUpperCase(), config.url);
+        } else {
+          console.warn('⚠️ API Request WITHOUT token:', config.method?.toUpperCase(), config.url);
         }
         return config;
       },
@@ -104,6 +107,92 @@ class ApiService {
     }
   }
 
+  async calculateDeliveryFee(location: { lat: number; lng: number; order_total?: number }): Promise<{
+    delivery_fee: number;
+    distance_meters: number;
+    distance_km: number;
+    breakdown: {
+      base_fee: number;
+      base_distance: number;
+      additional_fee: number;
+      uncapped_fee?: number;
+      capped?: boolean;
+      max_fee?: number;
+      message: string;
+    };
+  }> {
+    try {
+      console.log('📍 Calculating delivery fee for location:', location);
+      const response = await this.api.post('/api/orders/calculate-fee', location);
+      console.log('💰 Delivery fee calculated:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Calculate delivery fee failed:', error);
+      // Return default fee on error
+      return {
+        delivery_fee: 10.0,
+        distance_meters: 0,
+        distance_km: 0,
+        breakdown: {
+          base_fee: 10.0,
+          base_distance: 500,
+          additional_fee: 0,
+          message: 'Using default fee - calculation failed'
+        }
+      };
+    }
+  }
+
+  async getMapLocations(): Promise<{
+    gas_stations: Array<{
+      id: string;
+      name: string;
+      address: string;
+      location: { lat: number; lng: number };
+      phone: string;
+      hours: string;
+      services: string[];
+    }>;
+    available_riders: Array<{
+      id: number;
+      name: string;
+      phone: string;
+      rating: number;
+      location: { lat: number; lng: number };
+      total_deliveries: number;
+      status: string;
+    }>;
+    timestamp: string;
+  }> {
+    try {
+      console.log('🗺️ Fetching map locations (gas stations & riders)...');
+      const response = await this.api.get('/api/map/locations');
+      console.log('✅ Map locations fetched:', {
+        stations: response.data.gas_stations?.length || 0,
+        riders: response.data.available_riders?.length || 0
+      });
+      return response.data;
+    } catch (error) {
+      console.error('❌ Get map locations failed:', error);
+      // Return default gas station location on error
+      return {
+        gas_stations: [
+          {
+            id: 'station_1',
+            name: 'GasFill Main Station',
+            address: 'Accra, Ghana',
+            location: { lat: 5.6037, lng: -0.1870 },
+            phone: '+233 201 022 153',
+            hours: '24/7',
+            services: ['6kg', '12.5kg', '37kg', 'Refills', 'Exchange']
+          }
+        ],
+        available_riders: [],
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
   async getOrders(): Promise<Order[]> {
     try {
       const response = await this.api.get('/api/orders');
@@ -116,10 +205,39 @@ class ApiService {
 
   async getCustomerOrders(): Promise<Order[]> {
     try {
+      console.log('📦 Fetching customer orders...');
+      const token = await StorageService.getToken();
+      const userRole = await StorageService.getItem('userRole');
+      
+      // Skip if user is admin - admins don't have customer orders
+      if (userRole === 'admin') {
+        console.log('⚠️ Skipping customer orders fetch - user is admin');
+        return [];
+      }
+      
+      console.log('🔑 Current token:', token ? 'Present' : 'Missing');
+      
       const response = await this.api.get('/api/customer/orders');
+      console.log('✅ Customer orders fetched:', response.data?.length || 0);
       return response.data;
-    } catch (error) {
-      console.error('Get customer orders failed:', error);
+    } catch (error: any) {
+      console.error('❌ Get customer orders failed:', error.response?.status, error.message);
+      if (error.response?.status === 401) {
+        const userRole = await StorageService.getItem('userRole');
+        // Only show error if not admin (admins are expected to fail here)
+        if (userRole !== 'admin') {
+          console.error('🔒 Authentication failed - token may be expired or invalid');
+          const user = await StorageService.getUser();
+          console.log('👤 Current user:', user);
+        } else {
+          console.log('💡 Admin users don\'t have customer orders');
+        }
+      }
+      // Return empty array instead of throwing for admin users
+      const userRole = await StorageService.getItem('userRole');
+      if (userRole === 'admin' && error.response?.status === 401) {
+        return [];
+      }
       throw error;
     }
   }
@@ -144,6 +262,32 @@ class ApiService {
     }
   }
 
+  async cancelOrder(orderId: string): Promise<Order> {
+    try {
+      console.log('🚫 Cancelling order:', orderId);
+      const response = await this.api.patch(`/api/orders/${orderId}/status`, { status: 'cancelled' });
+      console.log('✅ Order cancelled successfully');
+      return response.data;
+    } catch (error) {
+      console.error('Cancel order failed:', error);
+      throw error;
+    }
+  }
+
+  async updateOrderLocation(orderId: string, location: { lat: number; lng: number }): Promise<any> {
+    try {
+      console.log('📍 Updating order location:', orderId, location);
+      const response = await this.api.patch(`/api/orders/${orderId}/location`, {
+        customer_location: location
+      });
+      console.log('✅ Location updated successfully');
+      return response.data;
+    } catch (error) {
+      console.error('Update order location failed:', error);
+      throw error;
+    }
+  }
+
   async getOrderTracking(orderId: string): Promise<any> {
     try {
       const response = await this.api.get(`/api/order/tracking/${orderId}`);
@@ -155,6 +299,13 @@ class ApiService {
         // Try to get order details from the regular orders endpoint
         const orderResponse = await this.api.get(`/api/orders/${orderId}`);
         const order = orderResponse.data;
+        
+        console.log('📦 Order data from backend:', {
+          id: order.id,
+          customer_location: order.customer_location,
+          customer_location_type: typeof order.customer_location,
+          customer_location_is_null: order.customer_location === null,
+        });
         
         // Fetch rider details if rider is assigned
         let riderData = null;
@@ -177,14 +328,8 @@ class ApiService {
           rider_name: riderData?.username || order.rider_name,
           rider_phone: riderData?.phone || '+233241234567',
           rider_rating: riderData?.rating || 4.5,
-          customer_location: order.customer_location || {
-            lat: 5.6037,
-            lng: -0.1870,
-          },
-          rider_location: riderData?.location || order.rider_location || {
-            lat: 5.6057,
-            lng: -0.1890,
-          },
+          customer_location: order.customer_location || null,
+          rider_location: riderData?.location || order.rider_location || null,
           items: order.items || [],
           total: order.total_amount || order.total || 0,
           estimated_arrival: order.estimated_delivery || new Date(Date.now() + 15 * 60 * 1000).toISOString(),
@@ -605,6 +750,129 @@ class ApiService {
       return response.data;
     } catch (error) {
       console.error('Verify payment failed:', error);
+      throw error;
+    }
+  }
+
+  // Rider Analytics
+  async getRiderAnalytics(period: 'day' | 'week' | 'month' = 'week'): Promise<any> {
+    try {
+      const response = await this.api.get('/api/rider/analytics', {
+        params: { period }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get rider analytics failed:', error);
+      throw error;
+    }
+  }
+
+  // Ratings & Reviews
+  async createRating(ratingData: {
+    order_id: string;
+    rating: number;
+    comment?: string;
+    tags?: string[];
+  }): Promise<any> {
+    try {
+      const response = await this.api.post('/api/ratings', ratingData);
+      return response.data;
+    } catch (error) {
+      console.error('Create rating failed:', error);
+      throw error;
+    }
+  }
+
+  async getOrderRatings(orderId: string): Promise<any[]> {
+    try {
+      const response = await this.api.get(`/api/ratings/order/${orderId}`);
+      return response.data.ratings || [];
+    } catch (error) {
+      console.error('Get order ratings failed:', error);
+      return [];
+    }
+  }
+
+  async getUserRatings(userId: number, userType: 'customer' | 'rider'): Promise<any> {
+    try {
+      const response = await this.api.get(`/api/ratings/user/${userId}`, {
+        params: { user_type: userType }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get user ratings failed:', error);
+      throw error;
+    }
+  }
+
+  async getMyRatingStats(): Promise<any> {
+    try {
+      const response = await this.api.get('/api/ratings/stats');
+      return response.data;
+    } catch (error) {
+      console.error('Get rating stats failed:', error);
+      throw error;
+    }
+  }
+
+  async disputeRating(ratingId: string, reason: string): Promise<any> {
+    try {
+      const response = await this.api.put(`/api/ratings/${ratingId}/dispute`, {
+        reason
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Dispute rating failed:', error);
+      throw error;
+    }
+  }
+
+  // Admin Rating Management
+  async getDisputedRatings(): Promise<any[]> {
+    try {
+      const response = await this.api.get('/api/admin/ratings/disputes');
+      return response.data.disputes || [];
+    } catch (error) {
+      console.error('Get disputed ratings failed:', error);
+      throw error;
+    }
+  }
+
+  async resolveRatingDispute(ratingId: string, adminResponse: string, status: 'resolved' | 'rejected'): Promise<any> {
+    try {
+      const response = await this.api.put(`/api/admin/ratings/${ratingId}/resolve`, {
+        admin_response: adminResponse,
+        status
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Resolve rating dispute failed:', error);
+      throw error;
+    }
+  }
+
+  // Push Notification Methods
+  async registerPushToken(pushToken: string, deviceType: string = 'mobile'): Promise<any> {
+    try {
+      const response = await this.api.post('/api/notifications/register-token', {
+        push_token: pushToken,
+        device_type: deviceType
+      });
+      console.log('✅ Push token registered with backend');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Failed to register push token with backend:', error);
+      throw error;
+    }
+  }
+
+  async removePushToken(): Promise<any> {
+    try {
+      const response = await this.api.post('/api/notifications/remove-token', {});
+      console.log('✅ Push token removed from backend');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Failed to remove push token from backend:', error);
       throw error;
     }
   }

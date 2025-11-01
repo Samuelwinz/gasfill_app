@@ -18,25 +18,87 @@ import {
   updateOrderStatus,
   AvailableOrder,
   ActiveOrder,
+  rejectOrder,
+  confirmOrderAssignment,
+  getPendingAssignments,
 } from '../services/riderApi';
-import { useRiderUpdates } from '../context/WebSocketContext';
+import { useRiderUpdates, useWebSocket } from '../context/WebSocketContext';
+import { useLocationTracking } from '../hooks/useLocationTracking';
+import { useAuth } from '../context/AuthContext';
 import Loading from '../components/Loading';
 import ErrorDisplay from '../components/ErrorDisplay';
+import RatingModal from '../components/RatingModal';
+import ReviewCard from '../components/ReviewCard';
+import DisputeModal from '../components/DisputeModal';
+import PendingAssignmentCard from '../components/PendingAssignmentCard';
+import { Rating } from '../types/rating';
+import ApiService from '../services/api';
 
 interface RiderJobsScreenProps {
   navigation: any;
+  route?: any;
 }
 
-const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
-  const [activeTab, setActiveTab] = useState<'available' | 'active'>('available');
+const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation, route }) => {
+  const { rider } = useAuth();
+  const { send } = useWebSocket();
+  
+  // Get initial tab from route params (from dashboard)
+  const initialTab = route?.params?.initialTab || 'available';
+  const [activeTab, setActiveTab] = useState<'available' | 'active'>(initialTab);
   const [availableJobs, setAvailableJobs] = useState<AvailableOrder[]>([]);
   const [activeJobs, setActiveJobs] = useState<ActiveOrder[]>([]);
+  const [pendingJobs, setPendingJobs] = useState<ActiveOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<AvailableOrder | ActiveOrder | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Rating states
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingOrderId, setRatingOrderId] = useState<string | number | null>(null);
+  const [orderRatings, setOrderRatings] = useState<Record<string | number, Rating[]>>({});
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputeRatingId, setDisputeRatingId] = useState<string | null>(null);
+
+  // Set active tab when route params change
+  useEffect(() => {
+    if (route?.params?.initialTab) {
+      setActiveTab(route.params.initialTab);
+    }
+  }, [route?.params?.initialTab]);
+
+  // Determine if rider should be tracking location (has active delivery orders)
+  const hasActiveDelivery = activeJobs.some(
+    order => order.status === 'pickup' || order.status === 'in_transit'
+  );
+
+  // Setup location tracking
+  const { currentLocation, isTracking } = useLocationTracking({
+    enabled: hasActiveDelivery,
+    intervalMs: 10000, // Update every 10 seconds
+    onLocationUpdate: (location) => {
+      console.log('[RiderJobs] Location update:', location);
+      
+      // Send location to server for each active delivery order
+      activeJobs.forEach(order => {
+        if (order.status === 'pickup' || order.status === 'in_transit') {
+          send('rider_location_update', {
+            rider_id: rider?.id,
+            order_id: order.id,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            accuracy: location.accuracy,
+            speed: location.speed,
+            heading: location.heading,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      });
+    },
+  });
 
   // Subscribe to real-time updates
   useRiderUpdates({
@@ -67,7 +129,24 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
 
   useEffect(() => {
     loadJobs();
+    loadPendingAssignments(); // Also load pending assignments
   }, [activeTab]);
+
+  useEffect(() => {
+    // Poll for pending assignments every 5 seconds
+    const interval = setInterval(() => {
+      loadPendingAssignments();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    // Load ratings when modal opens and order is delivered
+    if (showDetailsModal && selectedOrder && (selectedOrder as ActiveOrder).status === 'delivered') {
+      loadOrderRatings(selectedOrder.id);
+    }
+  }, [showDetailsModal, selectedOrder]);
 
   const loadJobs = async () => {
     try {
@@ -88,6 +167,17 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
       setError(err.message || 'Failed to load orders');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPendingAssignments = async () => {
+    try {
+      const pending = await getPendingAssignments();
+      setPendingJobs(pending);
+      console.log('✅ Pending assignments loaded:', pending.length);
+    } catch (err: any) {
+      console.error('❌ Error loading pending assignments:', err);
+      // Don't show error for pending assignments, fail silently
     }
   };
 
@@ -121,6 +211,46 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
     }
   };
 
+  const handleAcceptPendingAssignment = async (orderId: number) => {
+    try {
+      const response = await confirmOrderAssignment(orderId);
+      console.log('✅ Assignment confirmed:', response);
+      
+      Alert.alert(
+        'Assignment Accepted!',
+        'You\'ve confirmed the order assignment. Good luck with the delivery!',
+        [{ text: 'OK' }]
+      );
+      
+      // Refresh both lists
+      loadPendingAssignments();
+      loadJobs();
+      setActiveTab('active'); // Switch to active tab
+    } catch (err: any) {
+      console.error('❌ Error accepting assignment:', err);
+      Alert.alert('Error', err.message || 'Failed to accept assignment');
+    }
+  };
+
+  const handleRejectPendingAssignment = async (orderId: number) => {
+    try {
+      const response = await rejectOrder(orderId);
+      console.log('✅ Assignment rejected:', response);
+      
+      Alert.alert(
+        'Assignment Rejected',
+        'The order has been rejected and will be assigned to another rider.',
+        [{ text: 'OK' }]
+      );
+      
+      // Refresh pending list
+      loadPendingAssignments();
+    } catch (err: any) {
+      console.error('❌ Error rejecting assignment:', err);
+      Alert.alert('Error', err.message || 'Failed to reject assignment');
+    }
+  };
+
   const handleUpdateStatus = async (order: ActiveOrder, newStatus: 'pickup' | 'in_transit' | 'delivered') => {
     try {
       setActionLoading(true);
@@ -140,6 +270,14 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
         [{ text: 'OK', onPress: () => {
           setShowDetailsModal(false);
           loadJobs();
+          
+          // Prompt rating after delivery
+          if (newStatus === 'delivered') {
+            setTimeout(() => {
+              setRatingOrderId(order.id);
+              setShowRatingModal(true);
+            }, 500);
+          }
         }}]
       );
     } catch (err: any) {
@@ -147,6 +285,97 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
       Alert.alert('Error', err.message || 'Failed to update status');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleCancelOrder = async (order: ActiveOrder) => {
+    // Only allow cancellation for assigned orders (before pickup)
+    if (!['assigned'].includes(order.status.toLowerCase())) {
+      Alert.alert(
+        'Cannot Cancel',
+        'You can only cancel orders before pickup. Please contact support if you need assistance.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Cancel Order',
+      `Are you sure you want to cancel order #${order.id}? This action cannot be undone and may affect your rating.`,
+      [
+        {
+          text: 'No, Keep Order',
+          style: 'cancel',
+        },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setActionLoading(true);
+              
+              // Cancel the order using the API
+              await ApiService.cancelOrder(String(order.id));
+              
+              Alert.alert(
+                'Order Cancelled',
+                'The order has been cancelled successfully.',
+                [{ text: 'OK', onPress: () => {
+                  setShowDetailsModal(false);
+                  loadJobs();
+                }}]
+              );
+            } catch (err: any) {
+              console.error('❌ Error cancelling order:', err);
+              Alert.alert('Error', err.message || 'Failed to cancel order. Please try again.');
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const loadOrderRatings = async (orderId: string | number) => {
+    try {
+      const ratings = await ApiService.getOrderRatings(String(orderId));
+      setOrderRatings(prev => ({ ...prev, [orderId]: ratings }));
+    } catch (err) {
+      console.error('Failed to load ratings:', err);
+    }
+  };
+
+  const handleSubmitRating = async (rating: number, comment: string, tags: string[]) => {
+    if (!ratingOrderId) return;
+
+    try {
+      await ApiService.createRating({
+        order_id: String(ratingOrderId),
+        rating,
+        comment,
+        tags,
+      });
+
+      Alert.alert('Success', 'Thank you for your feedback!');
+      loadOrderRatings(ratingOrderId);
+    } catch (err: any) {
+      throw new Error(err.message || 'Failed to submit rating');
+    }
+  };
+
+  const handleDisputeRating = async (reason: string) => {
+    if (!disputeRatingId) return;
+
+    try {
+      await ApiService.disputeRating(disputeRatingId, reason);
+      Alert.alert('Dispute Submitted', 'Your dispute has been submitted for review.');
+      
+      if (selectedOrder) {
+        loadOrderRatings(selectedOrder.id);
+      }
+    } catch (err: any) {
+      throw new Error(err.message || 'Failed to submit dispute');
     }
   };
 
@@ -216,13 +445,32 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
         <View style={styles.jobFooter}>
           <View style={styles.earnings}>
             <Text style={styles.earningsLabel}>Delivery Fee</Text>
-            <Text style={styles.earningsAmount}>₵{job.delivery_fee}</Text>
+            <Text style={styles.earningsAmount}>₵{(job.delivery_fee ?? 10.0).toFixed(2)}</Text>
           </View>
           
-          <View style={styles.viewDetails}>
-            <Text style={styles.viewDetailsText}>Tap for details</Text>
-            <Ionicons name="chevron-forward" size={16} color="#6b7280" />
-          </View>
+          {/* Quick Map Button for in_transit orders */}
+          {activeTab === 'active' && (job as ActiveOrder).status === 'in_transit' ? (
+            <TouchableOpacity
+              style={styles.quickMapButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                navigation.navigate('RiderDeliveryMap', {
+                  orderId: job.id,
+                  customerName: job.customer_name,
+                  customerAddress: (job as ActiveOrder).delivery_address,
+                  customerPhone: job.customer_phone,
+                });
+              }}
+            >
+              <Ionicons name="map" size={16} color="#10b981" />
+              <Text style={styles.quickMapText}>Map</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.viewDetails}>
+              <Text style={styles.viewDetailsText}>Tap for details</Text>
+              <Ionicons name="chevron-forward" size={16} color="#6b7280" />
+            </View>
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -241,7 +489,12 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
       );
     }
 
-    const jobs = activeTab === 'available' ? availableJobs : activeJobs;
+    // Filter active jobs to exclude completed/delivered orders
+    const filteredActiveJobs = activeJobs.filter(
+      job => job.status !== 'delivered' && job.status !== 'cancelled'
+    );
+    
+    const jobs = activeTab === 'available' ? availableJobs : filteredActiveJobs;
     const emptyMessage = activeTab === 'available' 
       ? 'No available orders right now'
       : 'No active orders';
@@ -274,13 +527,31 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
             <Text style={styles.headerTitle}>Order Management</Text>
             <Text style={styles.headerSubtitle}>Available & active deliveries</Text>
           </View>
-          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-            <View style={styles.refreshIcon}>
-              <Ionicons name="refresh" size={20} color="#10b981" />
-            </View>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={styles.analyticsButton} 
+              onPress={() => navigation.navigate('RiderAnalytics')}
+            >
+              <Ionicons name="stats-chart" size={20} color="#3b82f6" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+              <View style={styles.refreshIcon}>
+                <Ionicons name="refresh" size={20} color="#10b981" />
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
+
+      {/* Location Tracking Indicator */}
+      {isTracking && (
+        <View style={styles.trackingBanner}>
+          <Ionicons name="navigate" size={16} color="#10b981" />
+          <Text style={styles.trackingText}>
+            📍 Location tracking active - Customer can see your live location
+          </Text>
+        </View>
+      )}
 
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
@@ -298,7 +569,7 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
           onPress={() => setActiveTab('active')}
         >
           <Text style={[styles.tabText, activeTab === 'active' && styles.activeTabText]}>
-            Active ({activeJobs.length})
+            Active ({activeJobs.filter(job => job.status !== 'delivered' && job.status !== 'cancelled').length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -311,6 +582,27 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#10b981']} tintColor="#10b981" />
         }
       >
+        {/* Pending Assignments Section */}
+        {pendingJobs.length > 0 && (
+          <View style={styles.pendingSection}>
+            <Text style={styles.pendingSectionTitle}>
+              ⚡ Pending Assignments ({pendingJobs.length})
+            </Text>
+            <Text style={styles.pendingSectionSubtitle}>
+              You have {pendingJobs.length} order{pendingJobs.length !== 1 ? 's' : ''} waiting for your response
+            </Text>
+            {pendingJobs.map((order) => (
+              <PendingAssignmentCard
+                key={order.id}
+                order={order}
+                expiresAt={order.assignment_expires_at || null}
+                onAccept={handleAcceptPendingAssignment}
+                onReject={handleRejectPendingAssignment}
+              />
+            ))}
+          </View>
+        )}
+
         {renderTabContent()}
       </ScrollView>
 
@@ -366,11 +658,58 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
               </View>
 
               <View style={styles.modalSection}>
+                <View style={styles.locationHeader}>
+                  <Ionicons name="location" size={20} color="#10b981" />
+                  <Text style={styles.modalSectionTitle}>Pickup Location</Text>
+                </View>
+                <Text style={styles.modalText}>
+                  {(selectedOrder as ActiveOrder).pickup_address || 'GasFill Main Depot, Accra, Ghana'}
+                </Text>
+                <Text style={styles.modalSubtext}>
+                  📍 Collect gas cylinders from here before delivery
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
                 <Text style={styles.modalSectionTitle}>Delivery Fee</Text>
                 <Text style={[styles.modalText, { color: '#10b981', fontSize: 24, fontWeight: '700' }]}>
                   ₵{(selectedOrder.delivery_fee ?? 0).toFixed(2)}
                 </Text>
               </View>
+
+              {/* Ratings Section - Show for delivered orders */}
+              {(selectedOrder as ActiveOrder).status === 'delivered' && (
+                <View style={styles.modalSection}>
+                  <View style={styles.ratingSectionHeader}>
+                    <Text style={styles.modalSectionTitle}>Customer Rating</Text>
+                    {!orderRatings[selectedOrder.id]?.some(r => r.reviewer_type === 'rider') && (
+                      <TouchableOpacity
+                        style={styles.rateButton}
+                        onPress={() => {
+                          setRatingOrderId(selectedOrder.id);
+                          setShowRatingModal(true);
+                        }}
+                      >
+                        <Ionicons name="star" size={16} color="#FFD700" />
+                        <Text style={styles.rateButtonText}>Rate Customer</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  
+                  {orderRatings[selectedOrder.id]?.map((rating) => (
+                    <ReviewCard
+                      key={rating.id}
+                      rating={rating}
+                      currentUserId={rider?.id || 0}
+                      currentUserType="rider"
+                      onDispute={(ratingId) => {
+                        setDisputeRatingId(ratingId);
+                        setShowDisputeModal(true);
+                      }}
+                    />
+                  ))}
+                </View>
+              )}
 
               {/* Action Buttons */}
               {activeTab === 'available' && (
@@ -387,6 +726,25 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
 
               {activeTab === 'active' && (
                 <View style={styles.actionButtons}>
+                  {/* Map Button - Show for in_transit orders */}
+                  {(selectedOrder as ActiveOrder).status === 'in_transit' && (
+                    <TouchableOpacity
+                      style={styles.mapButton}
+                      onPress={() => {
+                        setShowDetailsModal(false);
+                        navigation.navigate('RiderDeliveryMap', {
+                          orderId: selectedOrder.id,
+                          customerName: selectedOrder.customer_name,
+                          customerAddress: (selectedOrder as ActiveOrder).delivery_address,
+                          customerPhone: selectedOrder.customer_phone,
+                        });
+                      }}
+                    >
+                      <Ionicons name="map" size={20} color="#10b981" />
+                      <Text style={styles.mapButtonText}>View Map</Text>
+                    </TouchableOpacity>
+                  )}
+
                   {/* Chat Button */}
                   <TouchableOpacity
                     style={styles.chatButton}
@@ -409,14 +767,25 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
                   </TouchableOpacity>
 
                   {(selectedOrder as ActiveOrder).status === 'assigned' && (
-                    <TouchableOpacity
-                      style={[styles.primaryButton, actionLoading && styles.disabledButton]}
-                      onPress={() => handleUpdateStatus(selectedOrder as ActiveOrder, 'pickup')}
-                      disabled={actionLoading}
-                    >
-                      <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                      <Text style={styles.primaryButtonText}>Confirm Pickup</Text>
-                    </TouchableOpacity>
+                    <>
+                      <TouchableOpacity
+                        style={[styles.primaryButton, actionLoading && styles.disabledButton]}
+                        onPress={() => handleUpdateStatus(selectedOrder as ActiveOrder, 'pickup')}
+                        disabled={actionLoading}
+                      >
+                        <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                        <Text style={styles.primaryButtonText}>Confirm Pickup</Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity
+                        style={[styles.cancelButton, actionLoading && styles.disabledButton]}
+                        onPress={() => handleCancelOrder(selectedOrder as ActiveOrder)}
+                        disabled={actionLoading}
+                      >
+                        <Ionicons name="close-circle" size={20} color="#ef4444" />
+                        <Text style={styles.cancelButtonText}>Cancel Order</Text>
+                      </TouchableOpacity>
+                    </>
                   )}
 
                   {(selectedOrder as ActiveOrder).status === 'pickup' && (
@@ -446,6 +815,26 @@ const RiderJobsScreen: React.FC<RiderJobsScreenProps> = ({ navigation }) => {
           )}
         </SafeAreaView>
       </Modal>
+
+      {/* Rating Modal */}
+      {ratingOrderId && selectedOrder && (
+        <RatingModal
+          visible={showRatingModal}
+          onClose={() => setShowRatingModal(false)}
+          onSubmit={handleSubmitRating}
+          targetName={selectedOrder.customer_name}
+          targetType="customer"
+          title="Rate Customer"
+        />
+      )}
+
+      {/* Dispute Modal */}
+      <DisputeModal
+        visible={showDisputeModal}
+        onClose={() => setShowDisputeModal(false)}
+        onSubmit={handleDisputeRating}
+        ratingId={disputeRatingId || ''}
+      />
     </SafeAreaView>
   );
 };
@@ -486,6 +875,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '500',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  analyticsButton: {
+    padding: 8,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   refreshButton: {
     padding: 8,
@@ -670,6 +1073,22 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginRight: 4,
   },
+  quickMapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#10b981',
+  },
+  quickMapText: {
+    fontSize: 14,
+    color: '#10b981',
+    fontWeight: '600',
+  },
   errorContainer: {
     flex: 1,
     padding: 20,
@@ -785,6 +1204,102 @@ const styles = StyleSheet.create({
   },
   chatButtonText: {
     color: '#3b82f6',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  mapButton: {
+    backgroundColor: '#ffffff',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 2,
+    borderColor: '#10b981',
+    marginBottom: 12,
+  },
+  mapButtonText: {
+    color: '#10b981',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  trackingBanner: {
+    backgroundColor: '#d1fae5',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#10b981',
+  },
+  trackingText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#065f46',
+    fontWeight: '500',
+  },
+  pendingSection: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: '#fffbeb',
+    borderBottomWidth: 2,
+    borderBottomColor: '#fbbf24',
+  },
+  pendingSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#92400e',
+    marginBottom: 4,
+  },
+  pendingSectionSubtitle: {
+    fontSize: 14,
+    color: '#78350f',
+    marginBottom: 12,
+  },
+  ratingSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  rateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    gap: 4,
+  },
+  rateButtonText: {
+    color: '#F57C00',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  locationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+    borderWidth: 2,
+    borderColor: '#ef4444',
+  },
+  cancelButtonText: {
+    color: '#ef4444',
     fontSize: 16,
     fontWeight: '600',
   },

@@ -11,6 +11,7 @@ interface UseChatWebSocketProps {
   chatRoomId: string;
   userId: number;
   userType: 'customer' | 'rider';
+  userName?: string; // Add userName
   onNewMessage?: (message: ChatMessage) => void;
   onTypingStatus?: (isTyping: boolean, participantName: string) => void;
   onMessageRead?: (messageIds: string[]) => void;
@@ -22,6 +23,7 @@ export const useChatWebSocket = ({
   chatRoomId,
   userId,
   userType,
+  userName,
   onNewMessage,
   onTypingStatus,
   onMessageRead,
@@ -56,10 +58,28 @@ export const useChatWebSocket = ({
   useEffect(() => {
     if (!onNewMessage) return;
 
+    console.log('[useChatWebSocket] Subscribing to chat_message events for room:', chatRoomId);
+
     const unsubscribe = subscribe('chat_message', (data: ChatMessage) => {
+      console.log('[useChatWebSocket] 📨 RAW MESSAGE RECEIVED:', JSON.stringify(data, null, 2));
+      console.log('[useChatWebSocket] Current user - userId:', userId, 'userType:', userType);
+      console.log('[useChatWebSocket] Message sender - sender_id:', data.sender_id, 'sender_type:', data.sender_type);
+      console.log('[useChatWebSocket] Room check - data.chat_room_id:', data.chat_room_id, 'vs chatRoomId:', chatRoomId);
+      
+      // Check if message is for this room
+      const isCorrectRoom = data.chat_room_id === chatRoomId;
+      console.log('[useChatWebSocket] ✓ Room match:', isCorrectRoom);
+      
+      // Check if message is from another user
+      // A message is from "me" if BOTH sender_id AND sender_type match
+      const isFromMe = (data.sender_id === userId && data.sender_type === userType);
+      const isFromOtherUser = !isFromMe;
+      console.log('[useChatWebSocket] ✓ Is from me:', isFromMe, '(sender matches both ID and type)');
+      console.log('[useChatWebSocket] ✓ From other user:', isFromOtherUser);
+      
       // Only handle messages for this chat room from other participant
-      if (data.chat_room_id === chatRoomId && data.sender_id !== userId) {
-        console.log('[useChatWebSocket] Received new message:', data);
+      if (isCorrectRoom && isFromOtherUser) {
+        console.log('[useChatWebSocket] ✅✅✅ MESSAGE ACCEPTED - Calling onNewMessage');
         onNewMessage(data);
 
         // Send delivery receipt
@@ -68,6 +88,9 @@ export const useChatWebSocket = ({
           message_id: data.id,
           user_id: userId,
         });
+      } else {
+        console.log('[useChatWebSocket] ❌❌❌ MESSAGE REJECTED');
+        console.log('[useChatWebSocket] Rejection reason: isCorrectRoom =', isCorrectRoom, ', isFromOtherUser =', isFromOtherUser);
       }
     });
 
@@ -80,11 +103,30 @@ export const useChatWebSocket = ({
   useEffect(() => {
     if (!onTypingStatus) return;
 
+    console.log('[useChatWebSocket] Setting up chat_typing subscription for room:', chatRoomId, 'userId:', userId);
+
     const unsubscribe = subscribe('chat_typing', (data: TypingIndicator) => {
+      console.log('[useChatWebSocket] 🔔 RAW chat_typing event received:', JSON.stringify(data, null, 2));
+      console.log('[useChatWebSocket] Current room:', chatRoomId, 'Event room:', data.chat_room_id);
+      console.log('[useChatWebSocket] Current userId:', userId, 'Event userId:', data.user_id);
+      
+      // Normalize room IDs for comparison (handle both "room_ORD-1" and "order_ORD-1")
+      const normalizeRoomId = (roomId: string) => {
+        if (!roomId) return '';
+        return roomId.replace(/^(room_|order_)/, '').toLowerCase();
+      };
+      
+      const currentRoomNormalized = normalizeRoomId(chatRoomId);
+      const eventRoomNormalized = normalizeRoomId(data.chat_room_id);
+      
+      console.log('[useChatWebSocket] Normalized - Current:', currentRoomNormalized, 'Event:', eventRoomNormalized);
+      
       // Only handle typing for this chat room from other participant
-      if (data.chat_room_id === chatRoomId && data.user_id !== userId) {
-        console.log('[useChatWebSocket] Typing status changed:', data.is_typing);
+      if (eventRoomNormalized === currentRoomNormalized && data.user_id !== userId) {
+        console.log('[useChatWebSocket] ✅ Typing status changed:', data.is_typing);
         onTypingStatus(data.is_typing, ''); // Name will be filled from participant data
+      } else {
+        console.log('[useChatWebSocket] ⚠️ Typing event ignored - room match:', eventRoomNormalized === currentRoomNormalized, 'user match:', data.user_id !== userId);
       }
     });
 
@@ -146,10 +188,13 @@ export const useChatWebSocket = ({
         return;
       }
 
+      console.log('[useChatWebSocket] Sending message:', { message, messageType, userName, extraData });
+
       send('chat_send_message', {
         chat_room_id: chatRoomId,
         sender_id: userId,
         sender_type: userType,
+        sender_name: userName || 'User',
         message,
         message_type: messageType,
         ...extraData,
@@ -160,7 +205,7 @@ export const useChatWebSocket = ({
         stopTyping();
       }
     },
-    [isConnected, chatRoomId, userId, userType, send]
+    [isConnected, chatRoomId, userId, userType, userName, send]
   );
 
   /**

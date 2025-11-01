@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   StatusBar,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,12 +23,20 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
     navigation.navigate('Login');
   };
 
+  const handleAdminLogin = () => {
+    navigation.navigate('AdminLogin');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={styles.content}>
         <View style={styles.mascotContainer}>
-          <Ionicons name="flame" size={150} color="#FF6F00" />
+          <Image 
+            source={require('../../assets/images/mascot.png')} 
+            style={styles.mascotImage}
+            resizeMode="contain"
+          />
         </View>
         <Text style={styles.title}>
           Fast, Safe & Reliable{'\n'}Gas Refills!
@@ -42,6 +51,10 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
         </TouchableOpacity>
         <TouchableOpacity style={styles.secondaryButton} onPress={handleSignIn}>
           <Text style={styles.secondaryButtonText}>Already have an account? Sign In</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.adminButton} onPress={handleAdminLogin}>
+          <Ionicons name="shield-checkmark-outline" size={16} color="#94A3B8" />
+          <Text style={styles.adminButtonText}>Admin Login</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -65,6 +78,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 40,
+  },
+  mascotImage: {
+    width: 200,
+    height: 200,
   },
   title: {
     fontSize: 32,
@@ -101,6 +118,18 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
+  },
+  adminButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+    padding: 12,
+  },
+  adminButtonText: {
+    color: '#94A3B8',
+    fontSize: 14,
+    marginLeft: 6,
   },
 });
 

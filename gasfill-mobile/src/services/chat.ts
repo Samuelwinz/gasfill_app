@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ChatMessage, ChatRoom } from '../types';
 
-const API_BASE_URL = 'http://192.168.1.25:8000';
+const API_BASE_URL = 'http://192.168.8.100:8000';
 const TOKEN_KEY = 'gasfill_token_v1';
 
 class ChatService {
@@ -29,14 +29,12 @@ class ChatService {
       });
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => response.statusText);
-        console.warn('[ChatService] Chat API not available:', response.status, errorText);
         throw new Error(`API Error: ${response.status}`);
       }
 
       return await response.json();
     } catch (error) {
-      console.log('[ChatService] Using mock chat room (API not available)');
+      console.log('[ChatService] Chat API not available, using mock chat room');
       
       // Fallback to mock data
       const mockRoom: ChatRoom = {
@@ -134,13 +132,23 @@ class ChatService {
   /**
    * Send a message in a chat room (via HTTP - WebSocket will handle real-time)
    */
-  async sendMessage(message: Omit<ChatMessage, 'id' | 'created_at' | 'is_delivered'>): Promise<ChatMessage> {
+  async sendMessage(
+    message: Omit<ChatMessage, 'id' | 'created_at' | 'is_delivered'>,
+    imageUrl?: string,
+    locationData?: { latitude: number; longitude: number; accuracy?: number }
+  ): Promise<ChatMessage> {
     try {
       const headers = await this.getAuthHeaders();
+      const payload = {
+        ...message,
+        ...(imageUrl && { image_url: imageUrl }),
+        ...(locationData && { location_data: locationData }),
+      };
+
       const response = await fetch(`${API_BASE_URL}/api/chat/messages`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(message),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -157,9 +165,38 @@ class ChatService {
         id: `msg_${Date.now()}`,
         is_delivered: false,
         created_at: new Date().toISOString(),
+        ...(imageUrl && { image_url: imageUrl }),
+        ...(locationData && { location_data: locationData }),
       };
 
       return newMessage;
+    }
+  }
+
+  /**
+   * Upload image for chat
+   */
+  async uploadImage(formData: FormData): Promise<{ image_url: string }> {
+    try {
+      const token = await AsyncStorage.getItem(TOKEN_KEY);
+
+      const response = await fetch(`${API_BASE_URL}/api/chat/upload-image`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to upload image: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return { image_url: data.image_url };
+    } catch (error) {
+      console.error('[ChatService] Error uploading image:', error);
+      throw error;
     }
   }
 
@@ -258,6 +295,7 @@ class ChatService {
               id: 5,
               name: 'Mike Rider',
               user_type: 'rider' as const,
+              type: 'rider' as const,
               is_online: true,
             },
           ],
@@ -280,6 +318,7 @@ class ChatService {
               id: 6,
               name: 'Sarah Delivery',
               user_type: 'rider' as const,
+              type: 'rider' as const,
               is_online: false,
             },
           ],
@@ -300,6 +339,7 @@ class ChatService {
               id: 100,
               name: 'Support Team',
               user_type: 'support' as const,
+              type: 'support' as const,
               is_online: true,
             },
           ],
